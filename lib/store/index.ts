@@ -1,5 +1,5 @@
 import "server-only";
-import { config } from "@/lib/config";
+import { isBlobConfigured } from "@/lib/config";
 import { BlobStore } from "./blob";
 import { FileStore } from "./file";
 import { MemoryStore } from "./memory";
@@ -18,7 +18,7 @@ let cached: EngineStore | null = null;
 export function getStore(): EngineStore {
   if (cached) return cached;
 
-  if (config.storage.blobToken) {
+  if (isBlobConfigured()) {
     cached = new BlobStore();
   } else if (!process.env.VERCEL) {
     cached = new FileStore();

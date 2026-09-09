@@ -92,9 +92,38 @@ export const config = {
     cronSecret: env("CRON_SECRET"),
   },
   storage: {
+    /**
+     * Two ways to authenticate against Vercel Blob:
+     *
+     *  - BLOB_READ_WRITE_TOKEN: a long-lived token, created only when you tick
+     *    "Add a read-write token env var" while connecting the store.
+     *  - BLOB_STORE_ID + OIDC: the default when you connect a store without
+     *    that box ticked. The SDK picks up VERCEL_OIDC_TOKEN automatically and
+     *    the credential rotates on its own, so this is the safer setup.
+     *
+     * Either is sufficient; the store id path is preferred when both exist.
+     */
     blobToken: env("BLOB_READ_WRITE_TOKEN"),
+    blobStoreId: env("BLOB_STORE_ID"),
   },
 } as const;
+
+/** True when a Blob store is reachable by either auth path. */
+export function isBlobConfigured(): boolean {
+  return Boolean(config.storage.blobToken || config.storage.blobStoreId);
+}
+
+/**
+ * Credentials handed to every @vercel/blob call. Passing `storeId` lets the
+ * SDK use the ambient OIDC token; passing `token` uses the static one. Sending
+ * both is fine - the SDK ignores `token` when OIDC and a store id are present.
+ */
+export function blobCredentials(): { token?: string; storeId?: string } {
+  return {
+    ...(config.storage.blobToken ? { token: config.storage.blobToken } : {}),
+    ...(config.storage.blobStoreId ? { storeId: config.storage.blobStoreId } : {}),
+  };
+}
 
 export function isGeminiConfigured(): boolean {
   return Boolean(config.gemini.apiKey);
@@ -147,7 +176,7 @@ export function readiness(): ReadinessReport {
   const warnings: string[] = [];
   const gemini = isGeminiConfigured();
   const pinterest = isPinterestConfigured();
-  const blobStorage = Boolean(config.storage.blobToken);
+  const blobStorage = isBlobConfigured();
   const encryptionKey = Boolean(config.security.tokenEncryptionKey);
 
   if (!gemini) warnings.push("GEMINI_API_KEY is missing - generation is disabled.");

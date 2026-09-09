@@ -1,6 +1,6 @@
 import "server-only";
 import { put } from "@vercel/blob";
-import { config } from "@/lib/config";
+import { blobCredentials, isBlobConfigured } from "@/lib/config";
 import { upstream } from "@/lib/errors";
 
 /**
@@ -25,7 +25,7 @@ function extensionFor(mimeType: string): string {
 }
 
 export function canHostPublicly(): boolean {
-  return Boolean(config.storage.blobToken);
+  return isBlobConfigured();
 }
 
 export async function hostPinImage(
@@ -49,7 +49,7 @@ export async function hostPinImage(
         addRandomSuffix: false,
         allowOverwrite: true,
         contentType: mimeType,
-        token: config.storage.blobToken,
+        ...blobCredentials(),
       },
     );
     return { url: blob.url, inline: false };

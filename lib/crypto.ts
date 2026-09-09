@@ -3,6 +3,7 @@ import {
   createCipheriv,
   createDecipheriv,
   createHash,
+  createHmac,
   randomBytes,
   timingSafeEqual,
 } from "node:crypto";
@@ -79,6 +80,27 @@ export function safeEqual(a: string, b: string): boolean {
   const bb = Buffer.from(b, "utf8");
   if (ab.length !== bb.length) return false;
   return timingSafeEqual(ab, bb);
+}
+
+/**
+ * Derives an unguessable, stable path segment from the encryption key.
+ *
+ * Pin images have to live in a PUBLIC Blob store - Pinterest fetches them by
+ * URL with no auth header. That means the engine's state document may end up
+ * in a public store too, so it must not sit at a guessable path like
+ * "engine/state.json". Its contents are already AES-GCM encrypted where it
+ * matters (OAuth tokens); this closes the enumeration hole on the rest.
+ *
+ * Falls back to a fixed label when no key is configured, which only happens in
+ * local development where the file store is used anyway.
+ */
+export function derivePathSegment(label: string): string {
+  const raw = config.security.tokenEncryptionKey;
+  if (!raw) return label;
+  return createHmac("sha256", Buffer.from(raw, "base64"))
+    .update(label)
+    .digest("hex")
+    .slice(0, 32);
 }
 
 export function sha256(input: string): string {

@@ -1,58 +1,94 @@
 import "server-only";
 import { get, put } from "@vercel/blob";
-import { config } from "@/lib/config";
+import { blobCredentials } from "@/lib/config";
+import { derivePathSegment } from "@/lib/crypto";
 import { DocumentStore } from "./base";
 import { emptyState, type StateDocument } from "./types";
 
 /**
  * Production adapter, backed by Vercel Blob.
  *
- * The state document is stored with `access: 'private'` so Pin records and the
- * (already encrypted) OAuth envelope are never reachable over a public URL.
- * Only the generated Pin images are public - Pinterest requires that.
+ * Access mode is negotiated rather than assumed. The store has to be PUBLIC so
+ * Pinterest can fetch Pin images by URL, but the state document should still be
+ * private if the store allows mixed access. So we try private first and fall
+ * back to public, caching whichever works.
+ *
+ * Either way the path is derived from TOKEN_ENCRYPTION_KEY, so a public store
+ * never exposes the document at a guessable URL, and the OAuth tokens inside
+ * are AES-GCM encrypted regardless.
  *
  * Reads use `useCache: false`: the CDN would otherwise serve a stale document
  * straight after a write, which loses Pins.
  */
-const STATE_PATH = "engine/state.json";
+function statePath(): string {
+  return `engine/state-${derivePathSegment("state-document")}.json`;
+}
+
+type Access = "private" | "public";
+
+// Negotiated once per process, then reused.
+let accessMode: Access | null = null;
 
 export class BlobStore extends DocumentStore {
   readonly name = "Vercel Blob";
   readonly persistent = true;
 
   protected async read(): Promise<StateDocument> {
-    try {
-      const result = await get(STATE_PATH, {
-        access: "private",
-        useCache: false,
-        token: config.storage.blobToken,
-      });
-      if (!result?.stream) return emptyState();
+    const modes: Access[] = accessMode ? [accessMode] : ["private", "public"];
 
-      const text = await new Response(result.stream).text();
-      const parsed = JSON.parse(text) as StateDocument;
-      if (parsed.version !== 1 || typeof parsed.pins !== "object") {
-        return emptyState();
+    for (const access of modes) {
+      try {
+        const result = await get(statePath(), {
+          access,
+          useCache: false,
+          ...blobCredentials(),
+        });
+        if (!result?.stream) continue;
+
+        const text = await new Response(result.stream).text();
+        const parsed = JSON.parse(text) as StateDocument;
+        if (parsed.version !== 1 || typeof parsed.pins !== "object") {
+          return emptyState();
+        }
+        accessMode = access;
+        return { ...emptyState(), ...parsed };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        // A missing document on first run is expected, as is "wrong access
+        // mode" while we are still probing. Anything else deserves a log.
+        if (!/not.?found|404|access|forbidden|403/i.test(message)) {
+          console.warn("[blob-store] read failed:", message);
+        }
       }
-      return { ...emptyState(), ...parsed };
-    } catch (err) {
-      // A missing blob on first run is expected; anything else is worth a log.
-      const message = err instanceof Error ? err.message : String(err);
-      if (!/not.?found|404/i.test(message)) {
-        console.warn("[blob-store] read failed:", message);
-      }
-      return emptyState();
     }
+    return emptyState();
   }
 
   protected async write(doc: StateDocument): Promise<void> {
-    await put(STATE_PATH, JSON.stringify(doc), {
-      access: "private",
-      addRandomSuffix: false,
-      allowOverwrite: true,
-      contentType: "application/json",
-      cacheControlMaxAge: 0,
-      token: config.storage.blobToken,
-    });
+    const modes: Access[] = accessMode ? [accessMode] : ["private", "public"];
+    let lastError: unknown;
+
+    for (const access of modes) {
+      try {
+        await put(statePath(), JSON.stringify(doc), {
+          access,
+          addRandomSuffix: false,
+          allowOverwrite: true,
+          contentType: "application/json",
+          cacheControlMaxAge: 0,
+          ...blobCredentials(),
+        });
+        if (accessMode !== access) {
+          console.info(`[blob-store] state document stored with access=${access}`);
+        }
+        accessMode = access;
+        return;
+      } catch (err) {
+        lastError = err;
+      }
+    }
+    throw lastError instanceof Error
+      ? lastError
+      : new Error("Could not write the state document to Blob storage.");
   }
 }
