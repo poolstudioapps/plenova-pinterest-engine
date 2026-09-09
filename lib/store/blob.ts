@@ -1,6 +1,6 @@
 import "server-only";
 import { get, put } from "@vercel/blob";
-import { blobCredentials } from "@/lib/config";
+import { blobCredentials, config } from "@/lib/config";
 import { derivePathSegment } from "@/lib/crypto";
 import { DocumentStore } from "./base";
 import { emptyState, type StateDocument } from "./types";
@@ -30,7 +30,14 @@ type Access = "private" | "public";
 let accessMode: Access | null = null;
 
 export class BlobStore extends DocumentStore {
-  readonly name = "Vercel Blob";
+  /**
+   * Includes the store id so the dashboard shows exactly which Blob store is
+   * wired up. Worth the noise: with several stores in a team it is otherwise
+   * impossible to tell from inside the app which one you are writing to.
+   */
+  readonly name = config.storage.blobStoreId
+    ? `Vercel Blob (${config.storage.blobStoreId})`
+    : "Vercel Blob (static token)";
   readonly persistent = true;
 
   protected async read(): Promise<StateDocument> {
