@@ -12,6 +12,36 @@ function env(key: string): string | undefined {
   return v && v.trim().length > 0 ? v.trim() : undefined;
 }
 
+/**
+ * Resolves the public base URL of this deployment.
+ *
+ * NEXT_PUBLIC_APP_URL is a chicken-and-egg problem: you cannot know the domain
+ * until the first deploy exists. So it is optional, and Vercel's own injected
+ * variables are used instead, in order of stability:
+ *
+ *  1. NEXT_PUBLIC_APP_URL         - explicit override, e.g. a custom domain.
+ *  2. VERCEL_PROJECT_PRODUCTION_URL - the stable production domain. This is the
+ *     one that matters for OAuth, since the redirect URI registered on
+ *     Pinterest must never change between deploys.
+ *  3. VERCEL_URL                  - per-deployment URL. Changes on every push,
+ *     so it is a last resort and unusable as an OAuth redirect target.
+ *  4. localhost                   - local development.
+ *
+ * Vercel supplies (2) and (3) as bare hostnames, without a scheme.
+ */
+function resolveAppUrl(): string {
+  const explicit = env("NEXT_PUBLIC_APP_URL");
+  if (explicit) return explicit.replace(/\/+$/, "");
+
+  const productionHost = env("VERCEL_PROJECT_PRODUCTION_URL");
+  if (productionHost) return `https://${productionHost}`;
+
+  const deploymentHost = env("VERCEL_URL");
+  if (deploymentHost) return `https://${deploymentHost}`;
+
+  return "http://localhost:3000";
+}
+
 export const config = {
   gemini: {
     apiKey: env("GEMINI_API_KEY"),
@@ -54,7 +84,7 @@ export const config = {
       .filter(Boolean),
   },
   app: {
-    url: env("NEXT_PUBLIC_APP_URL") ?? "http://localhost:3000",
+    url: resolveAppUrl(),
     oneLink: env("APPSFLYER_ONELINK") ?? DEFAULT_ONELINK,
   },
   security: {
