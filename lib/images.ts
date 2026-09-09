@@ -18,7 +18,7 @@ export interface HostedImage {
   inline: boolean;
 }
 
-function extensionFor(mimeType: string): string {
+export function extensionFor(mimeType: string): string {
   if (mimeType.includes("jpeg") || mimeType.includes("jpg")) return "jpg";
   if (mimeType.includes("webp")) return "webp";
   return "png";
@@ -28,8 +28,12 @@ export function canHostPublicly(): boolean {
   return isBlobConfigured();
 }
 
-export async function hostPinImage(
-  pinId: string,
+/**
+ * Uploads an image at an explicit path. The media library organises images by
+ * plant and cultivar, so callers own the path rather than deriving it here.
+ */
+export async function hostImageAt(
+  pathname: string,
   data: Buffer,
   mimeType: string,
 ): Promise<HostedImage> {
@@ -42,7 +46,7 @@ export async function hostPinImage(
 
   try {
     const blob = await put(
-      `pins/${pinId}.${extensionFor(mimeType)}`,
+      pathname,
       data,
       {
         access: "public",

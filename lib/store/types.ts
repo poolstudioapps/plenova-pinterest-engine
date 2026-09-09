@@ -1,4 +1,10 @@
-import type { PinRecord, PinStatus, PinterestConnection } from "@/lib/types";
+import type {
+  MediaAsset,
+  PinRecord,
+  PinStatus,
+  PinterestConnection,
+} from "@/lib/types";
+import type { MediaFilter } from "@/lib/media";
 import type { Locale } from "@/lib/i18n";
 
 export interface PinFilter {
@@ -40,18 +46,27 @@ export interface EngineStore {
 
   getConnection(): Promise<PinterestConnection | null>;
   setConnection(connection: PinterestConnection | null): Promise<void>;
+
+  /** Media library - generated images, indexed by plant and cultivar. */
+  listMedia(filter?: MediaFilter): Promise<MediaAsset[]>;
+  getMedia(id: string): Promise<MediaAsset | null>;
+  saveMedia(asset: MediaAsset): Promise<void>;
+  deleteMedia(id: string): Promise<void>;
+  /** Bumps reuse accounting when an asset backs a new Pin or slide. */
+  markMediaUsed(id: string): Promise<void>;
 }
 
 /** Shape of the single persisted state document. */
 export interface StateDocument {
   version: 1;
   pins: Record<string, PinRecord>;
+  media: Record<string, MediaAsset>;
   /** AES-256-GCM envelope produced by lib/crypto.ts, or null when disconnected. */
   connection: string | null;
 }
 
 export function emptyState(): StateDocument {
-  return { version: 1, pins: {}, connection: null };
+  return { version: 1, pins: {}, media: {}, connection: null };
 }
 
 /** Shared filter/sort logic so every adapter behaves identically. */

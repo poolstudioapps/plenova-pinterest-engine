@@ -1,6 +1,7 @@
 import "server-only";
 import { decryptJson, encryptJson, hasEncryptionKey } from "@/lib/crypto";
-import type { PinRecord, PinterestConnection } from "@/lib/types";
+import type { MediaAsset, PinRecord, PinterestConnection } from "@/lib/types";
+import { filterMedia, type MediaFilter } from "@/lib/media";
 import type { Locale } from "@/lib/i18n";
 import {
   applyFilter,
@@ -72,6 +73,38 @@ export abstract class DocumentStore implements EngineStore {
   async deletePin(id: string): Promise<void> {
     await this.mutate((doc) => {
       delete doc.pins[id];
+    });
+  }
+
+  async listMedia(filter?: MediaFilter): Promise<MediaAsset[]> {
+    const doc = await this.read();
+    return filterMedia(Object.values(doc.media ?? {}), filter);
+  }
+
+  async getMedia(id: string): Promise<MediaAsset | null> {
+    const doc = await this.read();
+    return doc.media?.[id] ?? null;
+  }
+
+  async saveMedia(asset: MediaAsset): Promise<void> {
+    await this.mutate((doc) => {
+      doc.media ??= {};
+      doc.media[asset.id] = asset;
+    });
+  }
+
+  async deleteMedia(id: string): Promise<void> {
+    await this.mutate((doc) => {
+      delete doc.media?.[id];
+    });
+  }
+
+  async markMediaUsed(id: string): Promise<void> {
+    await this.mutate((doc) => {
+      const asset = doc.media?.[id];
+      if (!asset) return;
+      asset.usedCount += 1;
+      asset.lastUsedAt = new Date().toISOString();
     });
   }
 

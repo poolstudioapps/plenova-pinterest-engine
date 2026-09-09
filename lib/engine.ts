@@ -6,9 +6,16 @@ import { getVisualStyle, pickVisualStyle } from "@/lib/data/visual-styles";
 import { badRequest, duplicate, notFound } from "@/lib/errors";
 import { generatePinCopy, generatePinImage } from "@/lib/gemini";
 import { dedupeKey, pinId } from "@/lib/ids";
-import { hostPinImage } from "@/lib/images";
+import { extensionFor, hostImageAt } from "@/lib/images";
+import { mediaPath, varietySlug } from "@/lib/media";
 import { getStore } from "@/lib/store";
-import type { ContentAngle, PinRecord, Plant, VisualStyle } from "@/lib/types";
+import type {
+  ContentAngle,
+  MediaAsset,
+  PinRecord,
+  Plant,
+  VisualStyle,
+} from "@/lib/types";
 import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n";
 import { angleLabel as angleLabelFor, plantName } from "@/lib/data/localize";
 
@@ -27,6 +34,13 @@ export interface GenerateInput {
   variation?: number;
   /** When true, an existing Pin in the same slot is replaced instead of refused. */
   allowDuplicate?: boolean;
+  /** Free-form cultivar, e.g. "variegata". Indexes the image in the library. */
+  variety?: string;
+  /**
+   * Reuse an image already in the media library instead of generating one.
+   * Skips the image model entirely - the expensive half of a generation.
+   */
+  reuseMediaId?: string;
 }
 
 interface ResolvedSlot {
@@ -115,8 +129,39 @@ export async function generatePin(input: GenerateInput): Promise<PinRecord> {
   });
 
   const id = existing?.id ?? pinId();
-  const image = await generatePinImage(copy.imagePrompt, slot.style);
-  const hosted = await hostPinImage(id, image.data, image.mimeType);
+  const store2 = store;
+
+  // Reusing a library image skips the image model - the expensive half of a
+  // generation, and the whole point of keeping a library per plant.
+  let imageUrl: string;
+  let imageIsInline: boolean;
+  let mediaId: string | null;
+
+  if (input.reuseMediaId) {
+    const asset = await store2.getMedia(input.reuseMediaId);
+    if (!asset) throw notFound(`No media asset with id ${input.reuseMediaId}.`);
+    imageUrl = asset.url;
+    imageIsInline = asset.url.startsWith("data:");
+    mediaId = asset.id;
+    await store2.markMediaUsed(asset.id);
+  } else {
+    const image = await generatePinImage(copy.imagePrompt, slot.style);
+    const asset = await registerMedia({
+      plant: slot.plant,
+      plantName: plantName(slot.plant, slot.locale),
+      variety: input.variety ?? null,
+      style: slot.style.slug,
+      angleSlug: slot.angle.slug,
+      prompt: copy.imagePrompt,
+      data: image.data,
+      mimeType: image.mimeType,
+      sourceId: id,
+      keywords: copy.keywords,
+    });
+    imageUrl = asset.url;
+    imageIsInline = asset.url.startsWith("data:");
+    mediaId = asset.id;
+  }
 
   const now = new Date().toISOString();
   const record: PinRecord = {
@@ -129,6 +174,8 @@ export async function generatePin(input: GenerateInput): Promise<PinRecord> {
     angleLabel: angleLabelFor(slot.angle, slot.locale),
     visualStyle: slot.style.slug,
     variation: slot.variation,
+    variety: input.variety ?? null,
+    mediaId,
 
     title: copy.title,
     description: copy.description,
@@ -136,8 +183,8 @@ export async function generatePin(input: GenerateInput): Promise<PinRecord> {
     altText: copy.altText,
     imagePrompt: copy.imagePrompt,
 
-    imageUrl: hosted.url,
-    imageIsInline: hosted.inline,
+    imageUrl,
+    imageIsInline,
 
     link: config.app.oneLink,
     boardId: existing?.boardId ?? null,
@@ -186,4 +233,56 @@ export async function updatePin(
   };
   await store.savePin(updated);
   return updated;
+}
+
+
+/**
+ * Stores a freshly generated image in the media library, under a path keyed by
+ * plant and cultivar. Every image the engine pays for lands here exactly once,
+ * so it can back a later Pin - or a TikTok slide - without a second call to the
+ * image model.
+ */
+async function registerMedia(input: {
+  plant: Plant;
+  plantName: string;
+  variety: string | null;
+  style: string;
+  angleSlug: string;
+  prompt: string;
+  data: Buffer;
+  mimeType: string;
+  sourceId: string;
+  keywords: string[];
+}): Promise<MediaAsset> {
+  const id = `med_${input.sourceId.replace(/^pin_/, "")}`;
+  const vSlug = varietySlug(input.variety);
+  const path = mediaPath(
+    { plantSlug: input.plant.slug, varietySlug: vSlug, id },
+    extensionFor(input.mimeType),
+  );
+
+  const hosted = await hostImageAt(path, input.data, input.mimeType);
+
+  const asset: MediaAsset = {
+    id,
+    plantSlug: input.plant.slug,
+    plantName: input.plantName,
+    variety: input.variety,
+    varietySlug: vSlug,
+    url: hosted.url,
+    mimeType: input.mimeType,
+    aspectRatio: "2:3",
+    prompt: input.prompt,
+    visualStyle: input.style,
+    angleSlug: input.angleSlug,
+    source: "pin",
+    sourceId: input.sourceId,
+    tags: input.keywords.slice(0, 8),
+    usedCount: 1,
+    lastUsedAt: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+  };
+
+  await getStore().saveMedia(asset);
+  return asset;
 }

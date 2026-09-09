@@ -71,6 +71,10 @@ export interface PinRecord {
   angleLabel: string;
   visualStyle: string;
   variation: number;
+  /** Free-form cultivar this Pin targets, if any. */
+  variety: string | null;
+  /** The media library asset backing this Pin. */
+  mediaId: string | null;
 
   title: string;
   description: string;
@@ -95,6 +99,46 @@ export interface PinRecord {
 
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * A generated image, indexed so it can be found again and reused.
+ *
+ * This is the bridge between channels: a plant photograph paid for once by a
+ * Pinterest Pin can back a TikTok carousel slide later, instead of paying
+ * Gemini again for the same subject.
+ *
+ * Indexed by plant AND by free-form variety, because cultivars people actually
+ * search - "variegata", "Thai Constellation", "albo" - are not catalog entries
+ * and never will be. The catalog stays curated; the media library does not.
+ */
+export interface MediaAsset {
+  id: string;
+  plantSlug: string;
+  plantName: string;
+  /** Free-form cultivar, e.g. "variegata". Empty for the plain species. */
+  variety: string | null;
+  /** Slugified variety, used in the storage path. */
+  varietySlug: string | null;
+
+  url: string;
+  mimeType: string;
+  /** "2:3" for Pinterest, "4:5" for a TikTok carousel slide. */
+  aspectRatio: string;
+
+  /** The prompt that produced it - lets you regenerate a close variant. */
+  prompt: string;
+  visualStyle: string;
+  angleSlug: string | null;
+  /** Where it came from, so an uploaded asset is distinguishable. */
+  source: "pin" | "carousel" | "upload";
+  sourceId: string | null;
+
+  tags: string[];
+  /** Reuse accounting, so the picker can avoid always serving the same shot. */
+  usedCount: number;
+  lastUsedAt: string | null;
+  createdAt: string;
 }
 
 export interface PinterestBoard {

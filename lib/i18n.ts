@@ -66,6 +66,30 @@ const EN: Dict = {
   "nav.library": "Library",
   "nav.queue": "Queue",
   "nav.pinterest": "Pinterest",
+  "nav.media": "Images",
+
+  "media.title": "Image library",
+  "media.subtitle":
+    "Every image the engine has generated, filed by plant and cultivar. Reuse one instead of paying for a new generation.",
+  "media.empty": "No images yet",
+  "media.emptyBody":
+    "Generate a Pin and its image lands here automatically, filed under its plant.",
+  "media.allPlants": "All plants",
+  "media.search": "Search plant, cultivar or prompt",
+  "media.count": "{count} images across {plants} plants",
+  "media.used": "used {n}x",
+  "media.reuse": "Reuse this image",
+  "media.delete": "Remove from library",
+  "media.noMatch": "No image matches these filters.",
+
+  "generate.variety": "Cultivar",
+  "generate.varietyHint":
+    "Optional, free text - e.g. variegata, Thai Constellation. Files the image under it in the library.",
+  "generate.reuse": "Reuse an existing image",
+  "generate.reuseHint":
+    "Skips image generation and reuses a library image for this plant.",
+  "generate.reuseNone": "Generate a new image",
+  "generate.reuseAvailable": "{n} available for this plant",
 
   "dashboard.title": "Dashboard",
   "dashboard.subtitle":
@@ -229,6 +253,30 @@ const FR: Dict = {
   "nav.library": "Bibliothèque",
   "nav.queue": "File d'attente",
   "nav.pinterest": "Pinterest",
+  "nav.media": "Images",
+
+  "media.title": "Bibliothèque d'images",
+  "media.subtitle":
+    "Toutes les images générées par le moteur, classées par plante et cultivar. Réutilise-en une plutôt que de repayer une génération.",
+  "media.empty": "Aucune image",
+  "media.emptyBody":
+    "Génère un Pin et son image atterrit ici automatiquement, classée sous sa plante.",
+  "media.allPlants": "Toutes les plantes",
+  "media.search": "Rechercher une plante, un cultivar ou un prompt",
+  "media.count": "{count} images sur {plants} plantes",
+  "media.used": "utilisée {n}x",
+  "media.reuse": "Réutiliser cette image",
+  "media.delete": "Retirer de la bibliothèque",
+  "media.noMatch": "Aucune image ne correspond à ces filtres.",
+
+  "generate.variety": "Cultivar",
+  "generate.varietyHint":
+    "Optionnel, texte libre - ex. variegata, Thai Constellation. Classe l'image sous ce nom dans la bibliothèque.",
+  "generate.reuse": "Réutiliser une image existante",
+  "generate.reuseHint":
+    "Saute la génération d'image et réutilise une image de la bibliothèque pour cette plante.",
+  "generate.reuseNone": "Générer une nouvelle image",
+  "generate.reuseAvailable": "{n} disponible(s) pour cette plante",
 
   "dashboard.title": "Tableau de bord",
   "dashboard.subtitle":

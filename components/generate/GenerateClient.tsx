@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Button,
   Card,
@@ -17,7 +17,7 @@ import {
   translator,
   type Locale,
 } from "@/lib/i18n";
-import type { PinRecord } from "@/lib/types";
+import type { MediaAsset, PinRecord } from "@/lib/types";
 
 interface Option {
   slug: string;
@@ -50,6 +50,9 @@ export function GenerateClient({
   const [pinLocale, setPinLocale] = useState<Locale>(uiLocale);
   const [visualStyle, setVisualStyle] = useState("");
   const [customAngle, setCustomAngle] = useState("");
+  const [variety, setVariety] = useState("");
+  const [reuseMediaId, setReuseMediaId] = useState("");
+  const [reusable, setReusable] = useState<MediaAsset[]>([]);
   const [variation, setVariation] = useState(0);
   const [allowDuplicate, setAllowDuplicate] = useState(false);
 
@@ -57,6 +60,28 @@ export function GenerateClient({
   const [pin, setPin] = useState<PinRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [duplicateHint, setDuplicateHint] = useState(false);
+
+  // Reusable images are scoped to the selected plant - that is the only axis
+  // on which reuse makes sense, and it keeps the list short.
+  useEffect(() => {
+    let cancelled = false;
+    setReuseMediaId("");
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/media?plantSlug=${encodeURIComponent(plantSlug)}&limit=60`,
+        );
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as { media: MediaAsset[] };
+        if (!cancelled) setReusable(data.media);
+      } catch {
+        // The picker is an optimisation; generation works without it.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [plantSlug]);
 
   const grouped = useMemo(
     () =>
@@ -80,6 +105,8 @@ export function GenerateClient({
           plantSlug,
           angleSlug,
           locale: pinLocale,
+          variety: variety.trim() || undefined,
+          reuseMediaId: reuseMediaId || undefined,
           visualStyle: visualStyle || undefined,
           customAngle: customAngle.trim() || undefined,
           variation,
@@ -154,6 +181,46 @@ export function GenerateClient({
               {LOCALES.map((l) => (
                 <option key={l} value={l}>
                   {LOCALE_LABELS[l]}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          <Field
+            label={t("generate.variety")}
+            htmlFor="variety"
+            hint={t("generate.varietyHint")}
+          >
+            <Input
+              id="variety"
+              maxLength={60}
+              placeholder="variegata"
+              value={variety}
+              onChange={(e) => setVariety(e.target.value)}
+            />
+          </Field>
+
+          <Field
+            label={t("generate.reuse")}
+            htmlFor="reuse"
+            hint={
+              reusable.length > 0
+                ? t("generate.reuseAvailable", { n: reusable.length })
+                : t("generate.reuseHint")
+            }
+          >
+            <Select
+              id="reuse"
+              value={reuseMediaId}
+              disabled={reusable.length === 0}
+              onChange={(e) => setReuseMediaId(e.target.value)}
+            >
+              <option value="">{t("generate.reuseNone")}</option>
+              {reusable.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {[a.variety, a.visualStyle.replace(/-/g, " "), `${a.usedCount}x`]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </option>
               ))}
             </Select>
