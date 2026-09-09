@@ -1,0 +1,105 @@
+import "server-only";
+import { decryptJson, encryptJson, hasEncryptionKey } from "@/lib/crypto";
+import type { PinRecord, PinterestConnection } from "@/lib/types";
+import type { Locale } from "@/lib/i18n";
+import {
+  applyFilter,
+  emptyState,
+  type EngineStore,
+  type PinFilter,
+  type StateDocument,
+} from "./types";
+
+/**
+ * All adapters share the same document semantics and differ only in how they
+ * load and persist one JSON document. Subclasses implement `read`/`write`.
+ *
+ * Writes are serialised through a promise chain: two concurrent generate calls
+ * in the same instance would otherwise read-modify-write over each other and
+ * silently drop a Pin.
+ */
+export abstract class DocumentStore implements EngineStore {
+  abstract readonly name: string;
+  abstract readonly persistent: boolean;
+
+  protected abstract read(): Promise<StateDocument>;
+  protected abstract write(doc: StateDocument): Promise<void>;
+
+  private queue: Promise<unknown> = Promise.resolve();
+
+  /** Serialises a read-modify-write cycle against this instance. */
+  protected mutate<T>(fn: (doc: StateDocument) => T | Promise<T>): Promise<T> {
+    const run = this.queue.then(async () => {
+      const doc = await this.read();
+      const result = await fn(doc);
+      await this.write(doc);
+      return result;
+    });
+    // Keep the chain alive even if this link rejects.
+    this.queue = run.catch(() => undefined);
+    return run;
+  }
+
+  async listPins(filter?: PinFilter): Promise<PinRecord[]> {
+    const doc = await this.read();
+    return applyFilter(Object.values(doc.pins), filter);
+  }
+
+  async getPin(id: string): Promise<PinRecord | null> {
+    const doc = await this.read();
+    return doc.pins[id] ?? null;
+  }
+
+  async findByDedupeKey(key: string): Promise<PinRecord | null> {
+    const doc = await this.read();
+    return Object.values(doc.pins).find((p) => p.dedupeKey === key) ?? null;
+  }
+
+  async titlesForPlant(plantSlug: string, locale: Locale): Promise<string[]> {
+    const doc = await this.read();
+    return Object.values(doc.pins)
+      .filter((p) => p.plantSlug === plantSlug && p.locale === locale)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map((p) => p.title);
+  }
+
+  async savePin(pin: PinRecord): Promise<void> {
+    await this.mutate((doc) => {
+      doc.pins[pin.id] = pin;
+    });
+  }
+
+  async deletePin(id: string): Promise<void> {
+    await this.mutate((doc) => {
+      delete doc.pins[id];
+    });
+  }
+
+  async getConnection(): Promise<PinterestConnection | null> {
+    const doc = await this.read();
+    if (!doc.connection) return null;
+    if (!hasEncryptionKey()) {
+      console.warn(
+        "[store] A Pinterest connection exists but TOKEN_ENCRYPTION_KEY is unavailable.",
+      );
+      return null;
+    }
+    try {
+      return decryptJson<PinterestConnection>(doc.connection);
+    } catch {
+      // Wrong or rotated key - treat as disconnected rather than crashing.
+      console.warn("[store] Stored Pinterest connection could not be decrypted.");
+      return null;
+    }
+  }
+
+  async setConnection(connection: PinterestConnection | null): Promise<void> {
+    await this.mutate((doc) => {
+      doc.connection = connection ? encryptJson(connection) : null;
+    });
+  }
+
+  protected fallback(): StateDocument {
+    return emptyState();
+  }
+}
