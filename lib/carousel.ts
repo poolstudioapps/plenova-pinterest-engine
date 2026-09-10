@@ -472,7 +472,27 @@ export async function publishToAccounts(
     updatedAt: new Date().toISOString(),
   });
 
+  // Results for accounts this run does not touch are carried through
+  // untouched, so a partial record never loses the earlier ones.
+  const untouched = carousel.posts.filter((p) => !openIds.includes(p.openId));
   const posts: CarouselPost[] = [];
+
+  /**
+   * Written after every account, not once at the end.
+   *
+   * Seven accounts, each with a bounded confirmation wait, can run past the
+   * function's time limit. Saving only at the end would lose the publish ids
+   * already obtained, and the next attempt - seeing no record - would post to
+   * those accounts a second time.
+   */
+  const persist = async (status: CarouselRecord["status"]) => {
+    await store.saveCarousel({
+      ...carousel,
+      posts: [...untouched, ...posts],
+      status,
+      updatedAt: new Date().toISOString(),
+    });
+  };
 
   for (const openId of openIds) {
     const account = await store.getTikTokAccount(openId);
@@ -480,6 +500,7 @@ export async function publishToAccounts(
       posts.push(
         failedPost(openId, "", DEFAULT_LOCALE as ContentLocale, options, "Account is not connected."),
       );
+      await persist("publishing");
       continue;
     }
 
@@ -491,6 +512,7 @@ export async function publishToAccounts(
       posts.push(previous);
       continue;
     }
+
 
     const language = account.language;
     const caption = carousel.caption[language];
@@ -506,6 +528,7 @@ export async function publishToAccounts(
           `This carousel has nothing written in ${language}.`,
         ),
       );
+      await persist("publishing");
       continue;
     }
 
@@ -555,12 +578,10 @@ export async function publishToAccounts(
         ),
       );
     }
+
+    await persist("publishing");
   }
 
-  // Keep results for accounts that were not part of this run.
-  const untouched = carousel.posts.filter(
-    (p) => !posts.some((n) => n.openId === p.openId),
-  );
   const allPosts = [...untouched, ...posts];
   const publishedCount = posts.filter((p) => p.publishId).length;
 
