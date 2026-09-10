@@ -248,6 +248,10 @@ const EN: Dict = {
   "pinterest.trialBody":
     "The engine is authenticated with a manually supplied trial token. Boards can be read, but publishing needs the pins:write scope, which trial access does not grant.",
 
+  "login.intro":
+    "Internal content studio for Plenova, a houseplant care app. It generates plant-care images and copy, and publishes them to our own Pinterest and TikTok accounts. Access is restricted to authorised staff.",
+  "login.terms": "Terms of Service",
+  "login.privacy": "Privacy Policy",
   "login.password": "Password",
   "login.cta": "Sign in",
   "login.failed": "Incorrect password.",
@@ -446,6 +450,10 @@ const FR: Dict = {
   "pinterest.trialBody":
     "Le moteur est authentifié avec un jeton d'essai fourni manuellement. Les tableaux sont lisibles, mais la publication exige le scope pins:write, que l'accès d'essai n'accorde pas.",
 
+  "login.intro":
+    "Studio de contenu interne pour Plenova, application d'entretien des plantes d'intérieur. Il génère images et textes, et les publie sur nos propres comptes Pinterest et TikTok. Accès réservé aux personnes autorisées.",
+  "login.terms": "Conditions d'utilisation",
+  "login.privacy": "Politique de confidentialité",
   "login.password": "Mot de passe",
   "login.cta": "Se connecter",
   "login.failed": "Mot de passe incorrect.",
