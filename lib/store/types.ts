@@ -1,8 +1,10 @@
 import type {
+  CarouselRecord,
   MediaAsset,
   PinRecord,
   PinStatus,
   PinterestConnection,
+  TikTokConnection,
 } from "@/lib/types";
 import type { MediaFilter } from "@/lib/media";
 import type { Locale } from "@/lib/i18n";
@@ -54,6 +56,14 @@ export interface EngineStore {
   deleteMedia(id: string): Promise<void>;
   /** Bumps reuse accounting when an asset backs a new Pin or slide. */
   markMediaUsed(id: string): Promise<void>;
+
+  getTikTokConnection(): Promise<TikTokConnection | null>;
+  setTikTokConnection(connection: TikTokConnection | null): Promise<void>;
+
+  listCarousels(): Promise<CarouselRecord[]>;
+  getCarousel(id: string): Promise<CarouselRecord | null>;
+  saveCarousel(carousel: CarouselRecord): Promise<void>;
+  deleteCarousel(id: string): Promise<void>;
 }
 
 /** Shape of the single persisted state document. */
@@ -61,12 +71,22 @@ export interface StateDocument {
   version: 1;
   pins: Record<string, PinRecord>;
   media: Record<string, MediaAsset>;
+  carousels: Record<string, CarouselRecord>;
   /** AES-256-GCM envelope produced by lib/crypto.ts, or null when disconnected. */
   connection: string | null;
+  /** Same envelope, for the TikTok account. */
+  tiktok: string | null;
 }
 
 export function emptyState(): StateDocument {
-  return { version: 1, pins: {}, media: {}, connection: null };
+  return {
+    version: 1,
+    pins: {},
+    media: {},
+    carousels: {},
+    connection: null,
+    tiktok: null,
+  };
 }
 
 /** Shared filter/sort logic so every adapter behaves identically. */

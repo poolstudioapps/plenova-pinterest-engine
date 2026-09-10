@@ -12,7 +12,9 @@ const NAV = [
   { href: "/library", key: "nav.library" },
   { href: "/media", key: "nav.media" },
   { href: "/queue", key: "nav.queue" },
+  { href: "/carousels", key: "nav.carousels" },
   { href: "/pinterest", key: "nav.pinterest" },
+  { href: "/tiktok", key: "nav.tiktok" },
 ] as const;
 
 export function Sidebar({ locale }: { locale: Locale }) {

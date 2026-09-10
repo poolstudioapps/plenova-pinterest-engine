@@ -1,6 +1,12 @@
 import "server-only";
 import { decryptJson, encryptJson, hasEncryptionKey } from "@/lib/crypto";
-import type { MediaAsset, PinRecord, PinterestConnection } from "@/lib/types";
+import type {
+  CarouselRecord,
+  MediaAsset,
+  PinRecord,
+  PinterestConnection,
+  TikTokConnection,
+} from "@/lib/types";
 import { filterMedia, type MediaFilter } from "@/lib/media";
 import type { Locale } from "@/lib/i18n";
 import {
@@ -109,26 +115,76 @@ export abstract class DocumentStore implements EngineStore {
   }
 
   async getConnection(): Promise<PinterestConnection | null> {
-    const doc = await this.read();
-    if (!doc.connection) return null;
-    if (!hasEncryptionKey()) {
-      console.warn(
-        "[store] A Pinterest connection exists but TOKEN_ENCRYPTION_KEY is unavailable.",
-      );
-      return null;
-    }
-    try {
-      return decryptJson<PinterestConnection>(doc.connection);
-    } catch {
-      // Wrong or rotated key - treat as disconnected rather than crashing.
-      console.warn("[store] Stored Pinterest connection could not be decrypted.");
-      return null;
-    }
+    return this.readConnection<PinterestConnection>(
+      (doc) => doc.connection,
+      "Pinterest",
+    );
   }
 
   async setConnection(connection: PinterestConnection | null): Promise<void> {
     await this.mutate((doc) => {
       doc.connection = connection ? encryptJson(connection) : null;
+    });
+  }
+
+  /**
+   * Decrypts one stored connection envelope. Shared by both providers: a
+   * rotated or missing key must degrade to "disconnected" rather than throwing
+   * and taking the whole dashboard down.
+   */
+  private async readConnection<T>(
+    pick: (doc: StateDocument) => string | null,
+    label: string,
+  ): Promise<T | null> {
+    const doc = await this.read();
+    const envelope = pick(doc);
+    if (!envelope) return null;
+    if (!hasEncryptionKey()) {
+      console.warn(
+        `[store] A ${label} connection exists but TOKEN_ENCRYPTION_KEY is unavailable.`,
+      );
+      return null;
+    }
+    try {
+      return decryptJson<T>(envelope);
+    } catch {
+      console.warn(`[store] Stored ${label} connection could not be decrypted.`);
+      return null;
+    }
+  }
+
+  async getTikTokConnection(): Promise<TikTokConnection | null> {
+    return this.readConnection<TikTokConnection>((doc) => doc.tiktok ?? null, "TikTok");
+  }
+
+  async setTikTokConnection(connection: TikTokConnection | null): Promise<void> {
+    await this.mutate((doc) => {
+      doc.tiktok = connection ? encryptJson(connection) : null;
+    });
+  }
+
+  async listCarousels(): Promise<CarouselRecord[]> {
+    const doc = await this.read();
+    return Object.values(doc.carousels ?? {}).sort((a, b) =>
+      b.createdAt.localeCompare(a.createdAt),
+    );
+  }
+
+  async getCarousel(id: string): Promise<CarouselRecord | null> {
+    const doc = await this.read();
+    return doc.carousels?.[id] ?? null;
+  }
+
+  async saveCarousel(carousel: CarouselRecord): Promise<void> {
+    await this.mutate((doc) => {
+      doc.carousels ??= {};
+      doc.carousels[carousel.id] = carousel;
+    });
+  }
+
+  async deleteCarousel(id: string): Promise<void> {
+    await this.mutate((doc) => {
+      delete doc.carousels?.[id];
     });
   }
 

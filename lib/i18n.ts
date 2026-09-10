@@ -66,6 +66,70 @@ const EN: Dict = {
   "nav.library": "Library",
   "nav.queue": "Queue",
   "nav.pinterest": "Pinterest",
+  "nav.tiktok": "TikTok",
+  "nav.carousels": "Carousels",
+
+  "tiktok.title": "TikTok",
+  "tiktok.subtitle":
+    "Connect the Plenova TikTok account so the engine can publish photo carousels.",
+  "tiktok.connection": "Connection",
+  "tiktok.connectBody":
+    "Authorise the Plenova TikTok account. Tokens are encrypted before storage and never reach the browser.",
+  "tiktok.connect": "Connect TikTok",
+  "tiktok.disconnect": "Disconnect",
+  "tiktok.notConfigured": "TikTok credentials are not set",
+  "tiktok.notConfiguredBody":
+    "Add TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET and TIKTOK_REDIRECT_URI, then redeploy.",
+  "tiktok.connectedTitle": "Account connected",
+  "tiktok.connectedBody": "The TikTok account is linked and carousels can be published.",
+  "tiktok.failedTitle": "Connection failed",
+  "tiktok.directPost": "Direct post",
+  "tiktok.draft": "Draft upload",
+  "tiktok.available": "Available",
+  "tiktok.unavailable": "Not granted",
+  "tiktok.config": "App configuration",
+  "tiktok.redirectUri": "Redirect URI",
+  "tiktok.redirectHint":
+    "Must match the value registered on the TikTok app exactly.",
+  "tiktok.scopes": "Requested scopes",
+
+  "carousels.title": "Carousels",
+  "carousels.subtitle":
+    "Build a TikTok carousel from the image library, then publish it. Images already paid for by a Pin cost nothing here.",
+  "carousels.build": "New carousel",
+  "carousels.pickPlant": "Plant",
+  "carousels.pickSlides": "Slides",
+  "carousels.pickSlidesHint":
+    "Click images to add them, in order. TikTok allows up to 35 per carousel.",
+  "carousels.selected": "{n} selected",
+  "carousels.captionTitle": "Title",
+  "carousels.captionTitleHint": "90 characters max, shown as the first line.",
+  "carousels.captionDesc": "Description",
+  "carousels.create": "Create carousel",
+  "carousels.noImages":
+    "No images for this plant yet. Generate a Pin first and its image lands in the library.",
+  "carousels.empty": "No carousels yet",
+  "carousels.emptyBody":
+    "Pick a plant, choose slides from the library, and create your first carousel.",
+  "carousels.publish": "Publish to TikTok",
+  "carousels.delete": "Delete",
+  "carousels.slides": "{n} slides",
+
+  "publish.title": "Publish to TikTok",
+  "publish.mode": "How to post",
+  "publish.modeDirect": "Post directly to the profile",
+  "publish.modeDraft": "Send to drafts, finish in TikTok",
+  "publish.privacy": "Who can view this post",
+  "publish.privacyHint":
+    "Options come from your TikTok account and are honoured exactly as chosen.",
+  "publish.brandContent": "Branded content (paid partnership)",
+  "publish.brandOrganic": "Promoting your own business",
+  "publish.confirm": "Publish",
+  "publish.cancel": "Cancel",
+  "publish.loading": "Loading your TikTok account...",
+  "publish.published": "Published. TikTok publish id: {id}",
+  "publish.draftDone": "Sent to your TikTok drafts.",
+  "publish.needPrivacy": "Choose who can view the post first.",
   "nav.media": "Images",
 
   "media.title": "Image library",
@@ -266,6 +330,71 @@ const FR: Dict = {
   "nav.library": "Bibliothèque",
   "nav.queue": "File d'attente",
   "nav.pinterest": "Pinterest",
+  "nav.tiktok": "TikTok",
+  "nav.carousels": "Carrousels",
+
+  "tiktok.title": "TikTok",
+  "tiktok.subtitle":
+    "Connecte le compte TikTok de Plenova pour que le moteur publie des carrousels photo.",
+  "tiktok.connection": "Connexion",
+  "tiktok.connectBody":
+    "Autorise le compte TikTok de Plenova. Les jetons sont chiffrés avant stockage et n'atteignent jamais le navigateur.",
+  "tiktok.connect": "Connecter TikTok",
+  "tiktok.disconnect": "Déconnecter",
+  "tiktok.notConfigured": "Identifiants TikTok non renseignés",
+  "tiktok.notConfiguredBody":
+    "Ajoute TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET et TIKTOK_REDIRECT_URI, puis redéploie.",
+  "tiktok.connectedTitle": "Compte connecté",
+  "tiktok.connectedBody":
+    "Le compte TikTok est lié et les carrousels peuvent être publiés.",
+  "tiktok.failedTitle": "Échec de la connexion",
+  "tiktok.directPost": "Publication directe",
+  "tiktok.draft": "Envoi en brouillon",
+  "tiktok.available": "Disponible",
+  "tiktok.unavailable": "Non accordé",
+  "tiktok.config": "Configuration de l'app",
+  "tiktok.redirectUri": "URI de redirection",
+  "tiktok.redirectHint":
+    "Doit correspondre exactement à la valeur enregistrée sur l'app TikTok.",
+  "tiktok.scopes": "Scopes demandés",
+
+  "carousels.title": "Carrousels",
+  "carousels.subtitle":
+    "Construis un carrousel TikTok depuis la bibliothèque d'images, puis publie-le. Les images déjà payées par un Pin ne coûtent rien ici.",
+  "carousels.build": "Nouveau carrousel",
+  "carousels.pickPlant": "Plante",
+  "carousels.pickSlides": "Slides",
+  "carousels.pickSlidesHint":
+    "Clique les images pour les ajouter, dans l'ordre. TikTok en accepte 35 au maximum.",
+  "carousels.selected": "{n} sélectionnée(s)",
+  "carousels.captionTitle": "Titre",
+  "carousels.captionTitleHint": "90 caractères max, affiché en première ligne.",
+  "carousels.captionDesc": "Description",
+  "carousels.create": "Créer le carrousel",
+  "carousels.noImages":
+    "Aucune image pour cette plante. Génère d'abord un Pin, son image atterrira dans la bibliothèque.",
+  "carousels.empty": "Aucun carrousel",
+  "carousels.emptyBody":
+    "Choisis une plante, sélectionne des slides dans la bibliothèque, et crée ton premier carrousel.",
+  "carousels.publish": "Publier sur TikTok",
+  "carousels.delete": "Supprimer",
+  "carousels.slides": "{n} slides",
+
+  "publish.title": "Publier sur TikTok",
+  "publish.mode": "Mode de publication",
+  "publish.modeDirect": "Publier directement sur le profil",
+  "publish.modeDraft": "Envoyer en brouillon, finir dans TikTok",
+  "publish.privacy": "Qui peut voir cette publication",
+  "publish.privacyHint":
+    "Les options viennent de ton compte TikTok et sont respectées telles quelles.",
+  "publish.brandContent": "Contenu de marque (partenariat rémunéré)",
+  "publish.brandOrganic": "Promotion de ta propre activité",
+  "publish.confirm": "Publier",
+  "publish.cancel": "Annuler",
+  "publish.loading": "Chargement de ton compte TikTok...",
+  "publish.published": "Publié. Identifiant TikTok : {id}",
+  "publish.draftDone": "Envoyé dans tes brouillons TikTok.",
+  "publish.needPrivacy": "Choisis d'abord qui peut voir la publication.",
   "nav.media": "Images",
 
   "media.title": "Bibliothèque d'images",

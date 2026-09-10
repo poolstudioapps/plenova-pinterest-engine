@@ -49,6 +49,7 @@ export const duplicate = (m: string, d?: unknown) =>
 const SECRET_ENV_KEYS = [
   "GEMINI_API_KEY",
   "PINTEREST_APP_SECRET",
+  "TIKTOK_CLIENT_SECRET",
   "TOKEN_ENCRYPTION_KEY",
   "BLOB_READ_WRITE_TOKEN",
   "CRON_SECRET",
@@ -63,9 +64,12 @@ export function redact(input: string): string {
       out = out.split(value).join("[redacted]");
     }
   }
-  // Bearer tokens and Pinterest token shapes.
+  // Bearer tokens, plus the token shapes each provider issues.
   out = out.replace(/Bearer\s+[A-Za-z0-9._\-]+/g, "Bearer [redacted]");
   out = out.replace(/\bpina_[A-Za-z0-9._\-]+/g, "[redacted]");
+  // TikTok access and refresh tokens.
+  out = out.replace(/\bact\.[A-Za-z0-9._\-]+/g, "[redacted]");
+  out = out.replace(/\brft\.[A-Za-z0-9._\-]+/g, "[redacted]");
   return out;
 }
 

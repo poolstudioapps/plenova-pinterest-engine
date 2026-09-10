@@ -165,6 +165,73 @@ export interface PinterestConnection {
   connectedAt: string;
 }
 
+/** A connected TikTok account. Tokens live encrypted, same as Pinterest. */
+export interface TikTokConnection {
+  accessToken: string;
+  refreshToken: string | null;
+  expiresAt: number | null;
+  refreshTokenExpiresAt: number | null;
+  scopes: string[];
+  openId: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  connectedAt: string;
+}
+
+/**
+ * Creator state, queried immediately before a direct post.
+ *
+ * TikTok audits this: the privacy options must be rendered from the live
+ * response and the operator's choice honoured, never hard-coded.
+ */
+export interface TikTokCreatorInfo {
+  nickname: string;
+  avatarUrl: string | null;
+  privacyOptions: string[];
+  commentDisabled: boolean;
+  duetDisabled: boolean;
+  stitchDisabled: boolean;
+  maxTitleLength: number;
+  maxVideoDuration: number;
+}
+
+export type CarouselStatus =
+  | "draft"
+  | "publishing"
+  | "published"
+  | "failed";
+
+/** A TikTok photo carousel: ordered slides plus one caption. */
+export interface CarouselRecord {
+  id: string;
+  locale: Locale;
+  title: string;
+  description: string;
+  /** Media library asset ids, in slide order. */
+  slideIds: string[];
+  /** Resolved public URLs at publish time, in the same order. */
+  slideUrls: string[];
+  /** 1-indexed, as TikTok expects. */
+  coverIndex: number;
+
+  plantSlug: string | null;
+  plantName: string | null;
+
+  status: CarouselStatus;
+  postMode: "DIRECT_POST" | "MEDIA_UPLOAD";
+  privacyLevel: string | null;
+  brandContentToggle: boolean;
+  brandOrganicToggle: boolean;
+
+  publishId: string | null;
+  publishedAt: string | null;
+  error: string | null;
+
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface EngineStats {
   plants: number;
   /** Images in the reusable library. */

@@ -279,7 +279,8 @@ pas basculé vers Vercel**. C'est la seule action qui casserait l'ancien outil.
 | Domaine `latelierugc.com` vérifié | ✅ |
 | `studio.latelierugc.com` en ligne (HTTPS, TLS valide) | ✅ |
 | Pages légales publiques et lisibles | ✅ |
-| Variables d'environnement TikTok | ⬜ à poser quand le code existera |
-| Intégration TikTok dans le tool | ⬜ en cours |
+| Intégration TikTok dans le tool | ✅ OAuth PKCE, creator_info, publication directe + brouillon |
+| Onglets TikTok et Carrousels | ✅ |
+| Variables d'environnement TikTok | ⬜ **à poser maintenant** |
 | Vidéo de démo | ⬜ nécessite le code |
 | Soumission | ⬜ **ne pas soumettre avant la vidéo** |

@@ -83,6 +83,15 @@ export const config = {
       .split(/[,\s]+/)
       .filter(Boolean),
   },
+  tiktok: {
+    clientKey: env("TIKTOK_CLIENT_KEY"),
+    clientSecret: env("TIKTOK_CLIENT_SECRET"),
+    redirectUri: env("TIKTOK_REDIRECT_URI"),
+    authorizeUrl: "https://www.tiktok.com/v2/auth/authorize/",
+    apiBase: "https://open.tiktokapis.com",
+    /** user.info.basic for the profile, the other two to publish. */
+    scopes: ["user.info.basic", "video.publish", "video.upload"],
+  },
   app: {
     url: resolveAppUrl(),
     oneLink: env("APPSFLYER_ONELINK") ?? DEFAULT_ONELINK,
@@ -123,6 +132,24 @@ export function blobCredentials(): { token?: string; storeId?: string } {
     ...(config.storage.blobToken ? { token: config.storage.blobToken } : {}),
     ...(config.storage.blobStoreId ? { storeId: config.storage.blobStoreId } : {}),
   };
+}
+
+export function isTikTokConfigured(): boolean {
+  return Boolean(
+    config.tiktok.clientKey &&
+      config.tiktok.clientSecret &&
+      resolveTikTokRedirectUri(),
+  );
+}
+
+/** Must match the value registered on the TikTok app character for character. */
+export function resolveTikTokRedirectUri(): string | undefined {
+  const explicit = config.tiktok.redirectUri;
+  if (explicit) return explicit;
+  if (config.app.url) {
+    return new URL("/api/tiktok/callback", config.app.url).toString();
+  }
+  return undefined;
 }
 
 export function isGeminiConfigured(): boolean {
