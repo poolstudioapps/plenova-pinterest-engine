@@ -8,7 +8,7 @@ import { getStore } from "@/lib/store";
 export const dynamic = "force-dynamic";
 
 type Params = {
-  params: Promise<{ id: string; index: string; lang: string }>;
+  params: Promise<{ id: string; index: string; lang: string; sig: string }>;
 };
 
 /**
@@ -23,12 +23,15 @@ type Params = {
  * It has to be reachable without a session, because TikTok's servers fetch it
  * with no cookie. So the path is signed: the id alone is not enough, and the
  * signature comes from the same key the rest of the app is keyed on.
+ *
+ * The signature is a path segment rather than a query parameter, and the URL
+ * ends in .jpg, so what TikTok receives is an ordinary-looking image URL with
+ * no query string at all. That is the shape it is known to accept.
  */
 export async function GET(_request: Request, { params }: Params) {
   return handle(async () => {
-    const { id, index, lang } = await params;
-    const url = new URL(_request.url);
-    const token = url.searchParams.get("t") ?? "";
+    const { id, index, lang, sig } = await params;
+    const token = sig.replace(/\.jpg$/, "");
 
     const position = Number(index);
     if (!Number.isInteger(position) || position < 0 || position > 34) {

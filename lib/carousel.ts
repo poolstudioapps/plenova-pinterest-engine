@@ -572,7 +572,7 @@ export function slideUrlsFor(
     .map((slide, index) => {
       if (!slide.composed[language] && !slide.imageUrl) return null;
       const label = `${carousel.id}:${index}:${language}`;
-      return `${config.app.url}/api/pull/${carousel.id}/${index}/${language}?t=${signLabel(label)}`;
+      return `${config.app.url}/api/pull/${carousel.id}/${index}/${language}/${signLabel(label)}.jpg`;
     })
     .filter((u): u is string => u !== null);
 }
