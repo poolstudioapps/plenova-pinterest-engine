@@ -15,6 +15,8 @@ import { DEFAULT_LOCALE, type ContentLocale } from "@/lib/i18n";
 import { extensionFor, hostImageAt } from "@/lib/images";
 import { mediaPath, varietySlug } from "@/lib/media";
 import { findReference, isPexelsConfigured } from "@/lib/pexels";
+import { config } from "@/lib/config";
+import { signLabel } from "@/lib/crypto";
 import { getStore } from "@/lib/store";
 import { getPublishStatus, publishCarousel } from "@/lib/tiktok";
 import {
@@ -555,13 +557,24 @@ export async function updateSlide(
 }
 
 /** The images to publish for one language, composites where they exist. */
+/**
+ * The image URLs handed to TikTok, for one language.
+ *
+ * Always on our own domain, never the Blob hostname: TikTok pulls these itself
+ * and rejects any domain not verified in its developer portal. The Blob
+ * hostname belongs to Vercel and cannot be verified, so it is relayed.
+ */
 export function slideUrlsFor(
   carousel: CarouselRecord,
   language: ContentLocale,
 ): string[] {
   return carousel.slides
-    .map((s) => s.composed[language] ?? s.imageUrl)
-    .filter((u): u is string => Boolean(u));
+    .map((slide, index) => {
+      if (!slide.composed[language] && !slide.imageUrl) return null;
+      const label = `${carousel.id}:${index}:${language}`;
+      return `${config.app.url}/api/pull/${carousel.id}/${index}/${language}?t=${signLabel(label)}`;
+    })
+    .filter((u): u is string => u !== null);
 }
 
 export interface PublishOptions {

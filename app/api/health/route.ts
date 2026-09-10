@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { config } from "@/lib/config";
 
 /**
  * Public deployment check.
@@ -20,6 +21,10 @@ export function GET() {
       ok: true,
       commit: commit ? commit.slice(0, 7) : "local",
       builtFor: process.env.VERCEL_ENV ?? "development",
+      // The domain the app hands to TikTok for image pulls. It has to be the
+      // one verified in the developer portal, and getting it wrong fails every
+      // publish with a message about URL ownership.
+      baseUrl: config.app.url,
       time: new Date().toISOString(),
     },
     { headers: { "Cache-Control": "no-store" } },

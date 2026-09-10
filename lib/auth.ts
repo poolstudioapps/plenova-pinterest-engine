@@ -27,10 +27,13 @@ const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
  *  - /legal            TikTok and Pinterest read these during app review.
  *  - OAuth callbacks   providers redirect here before a session exists.
  *  - /api/cron         guarded by CRON_SECRET instead; see the route.
+ *  - /api/pull         TikTok's servers fetch slide images with no cookie;
+ *                      guarded by a signature in the URL instead.
  *  - /login, /api/auth otherwise you could never sign in.
  */
 const PUBLIC_PREFIXES = [
   "/api/health",
+  "/api/pull",
   "/legal",
   "/login",
   "/api/auth",

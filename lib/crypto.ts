@@ -103,6 +103,23 @@ export function derivePathSegment(label: string): string {
     .slice(0, 32);
 }
 
+/**
+ * Signs a short label so a public URL can be handed out without becoming a
+ * directory anyone can walk. Same key as the rest, different purpose.
+ */
+export function signLabel(label: string): string {
+  const raw = config.security.tokenEncryptionKey;
+  if (!raw) return "unsigned";
+  return createHmac("sha256", Buffer.from(raw, "base64"))
+    .update(`url:${label}`)
+    .digest("base64url")
+    .slice(0, 32);
+}
+
+export function verifyLabel(label: string, token: string): boolean {
+  return safeEqual(signLabel(label), token);
+}
+
 export function sha256(input: string): string {
   return createHash("sha256").update(input).digest("hex");
 }
