@@ -1,16 +1,15 @@
-
 /**
  * Slide composition.
  *
- * Ported in spirit from the carousel-studio renderer: the layout is plain
- * HTML and CSS, rendered by a real browser engine. That matters because the
- * two signature looks depend on CSS that no server-side HTML-to-image library
- * implements - `-webkit-text-stroke` with `paint-order`, and
+ * Ported from the carousel-studio renderer, block model included: the layout
+ * is plain HTML and CSS rendered by a real browser engine. That matters
+ * because the signature looks depend on CSS no server-side HTML-to-image
+ * library implements - `-webkit-text-stroke` with `paint-order`, and
  * `box-decoration-break: clone` for per-line pills.
  *
  * Rather than run headless Chromium on a serverless function, the operator's
- * own browser does the render. It is the same engine, so the output matches,
- * and there is nothing to install or keep warm.
+ * own browser does the render. It is the same engine, so what the editor shows
+ * is what the file contains, and there is nothing to install or keep warm.
  *
  * Everything the markup references must be inlined as a data URL: the capture
  * happens inside an SVG foreignObject, which cannot fetch external resources.
@@ -19,21 +18,124 @@
 export const SLIDE_WIDTH = 1080;
 export const SLIDE_HEIGHT = 1350;
 
-export type OverlayStyle = "stroke" | "pill" | "none";
+export type OverlayStyle = "stroke" | "pillWhite" | "pillBlack" | "none";
 
-export interface OverlayOptions {
-  style: OverlayStyle;
-  /** Vertical placement of the text block. */
-  position: "top" | "center" | "bottom";
-  /** Outline colour for the stroke style. Plenova green by default. */
-  strokeColor?: string;
+export const OVERLAY_STYLES: OverlayStyle[] = [
+  "stroke",
+  "pillWhite",
+  "pillBlack",
+  "none",
+];
+
+/**
+ * One movable text block.
+ *
+ * `x` and `y` are the CENTRE of the block in source pixels, which is what
+ * makes dragging and resizing behave the way a designer expects: the block
+ * grows around its anchor instead of drifting away from it.
+ */
+export interface OverlayBlock {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  fontSize: number;
+  fontWeight: number;
+  align: "left" | "center" | "right";
+  lineHeight: number;
+  /** Overrides the slide style for this block alone. */
+  style: OverlayStyle | null;
+  strokeColor: string;
+  /** Outline thickness as a percentage of the font size. */
+  strokeWidth: number;
 }
 
-export const DEFAULT_OVERLAY: OverlayOptions = {
-  style: "stroke",
-  position: "bottom",
+export interface SlideOverlay {
+  style: OverlayStyle;
+  title: OverlayBlock;
+  subtitle: OverlayBlock;
+}
+
+export const TITLE_DEFAULTS: OverlayBlock = {
+  x: 540,
+  y: 560,
+  width: 900,
+  height: 260,
+  fontSize: 96,
+  fontWeight: 800,
+  align: "center",
+  lineHeight: 1.1,
+  style: null,
   strokeColor: "#11481D",
+  strokeWidth: 18,
 };
+
+export const SUBTITLE_DEFAULTS: OverlayBlock = {
+  x: 540,
+  y: 800,
+  width: 850,
+  height: 180,
+  fontSize: 52,
+  fontWeight: 700,
+  align: "center",
+  lineHeight: 1.25,
+  style: null,
+  strokeColor: "#11481D",
+  strokeWidth: 15,
+};
+
+export function defaultOverlay(style: OverlayStyle = "stroke"): SlideOverlay {
+  return {
+    style,
+    title: { ...TITLE_DEFAULTS },
+    subtitle: { ...SUBTITLE_DEFAULTS },
+  };
+}
+
+/** Fills in every field, so a stored overlay from any older shape still renders. */
+export function normaliseOverlay(
+  raw: unknown,
+  fallbackStyle: OverlayStyle = "stroke",
+): SlideOverlay {
+  const o = (raw ?? {}) as Record<string, unknown>;
+  const style = OVERLAY_STYLES.includes(o.style as OverlayStyle)
+    ? (o.style as OverlayStyle)
+    : fallbackStyle;
+  return {
+    style,
+    title: normaliseBlock(o.title, TITLE_DEFAULTS),
+    subtitle: normaliseBlock(o.subtitle, SUBTITLE_DEFAULTS),
+  };
+}
+
+function normaliseBlock(raw: unknown, defaults: OverlayBlock): OverlayBlock {
+  const b = (raw ?? {}) as Record<string, unknown>;
+  const num = (value: unknown, fallback: number, min: number, max: number) => {
+    const n = typeof value === "number" && Number.isFinite(value) ? value : fallback;
+    return Math.min(max, Math.max(min, n));
+  };
+  return {
+    x: num(b.x, defaults.x, 0, SLIDE_WIDTH),
+    y: num(b.y, defaults.y, 0, SLIDE_HEIGHT),
+    width: num(b.width, defaults.width, 80, SLIDE_WIDTH),
+    height: num(b.height, defaults.height, 40, SLIDE_HEIGHT),
+    fontSize: num(b.fontSize, defaults.fontSize, 16, 240),
+    fontWeight: num(b.fontWeight, defaults.fontWeight, 300, 900),
+    align:
+      b.align === "left" || b.align === "right" || b.align === "center"
+        ? b.align
+        : defaults.align,
+    lineHeight: num(b.lineHeight, defaults.lineHeight, 0.8, 3),
+    style: OVERLAY_STYLES.includes(b.style as OverlayStyle)
+      ? (b.style as OverlayStyle)
+      : null,
+    strokeColor:
+      typeof b.strokeColor === "string" && /^#[0-9a-f]{6}$/i.test(b.strokeColor)
+        ? b.strokeColor
+        : defaults.strokeColor,
+    strokeWidth: num(b.strokeWidth, defaults.strokeWidth, 0, 50),
+  };
+}
 
 function escapeHtml(value: string): string {
   return value
@@ -44,38 +146,84 @@ function escapeHtml(value: string): string {
 }
 
 /**
- * Renders one text line.
+ * The inner span for one block.
+ *
+ * The pill styles use one inline span with `box-decoration-break: clone`, so
+ * the background wraps each line separately with its own rounded corners.
+ * That is the native TikTok look, and it is the reason this renders in a
+ * browser rather than in an image library.
  *
  * `paint-order: stroke fill` is what keeps the outline outside the glyph
  * rather than eating into it; without it the text looks thinner and muddier at
  * thumbnail size.
  */
-function renderText(
+export function renderBlockInner(
   text: string,
-  fontSize: number,
-  weight: number,
-  options: OverlayOptions,
+  block: OverlayBlock,
+  slideStyle: OverlayStyle,
 ): string {
-  const safe = escapeHtml(text);
+  const safe = escapeHtml(text).replace(/\n/g, "<br/>");
   if (!safe) return "";
+  const style = block.style ?? slideStyle;
+  const size = block.fontSize;
 
-  if (options.style === "pill") {
-    const padX = Math.round(fontSize * 0.4);
-    const padY = Math.round(fontSize * 0.12);
-    const radius = Math.round(fontSize * 0.28);
-    return `<span style="background:#fff;color:#000;padding:${padY}px ${padX}px;border-radius:${radius}px;box-decoration-break:clone;-webkit-box-decoration-break:clone;font-weight:${weight};font-size:${fontSize}px;">${safe}</span>`;
+  if (style === "pillWhite" || style === "pillBlack") {
+    const padX = Math.round(size * 0.45);
+    const padY = Math.round(size * 0.1);
+    const radius = Math.round(size * 0.3);
+    const bg = style === "pillWhite" ? "#fff" : "#000";
+    const fg = style === "pillWhite" ? "#000" : "#fff";
+    return `<span style="background:${bg};color:${fg};padding:${padY}px ${padX}px;border-radius:${radius}px;box-decoration-break:clone;-webkit-box-decoration-break:clone;">${safe}</span>`;
   }
 
-  if (options.style === "stroke") {
-    const stroke = Math.max(3, Math.round(fontSize * 0.14));
-    const color = options.strokeColor ?? DEFAULT_OVERLAY.strokeColor;
-    return `<span style="color:#fff;font-weight:${weight};font-size:${fontSize}px;-webkit-text-stroke:${stroke}px ${color};paint-order:stroke fill;text-shadow:0 4px 14px rgba(0,0,0,0.35);">${safe}</span>`;
+  if (style === "stroke") {
+    const stroke = Math.max(0, Math.round(size * (block.strokeWidth / 100)));
+    return `<span style="color:#fff;-webkit-text-stroke:${stroke}px ${block.strokeColor};paint-order:stroke fill;text-shadow:0 4px 12px rgba(0,0,0,0.35);">${safe}</span>`;
   }
 
-  return `<span style="color:#fff;font-weight:${weight};font-size:${fontSize}px;text-shadow:0 2px 10px rgba(0,0,0,0.65);">${safe}</span>`;
+  return `<span style="color:#fff;text-shadow:0 2px 8px rgba(0,0,0,0.6);">${safe}</span>`;
 }
 
-/** The words to lay over one image. */
+/**
+ * Geometry for one block, as a style object.
+ *
+ * The editor preview and the final capture both read this, so what the
+ * operator drags into place is what the JPEG contains. Two implementations of
+ * the same layout would drift apart the first time either was touched.
+ */
+export function blockLayout(block: OverlayBlock): Record<string, string | number> {
+  const justify =
+    block.align === "left"
+      ? "flex-start"
+      : block.align === "right"
+        ? "flex-end"
+        : "center";
+  return {
+    position: "absolute",
+    left: `${block.x}px`,
+    top: `${block.y}px`,
+    width: `${block.width}px`,
+    height: `${block.height}px`,
+    transform: "translate(-50%,-50%)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: justify,
+    fontSize: `${block.fontSize}px`,
+    fontWeight: block.fontWeight,
+    lineHeight: block.lineHeight,
+    overflowWrap: "break-word",
+    wordWrap: "break-word",
+  };
+}
+
+/** The same geometry as a CSS declaration string, for the captured markup. */
+export function blockBoxStyle(block: OverlayBlock): string {
+  return Object.entries(blockLayout(block))
+    .map(([key, value]) => `${key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}:${value}`)
+    .join(";");
+}
+
+/** The words to lay over one image, in one language. */
 export interface SlideCopy {
   title: string;
   subtitle: string;
@@ -83,37 +231,20 @@ export interface SlideCopy {
 
 export interface BuildSlideHtmlInput {
   slide: SlideCopy;
+  overlay: SlideOverlay;
   /** The background photograph, as a data URL. */
   backgroundDataUrl: string;
-  /** The font file, as a base64 string (no data: prefix). */
+  /** The font file, as a base64 string with no data: prefix. */
   fontBase64: string;
-  options?: Partial<OverlayOptions>;
 }
 
 export function buildSlideHtml(input: BuildSlideHtmlInput): string {
-  const options: OverlayOptions = { ...DEFAULT_OVERLAY, ...input.options };
-  const { title, subtitle } = input.slide;
+  const { overlay, slide } = input;
 
-  // Long titles have to shrink or they wrap into an unreadable block.
-  const titleSize = title.length > 34 ? 74 : title.length > 22 ? 88 : 104;
-  const subtitleSize = 40;
-
-  const justify =
-    options.position === "top"
-      ? "flex-start"
-      : options.position === "bottom"
-        ? "flex-end"
-        : "center";
-
-  // A scrim only where the text sits, so the photograph stays readable.
-  const scrim =
-    options.style === "pill"
-      ? "none"
-      : options.position === "top"
-        ? "linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0) 55%)"
-        : options.position === "bottom"
-          ? "linear-gradient(to top, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 55%)"
-          : "radial-gradient(ellipse at center, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0) 70%)";
+  const block = (text: string, b: OverlayBlock) =>
+    text.trim()
+      ? `<div style="${blockBoxStyle(b)}"><div style="width:100%;text-align:${b.align};">${renderBlockInner(text, b, overlay.style)}</div></div>`
+      : "";
 
   return `<div style="
   width:${SLIDE_WIDTH}px;height:${SLIDE_HEIGHT}px;position:relative;overflow:hidden;
@@ -131,13 +262,7 @@ export function buildSlideHtml(input: BuildSlideHtmlInput): string {
     * { margin:0; padding:0; box-sizing:border-box; }
   </style>
   <img src="${input.backgroundDataUrl}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;" />
-  <div style="position:absolute;inset:0;background:${scrim};"></div>
-  <div style="
-    position:absolute;inset:0;display:flex;flex-direction:column;
-    justify-content:${justify};align-items:center;
-    padding:96px 84px;text-align:center;gap:28px;">
-    <div style="line-height:1.08;">${renderText(title, titleSize, 800, options)}</div>
-    ${subtitle ? `<div style="line-height:1.32;max-width:88%;">${renderText(subtitle, subtitleSize, 500, options)}</div>` : ""}
-  </div>
+  ${block(slide.title, overlay.title)}
+  ${block(slide.subtitle, overlay.subtitle)}
 </div>`;
 }

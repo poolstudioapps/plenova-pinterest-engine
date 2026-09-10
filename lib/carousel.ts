@@ -17,11 +17,17 @@ import { mediaPath, varietySlug } from "@/lib/media";
 import { findReference, isPexelsConfigured } from "@/lib/pexels";
 import { getStore } from "@/lib/store";
 import { getPublishStatus, publishCarousel } from "@/lib/tiktok";
+import {
+  defaultOverlay,
+  type OverlayStyle,
+  type SlideOverlay,
+} from "@/lib/overlay";
 import type {
   CarouselPost,
   CarouselRecord,
   CarouselSlide,
   MediaAsset,
+  SlideText,
 } from "@/lib/types";
 
 /**
@@ -65,6 +71,8 @@ export interface GenerateCarouselInput {
   imageSource?: ImageSource;
   plantSlug?: string;
   variety?: string;
+  /** Starting look for every slide. Each one can be adjusted afterwards. */
+  overlayStyle?: OverlayStyle;
 }
 
 /**
@@ -238,6 +246,7 @@ async function generateCarousel(
       text,
       imagePrompt: draft.imagePrompt,
       photoQuery: draft.photoQuery,
+      overlay: startingOverlay(input.overlayStyle ?? "stroke", text),
       mediaId: asset.id,
       imageUrl: asset.url,
       composed: {},
@@ -415,6 +424,92 @@ export async function saveComposedSlide(
     lastUsedAt: now,
     createdAt: now,
   });
+
+  const updated: CarouselRecord = {
+    ...carousel,
+    slides,
+    updatedAt: new Date().toISOString(),
+  };
+  await store.saveCarousel(updated);
+  return updated;
+}
+
+/**
+ * The layout a slide starts with.
+ *
+ * Everything here is editable afterwards, so this only has to be a good first
+ * guess - but a good first guess is most of the value. A fixed size makes long
+ * titles wrap into an unreadable block, and the longest translation is the one
+ * that has to fit, since all languages share the layout.
+ */
+function startingOverlay(
+  style: OverlayStyle,
+  text: Partial<Record<ContentLocale, SlideText>>,
+): SlideOverlay {
+  const overlay = defaultOverlay(style);
+  const longest = Math.max(
+    0,
+    ...Object.values(text).map((t) => t?.title.length ?? 0),
+  );
+
+  overlay.title.fontSize =
+    longest <= 22 ? 104 : longest <= 34 ? 88 : longest <= 50 ? 74 : 62;
+
+  const longestSub = Math.max(
+    0,
+    ...Object.values(text).map((t) => t?.subtitle.length ?? 0),
+  );
+  overlay.subtitle.fontSize = longestSub <= 60 ? 52 : longestSub <= 95 ? 44 : 38;
+
+  return overlay;
+}
+
+/**
+ * Saves one slide's words and layout, from the editor.
+ *
+ * Any composite that the change invalidates is dropped. Text edits only
+ * invalidate the language they were made in; a layout change invalidates every
+ * language, because the layout is shared. Leaving a stale composite in place
+ * would publish the old wording, which is the worst of the three outcomes.
+ */
+export async function updateSlide(
+  id: string,
+  index: number,
+  patch: {
+    text?: Partial<Record<ContentLocale, SlideText>>;
+    overlay?: SlideOverlay;
+  },
+): Promise<CarouselRecord> {
+  const store = getStore();
+  const carousel = await store.getCarousel(id);
+  if (!carousel) throw notFound(`No carousel with id ${id}.`);
+
+  const slide = carousel.slides[index];
+  if (!slide) throw badRequest(`This carousel has no slide ${index + 1}.`);
+
+  const text = { ...slide.text };
+  const stale = new Set<ContentLocale>();
+
+  for (const [language, value] of Object.entries(patch.text ?? {})) {
+    const locale = language as ContentLocale;
+    const before = slide.text[locale];
+    if (before?.title === value.title && before?.subtitle === value.subtitle) {
+      continue;
+    }
+    text[locale] = value;
+    stale.add(locale);
+  }
+
+  const overlay = patch.overlay ?? slide.overlay;
+  if (patch.overlay && JSON.stringify(patch.overlay) !== JSON.stringify(slide.overlay)) {
+    for (const language of carousel.languages) stale.add(language);
+  }
+
+  const composed = { ...slide.composed };
+  for (const language of stale) delete composed[language];
+
+  const slides = [...carousel.slides];
+  slides[index] = { ...slide, text, overlay, composed };
 
   const updated: CarouselRecord = {
     ...carousel,

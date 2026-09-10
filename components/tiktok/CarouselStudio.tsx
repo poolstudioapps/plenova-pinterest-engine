@@ -12,15 +12,21 @@ import {
   Select,
 } from "@/components/ui";
 import { PublishDialog } from "@/components/tiktok/PublishDialog";
+import { SlideEditor } from "@/components/tiktok/SlideEditor";
 import type { AccountView } from "@/components/tiktok/TikTokPanel";
 import { captureSlides } from "@/lib/capture";
-import type { OverlayStyle } from "@/lib/overlay";
+import {
+  OVERLAY_STYLES,
+  defaultOverlay,
+  type OverlayStyle,
+} from "@/lib/overlay";
 import {
   CONTENT_LOCALES,
   CONTENT_LOCALE_LABELS,
   translator,
   type ContentLocale,
   type Locale,
+  type TranslationKey,
 } from "@/lib/i18n";
 import type { CarouselRecord } from "@/lib/types";
 import { cn, relativeTime } from "@/lib/utils";
@@ -33,6 +39,13 @@ interface Props {
   canGenerate: boolean;
   hasPexels: boolean;
 }
+
+const OVERLAY_STYLE_LABELS: Record<OverlayStyle, TranslationKey> = {
+  stroke: "editor.styleStroke",
+  pillWhite: "editor.stylePillWhite",
+  pillBlack: "editor.stylePillBlack",
+  none: "editor.styleNone",
+};
 
 /** Starting points, so the field is never an intimidating blank box. */
 const THEME_EXAMPLES = [
@@ -69,6 +82,11 @@ export function CarouselStudio({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [publishing, setPublishing] = useState<CarouselRecord | null>(null);
+  const [editing, setEditing] = useState<{
+    carousel: CarouselRecord;
+    index: number;
+    language: ContentLocale;
+  } | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [previewLang, setPreviewLang] = useState<ContentLocale>(
     uiLocale as ContentLocale,
@@ -135,6 +153,7 @@ export function CarouselStudio({
           languages,
           plantSlug: plantSlug || undefined,
           imageSource,
+          overlayStyle,
         }),
       });
       const data = (await res.json()) as {
@@ -188,12 +207,13 @@ export function CarouselStudio({
           src: `/api/carousels/${carousel.id}/slides/${i}/raw`,
           title: s.text[language]?.title ?? "",
           subtitle: s.text[language]?.subtitle ?? "",
+          // Each slide carries its own layout, so one edited slide does not
+          // drag the rest of the carousel with it.
+          overlay: s.overlay ?? defaultOverlay(overlayStyle),
         }));
 
-        const captured = await captureSlides(
-          slides,
-          { style: overlayStyle },
-          () => setProgress({ done: ++done, total }),
+        const captured = await captureSlides(slides, () =>
+          setProgress({ done: ++done, total }),
         );
 
         // One request per slide: a whole carousel of base64 JPEGs in one body
@@ -358,9 +378,11 @@ export function CarouselStudio({
               value={overlayStyle}
               onChange={(e) => setOverlayStyle(e.target.value as OverlayStyle)}
             >
-              <option value="stroke">{t("carousels.styleStroke")}</option>
-              <option value="pill">{t("carousels.stylePill")}</option>
-              <option value="none">{t("carousels.styleNone")}</option>
+              {OVERLAY_STYLES.map((style) => (
+                <option key={style} value={style}>
+                  {t(OVERLAY_STYLE_LABELS[style])}
+                </option>
+              ))}
             </Select>
           </Field>
         </div>
@@ -571,6 +593,19 @@ export function CarouselStudio({
                             <p className="text-[11.5px] leading-snug text-[var(--color-ink-faint)]">
                               {text?.subtitle ?? ""}
                             </p>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setEditing({
+                                  carousel,
+                                  index: i,
+                                  language: lang,
+                                })
+                              }
+                              className="w-full rounded-[7px] border border-[var(--color-line)] py-1 text-[11.5px] font-medium text-[var(--color-ink-soft)] transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-ink)]"
+                            >
+                              {t("editor.open")}
+                            </button>
                           </div>
                         );
                       })}
@@ -618,6 +653,26 @@ export function CarouselStudio({
           })}
         </div>
       )}
+
+      {editing ? (
+        <SlideEditor
+          uiLocale={uiLocale}
+          carousel={editing.carousel}
+          index={editing.index}
+          language={editing.language}
+          onClose={() => setEditing(null)}
+          onSaved={(updated) => {
+            setCarousels((current) =>
+              current.map((c) => (c.id === updated.id ? updated : c)),
+            );
+            // Saving drops the composites the edit invalidated, so let the
+            // auto-compose burn the new words in rather than leaving the old
+            // ones on screen.
+            autoComposed.current.delete(updated.id);
+            setEditing(null);
+          }}
+        />
+      ) : null}
 
       {publishing ? (
         <PublishDialog

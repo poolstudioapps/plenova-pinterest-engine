@@ -7,6 +7,7 @@ import type {
   TikTokAccount,
 } from "@/lib/types";
 import type { MediaFilter } from "@/lib/media";
+import { normaliseOverlay } from "@/lib/overlay";
 import type { ContentLocale } from "@/lib/i18n";
 
 export interface PinFilter {
@@ -175,6 +176,7 @@ export function normaliseCarousel(raw: unknown): CarouselRecord | null {
             ? s.text
             : // Flat title/subtitle became a per-language dictionary.
               { [primary]: { title: s?.title ?? "", subtitle: s?.subtitle ?? "" } },
+        overlay: normaliseOverlay(s?.overlay),
         imagePrompt: s?.imagePrompt ?? "",
         photoQuery: s?.photoQuery ?? "",
         mediaId: s?.mediaId ?? null,

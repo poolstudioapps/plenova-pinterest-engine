@@ -1,6 +1,7 @@
 /** Shared domain types for the Pinterest engine. */
 
 import type { ContentLocale, Locale } from "@/lib/i18n";
+import type { SlideOverlay } from "@/lib/overlay";
 
 export type Difficulty = "easy" | "medium" | "hard";
 
@@ -239,6 +240,11 @@ export interface CarouselSlide {
   hasPlenovaMention?: boolean;
   /** Overlay copy per language. One image, several texts over it. */
   text: Partial<Record<ContentLocale, SlideText>>;
+  /**
+   * Where the words sit and how they look. Shared across languages on purpose:
+   * a slide is one design, and only the words in it change.
+   */
+  overlay?: SlideOverlay;
   imagePrompt: string;
   photoQuery: string;
   mediaId: string | null;

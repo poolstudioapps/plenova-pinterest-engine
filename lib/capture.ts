@@ -4,8 +4,8 @@ import {
   SLIDE_HEIGHT,
   SLIDE_WIDTH,
   buildSlideHtml,
-  type OverlayOptions,
   type SlideCopy,
+  type SlideOverlay,
 } from "@/lib/overlay";
 
 /**
@@ -57,14 +57,19 @@ async function loadBackground(src: string): Promise<string> {
   });
 }
 
-/** Renders one slide and returns it as a JPEG data URL. */
-/** One slide to compose: where to fetch its image, and the words for it. */
-export type CapturableSlide = SlideCopy & { src: string };
+/**
+ * One slide to compose: where to fetch its image, the words, and the layout.
+ *
+ * The layout travels with the slide rather than being a global setting, which
+ * is what lets one slide be adjusted without disturbing the others.
+ */
+export type CapturableSlide = SlideCopy & {
+  src: string;
+  overlay: SlideOverlay;
+};
 
-export async function captureSlide(
-  slide: CapturableSlide,
-  options: Partial<OverlayOptions> = {},
-): Promise<string> {
+/** Renders one slide and returns it as a JPEG data URL. */
+export async function captureSlide(slide: CapturableSlide): Promise<string> {
   const [fontBase64, backgroundDataUrl] = await Promise.all([
     loadFont(),
     loadBackground(slide.src),
@@ -72,9 +77,9 @@ export async function captureSlide(
 
   const html = buildSlideHtml({
     slide,
+    overlay: slide.overlay,
     backgroundDataUrl,
     fontBase64,
-    options,
   });
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SLIDE_WIDTH}" height="${SLIDE_HEIGHT}">
@@ -109,12 +114,11 @@ export interface CapturedSlide {
 /** Renders every slide of a carousel, reporting progress as it goes. */
 export async function captureSlides(
   slides: CapturableSlide[],
-  options: Partial<OverlayOptions> = {},
   onProgress?: (done: number, total: number) => void,
 ): Promise<CapturedSlide[]> {
   const out: CapturedSlide[] = [];
   for (const [index, slide] of slides.entries()) {
-    out.push({ index, dataUrl: await captureSlide(slide, options) });
+    out.push({ index, dataUrl: await captureSlide(slide) });
     onProgress?.(index + 1, slides.length);
   }
   return out;
