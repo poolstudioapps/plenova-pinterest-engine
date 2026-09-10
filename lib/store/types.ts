@@ -7,10 +7,10 @@ import type {
   TikTokAccount,
 } from "@/lib/types";
 import type { MediaFilter } from "@/lib/media";
-import type { Locale } from "@/lib/i18n";
+import type { ContentLocale } from "@/lib/i18n";
 
 export interface PinFilter {
-  locale?: Locale;
+  locale?: ContentLocale;
   plantSlug?: string;
   angleSlug?: string;
   status?: PinStatus;
@@ -42,7 +42,7 @@ export interface EngineStore {
    * yourself" prompt. Scoped by locale, since a French title is no constraint
    * on an English one.
    */
-  titlesForPlant(plantSlug: string, locale: Locale): Promise<string[]>;
+  titlesForPlant(plantSlug: string, locale: ContentLocale): Promise<string[]>;
   savePin(pin: PinRecord): Promise<void>;
   deletePin(id: string): Promise<void>;
 

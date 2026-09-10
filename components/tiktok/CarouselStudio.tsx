@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Badge,
   Button,
@@ -84,6 +84,42 @@ export function CarouselStudio({
     );
   }
 
+  /** Pulls the list, which is how a detached generation reports progress. */
+  const refresh = useCallback(async () => {
+    try {
+      const res = await fetch("/api/carousels");
+      if (!res.ok) return;
+      const data = (await res.json()) as { carousels: CarouselRecord[] };
+      setCarousels(data.carousels);
+    } catch {
+      // A missed poll is not worth surfacing; the next one will catch up.
+    }
+  }, []);
+
+  // The server owns the generation, so the page just watches for it to finish.
+  // Polling stops as soon as nothing is in flight, including after a reload
+  // that landed on a carousel someone else started.
+  const generating = carousels.some((c) => c.status === "generating");
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (!generating) {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+      return;
+    }
+    if (pollRef.current) return;
+    pollRef.current = setInterval(() => void refresh(), 5000);
+    return () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, [generating, refresh]);
+
   async function generate() {
     setBusy(true);
     setError(null);
@@ -106,8 +142,9 @@ export function CarouselStudio({
         setError(data.error?.message ?? t("preview.requestFailed"));
         return;
       }
+      // The response only means the work has started - it lands in the list as
+      // "generating" and fills in as the server gets through it.
       setCarousels((current) => [data.carousel!, ...current]);
-      setExpanded(data.carousel.id);
       setPreviewLang(data.carousel.languages[0] ?? previewLang);
       setTheme("");
     } catch {
@@ -321,9 +358,9 @@ export function CarouselStudio({
               !canGenerate || theme.trim().length < 3 || languages.length === 0
             }
           >
-            {busy ? t("carousels.generating") : t("carousels.generate")}
+            {busy ? t("carousels.starting") : t("carousels.generate")}
           </Button>
-          {busy ? (
+          {generating ? (
             <span className="text-[12.5px] text-[var(--color-ink-faint)]">
               {t("carousels.generatingHint")}
             </span>
@@ -353,6 +390,7 @@ export function CarouselStudio({
       ) : (
         <div className="space-y-4">
           {carousels.map((carousel) => {
+            const inFlight = carousel.status === "generating";
             const open = expanded === carousel.id;
             const lang = carousel.languages.includes(previewLang)
               ? previewLang
@@ -389,11 +427,22 @@ export function CarouselStudio({
                       {carousel.slides[0]?.text[lang]?.title ?? carousel.theme}
                     </p>
                     <p className="mt-0.5 truncate text-[12.5px] text-[var(--color-ink-faint)]">
-                      {carousel.theme} ·{" "}
-                      {t("carousels.slides", { n: carousel.slides.length })} ·{" "}
+                      {carousel.theme}
+                      {inFlight
+                        ? ` · ${t("carousels.inFlight", {
+                            done: carousel.progress?.done ?? 0,
+                            total: carousel.progress?.total ?? "?",
+                          })}`
+                        : ` · ${t("carousels.slides", { n: carousel.slides.length })}`}
+                      {" · "}
                       {relativeTime(carousel.createdAt)}
                     </p>
-                    {missingComposites ? (
+                    {carousel.error ? (
+                      <p className="mt-1 line-clamp-2 text-[12px] text-[var(--color-danger)]">
+                        {carousel.error}
+                      </p>
+                    ) : null}
+                    {missingComposites && !inFlight ? (
                       <p className="mt-1 text-[12px] text-[var(--color-warn)]">
                         {t("carousels.notComposed")}
                       </p>
@@ -418,7 +467,7 @@ export function CarouselStudio({
                     <Button
                       onClick={() => void compose(carousel)}
                       loading={composing === carousel.id}
-                      disabled={composing !== null}
+                      disabled={composing !== null || inFlight}
                     >
                       {composing === carousel.id
                         ? `${progress.done}/${progress.total}`
@@ -428,7 +477,7 @@ export function CarouselStudio({
                     </Button>
                     <Button
                       onClick={() => setPublishing(carousel)}
-                      disabled={accounts.length === 0}
+                      disabled={accounts.length === 0 || inFlight}
                     >
                       {t("carousels.publish")}
                     </Button>

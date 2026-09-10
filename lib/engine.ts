@@ -16,7 +16,7 @@ import type {
   Plant,
   VisualStyle,
 } from "@/lib/types";
-import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n";
+import { DEFAULT_LOCALE, type ContentLocale } from "@/lib/i18n";
 import { angleLabel as angleLabelFor, plantName } from "@/lib/data/localize";
 
 /**
@@ -28,7 +28,7 @@ export interface GenerateInput {
   plantSlug: string;
   angleSlug: string;
   /** Language the Pin copy is written in. Defaults to English. */
-  locale?: Locale;
+  locale?: ContentLocale;
   visualStyle?: string;
   customAngle?: string;
   variation?: number;
@@ -48,7 +48,7 @@ interface ResolvedSlot {
   angle: ContentAngle;
   style: VisualStyle;
   variation: number;
-  locale: Locale;
+  locale: ContentLocale;
   key: string;
 }
 
@@ -75,7 +75,7 @@ function resolveSlot(input: GenerateInput): ResolvedSlot {
         hashSeed(plant.slug, angle.slug) + variation,
       );
 
-  const locale = input.locale ?? DEFAULT_LOCALE;
+  const locale = input.locale ?? (DEFAULT_LOCALE as ContentLocale);
   const vSlug = varietySlug(input.variety);
 
   return {
@@ -172,7 +172,7 @@ export async function generatePin(input: GenerateInput): Promise<PinRecord> {
     plantSlug: slot.plant.slug,
     plantName: plantName(slot.plant, slot.locale),
     angleSlug: slot.angle.slug,
-    angleLabel: angleLabelFor(slot.angle, slot.locale),
+    angleLabel: angleLabelFor(slot.angle, slot.locale === "fr" ? "fr" : "en"),
     visualStyle: slot.style.slug,
     variation: slot.variation,
     variety: input.variety ?? null,

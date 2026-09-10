@@ -180,8 +180,10 @@ const EN: Dict = {
   "carousels.anyPlant": "No specific plant",
   "carousels.generate": "Generate carousel",
   "carousels.generating": "Generating...",
+  "carousels.starting": "Starting...",
+  "carousels.inFlight": "writing and illustrating, {done}/{total} slides",
   "carousels.generatingHint":
-    "Writing the slides, then painting each image. Allow a couple of minutes.",
+    "Runs on the server - you can navigate away or close the tab, it keeps going.",
   "carousels.caption": "Caption",
   "carousels.compose": "Add text",
   "carousels.recompose": "Redo text",
@@ -492,8 +494,10 @@ const FR: Dict = {
   "carousels.anyPlant": "Aucune plante précise",
   "carousels.generate": "Générer le carrousel",
   "carousels.generating": "Génération...",
+  "carousels.starting": "Lancement...",
+  "carousels.inFlight": "rédaction et illustration, {done}/{total} slides",
   "carousels.generatingHint":
-    "Rédaction des slides, puis création de chaque image. Compte deux bonnes minutes.",
+    "Tourne sur le serveur — tu peux naviguer ailleurs ou fermer l'onglet, ça continue.",
   "carousels.caption": "Légende",
   "carousels.compose": "Incruster le texte",
   "carousels.recompose": "Refaire le texte",

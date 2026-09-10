@@ -12,9 +12,10 @@ import {
 } from "@/components/ui";
 import { PinPreview } from "@/components/generate/PinPreview";
 import {
-  LOCALES,
-  LOCALE_LABELS,
+  CONTENT_LOCALES,
+  CONTENT_LOCALE_LABELS,
   translator,
+  type ContentLocale,
   type Locale,
 } from "@/lib/i18n";
 import type { MediaAsset, PinRecord } from "@/lib/types";
@@ -47,7 +48,9 @@ export function GenerateClient({
   const [angleSlug, setAngleSlug] = useState(angles[0]?.slug ?? "");
   // The Pin language defaults to the dashboard language but is independent:
   // an English-speaking operator may well be producing French Pins.
-  const [pinLocale, setPinLocale] = useState<Locale>(uiLocale);
+  const [pinLocale, setPinLocale] = useState<ContentLocale>(
+    uiLocale as ContentLocale,
+  );
   const [visualStyle, setVisualStyle] = useState("");
   const [customAngle, setCustomAngle] = useState("");
   const [variety, setVariety] = useState("");
@@ -183,11 +186,11 @@ export function GenerateClient({
             <Select
               id="pin-locale"
               value={pinLocale}
-              onChange={(e) => setPinLocale(e.target.value as Locale)}
+              onChange={(e) => setPinLocale(e.target.value as ContentLocale)}
             >
-              {LOCALES.map((l) => (
+              {CONTENT_LOCALES.map((l) => (
                 <option key={l} value={l}>
-                  {LOCALE_LABELS[l]}
+                  {CONTENT_LOCALE_LABELS[l]}
                 </option>
               ))}
             </Select>

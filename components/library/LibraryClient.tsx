@@ -12,8 +12,8 @@ import {
 } from "@/components/ui";
 import { PinPreview } from "@/components/generate/PinPreview";
 import {
-  LOCALES,
-  LOCALE_LABELS,
+  CONTENT_LOCALES,
+  CONTENT_LOCALE_LABELS,
   translator,
   type Locale,
 } from "@/lib/i18n";
@@ -148,9 +148,9 @@ export function LibraryClient({ uiLocale, initialPins, plants, angles }: Props) 
 
         <Select value={pinLocale} onChange={(e) => setPinLocale(e.target.value)}>
           <option value="">{t("library.allLanguages")}</option>
-          {LOCALES.map((l) => (
+          {CONTENT_LOCALES.map((l) => (
             <option key={l} value={l}>
-              {LOCALE_LABELS[l]}
+              {CONTENT_LOCALE_LABELS[l]}
             </option>
           ))}
         </Select>

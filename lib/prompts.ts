@@ -1,5 +1,5 @@
 import type { ContentAngle, Plant, VisualStyle } from "@/lib/types";
-import { LOCALE_WRITING, type Locale } from "@/lib/i18n";
+import { LOCALE_WRITING, type ContentLocale } from "@/lib/i18n";
 import { plantAka, plantName } from "@/lib/data/localize";
 import { PINTEREST_LIMITS } from "@/lib/utils";
 
@@ -89,19 +89,22 @@ export interface CopyPromptInput {
   style: VisualStyle;
   variation: number;
   /** Language the Pin copy must be written in. */
-  locale: Locale;
+  locale: ContentLocale;
   customAngle?: string;
   /** Titles already generated for this plant, so the model can avoid them. */
   existingTitles?: string[];
 }
 
 /** Filler words that read as AI-written, banned from titles per language. */
-const BANNED_TITLE_WORDS: Record<Locale, string> = {
+const BANNED_TITLE_WORDS: Record<ContentLocale, string> = {
   en: "'unlock', 'game-changer', 'ultimate', 'secret', 'hack', 'thriving'",
   fr: "« secret », « astuce ultime », « incontournable », « révolutionnaire », « boostez »",
+  es: "«secreto», «truco definitivo», «imprescindible», «revolucionario»",
+  de: "„Geheimtipp\", „ultimativ\", „revolutionär\", „unverzichtbar\"",
+  it: "«segreto», «trucco definitivo», «immancabile», «rivoluzionario»",
 };
 
-export function buildSystemInstruction(locale: Locale): string {
+export function buildSystemInstruction(locale: ContentLocale): string {
   const writing = LOCALE_WRITING[locale];
   return [
     "You are the content lead for Plenova, a houseplant care app.",

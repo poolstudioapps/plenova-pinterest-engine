@@ -61,7 +61,7 @@ export type PinStatus =
 export interface PinRecord {
   id: string;
   /** Language the Pin copy is written in. */
-  locale: Locale;
+  locale: ContentLocale;
   /** Stable hash of plant+angle+style+variation, used for duplicate detection. */
   dedupeKey: string;
   plantSlug: string;
@@ -214,6 +214,8 @@ export interface TikTokCreatorInfo {
 }
 
 export type CarouselStatus =
+  /** Slides are being written and illustrated on the server. */
+  | "generating"
   | "draft"
   | "publishing"
   | "published"
@@ -268,6 +270,10 @@ export interface CarouselRecord {
 
   /** One entry per account the carousel has been posted to. */
   posts: CarouselPost[];
+  /** Set while generating, and on failure. */
+  error: string | null;
+  /** Slides finished so far, so progress survives a page reload. */
+  progress: { done: number; total: number } | null;
 
   createdAt: string;
   updatedAt: string;

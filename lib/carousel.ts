@@ -64,11 +64,84 @@ export interface GenerateCarouselInput {
   variety?: string;
 }
 
-export async function generateCarousel(
+/**
+ * Creates the record immediately, before any model call.
+ *
+ * Generation takes minutes, which is far longer than a browser tab can be
+ * relied on to stay open. Persisting a placeholder first means the work is
+ * owned by the server: navigating away, or closing the tab, no longer loses
+ * it, and the carousel list can show it in progress.
+ */
+export async function startCarousel(
   input: GenerateCarouselInput,
 ): Promise<CarouselRecord> {
   const theme = input.theme.trim();
   if (theme.length < 3) throw badRequest("Describe the carousel theme.");
+
+  const languages =
+    input.languages && input.languages.length > 0
+      ? Array.from(new Set(input.languages))
+      : [DEFAULT_LOCALE as ContentLocale];
+
+  const plant = input.plantSlug ? getPlant(input.plantSlug) : undefined;
+  if (input.plantSlug && !plant) {
+    throw badRequest(`Unknown plant: ${input.plantSlug}`);
+  }
+
+  const now = new Date().toISOString();
+  const record: CarouselRecord = {
+    id: carouselId(),
+    languages,
+    theme,
+    caption: {},
+    hashtags: {},
+    slides: [],
+    coverIndex: 1,
+    plantSlug: plant?.slug ?? null,
+    plantName: plant ? localizedPlantName(plant, "en") : null,
+    status: "generating",
+    posts: [],
+    error: null,
+    progress: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  await getStore().saveCarousel(record);
+  return record;
+}
+
+/**
+ * Does the actual work, updating the record as it goes.
+ *
+ * Runs detached from the request that started it, so every failure has to be
+ * written to the record rather than thrown at a caller that is no longer
+ * listening.
+ */
+export async function runCarouselGeneration(
+  id: string,
+  input: GenerateCarouselInput,
+): Promise<void> {
+  try {
+    await generateCarousel(id, input);
+  } catch (err) {
+    const store = getStore();
+    const carousel = await store.getCarousel(id);
+    if (!carousel) return;
+    await store.saveCarousel({
+      ...carousel,
+      status: "failed",
+      error: err instanceof Error ? err.message : "Generation failed.",
+      updatedAt: new Date().toISOString(),
+    });
+  }
+}
+
+async function generateCarousel(
+  id: string,
+  input: GenerateCarouselInput,
+): Promise<CarouselRecord> {
+  const theme = input.theme.trim();
 
   const languages =
     input.languages && input.languages.length > 0
@@ -90,7 +163,6 @@ export async function generateCarousel(
     existingThemes: existing.map((c) => c.theme).filter(Boolean),
   });
 
-  const id = carouselId();
   const vSlug = varietySlug(input.variety);
   const source: ImageSource = input.imageSource ?? "photo";
 
@@ -123,6 +195,15 @@ export async function generateCarousel(
 
     if (recycled) await store.markMediaUsed(recycled.id);
 
+    const inProgress = await store.getCarousel(id);
+    if (inProgress) {
+      await store.saveCarousel({
+        ...inProgress,
+        progress: { done: index + 1, total: concept.slides.length },
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
     const text: CarouselSlide["text"] = {};
     for (const lang of languages) {
       const title = draft.title[lang];
@@ -150,7 +231,7 @@ export async function generateCarousel(
       .join("\n\n");
   }
 
-  const now = new Date().toISOString();
+  const started = await store.getCarousel(id);
   const record: CarouselRecord = {
     id,
     languages,
@@ -165,9 +246,11 @@ export async function generateCarousel(
 
     status: "draft",
     posts: [],
+    error: null,
+    progress: null,
 
-    createdAt: now,
-    updatedAt: now,
+    createdAt: started?.createdAt ?? new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   };
 
   await store.saveCarousel(record);

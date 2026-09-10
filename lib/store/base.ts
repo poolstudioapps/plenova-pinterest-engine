@@ -9,7 +9,7 @@ import type {
   TikTokAccounts,
 } from "@/lib/types";
 import { filterMedia, type MediaFilter } from "@/lib/media";
-import type { Locale } from "@/lib/i18n";
+import type { ContentLocale } from "@/lib/i18n";
 import {
   applyFilter,
   emptyState,
@@ -63,7 +63,7 @@ export abstract class DocumentStore implements EngineStore {
     return Object.values(doc.pins).find((p) => p.dedupeKey === key) ?? null;
   }
 
-  async titlesForPlant(plantSlug: string, locale: Locale): Promise<string[]> {
+  async titlesForPlant(plantSlug: string, locale: ContentLocale): Promise<string[]> {
     const doc = await this.read();
     return Object.values(doc.pins)
       .filter((p) => p.plantSlug === plantSlug && p.locale === locale)

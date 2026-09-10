@@ -1,5 +1,5 @@
 import type { ContentAngle, Plant, VisualStyle } from "@/lib/types";
-import type { Locale } from "@/lib/i18n";
+import type { ContentLocale, Locale } from "@/lib/i18n";
 import { PLANTS_FR } from "./plants.fr";
 import {
   ANGLE_CATEGORY_LABELS_FR,
@@ -13,13 +13,13 @@ import {
  * rendering an empty label.
  */
 
-export function plantName(plant: Plant, locale: Locale): string {
+export function plantName(plant: Plant, locale: ContentLocale): string {
   if (locale === "fr") return PLANTS_FR[plant.slug]?.name ?? plant.name;
   return plant.name;
 }
 
 /** Alternative common names in the target locale, for SEO breadth. */
-export function plantAka(plant: Plant, locale: Locale): string[] {
+export function plantAka(plant: Plant, locale: ContentLocale): string[] {
   if (locale === "fr") return PLANTS_FR[plant.slug]?.aka ?? [];
   return [];
 }
