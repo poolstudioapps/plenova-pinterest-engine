@@ -95,9 +95,18 @@ export function toErrorResponse(err: unknown): {
     };
   }
   const message = err instanceof Error ? err.message : "Unexpected error";
+  const name = err instanceof Error ? err.name : "Error";
   console.error("[unhandled]", redact(message));
+  // The real reason travels back, redacted. The whole app sits behind a
+  // password, and "Unexpected server error." on its own left nobody - operator
+  // included - any way to tell a bad key from a storage failure.
   return {
-    body: { error: { code: "internal", message: "Unexpected server error." } },
+    body: {
+      error: {
+        code: "internal",
+        message: redact(`${name}: ${message}`),
+      },
+    },
     status: 500,
   };
 }

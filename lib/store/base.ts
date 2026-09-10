@@ -76,8 +76,12 @@ export abstract class DocumentStore implements EngineStore {
   ): Promise<T> {
     const { doc, version } = await this.load();
     const result = await fn(doc);
+    // The last attempt drops the condition. Under real contention the earlier
+    // attempts are what protect the other writer; refusing the user's save
+    // outright would be a worse answer than the last-writer-wins this had
+    // before conditional writes existed.
     try {
-      await this.store(doc, version);
+      await this.store(doc, attemptsLeft > 1 ? version : null);
     } catch (err) {
       if (err instanceof ConcurrentWrite && attemptsLeft > 1) {
         return this.applyMutation(fn, attemptsLeft - 1);

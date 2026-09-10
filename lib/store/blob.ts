@@ -50,6 +50,17 @@ type Access = "private" | "public";
 // Negotiated once per process, then reused.
 let accessMode: Access | null = null;
 
+/**
+ * Conditional writes are used until the store shows it will not take them.
+ *
+ * `ifMatch` is the right tool here, but it depends on the Blob API accepting
+ * it, and a store that rejects it would otherwise fail every single save. So a
+ * conditional write that fails for any reason other than losing the race is
+ * retried without the condition, and the process stops trying to be
+ * conditional. Losing the safety is bad; refusing to save anything is worse.
+ */
+let conditionalWrites = true;
+
 export class BlobStore extends DocumentStore {
   /**
    * Includes the store id so the dashboard shows exactly which Blob store is
@@ -62,8 +73,8 @@ export class BlobStore extends DocumentStore {
   readonly persistent = true;
 
   protected async load(): Promise<VersionedDocument> {
-    const probing = accessMode === null;
     const modes: Access[] = accessMode ? [accessMode] : ["private", "public"];
+    let sawMissing = false;
     let hardError: Error | null = null;
 
     for (const access of modes) {
@@ -75,7 +86,10 @@ export class BlobStore extends DocumentStore {
         });
         // No stream means the store answered "unchanged"; we never send a
         // conditional read, so treat it as nothing to load.
-        if (!result?.stream) continue;
+        if (!result?.stream) {
+          sawMissing = true;
+          continue;
+        }
 
         const text = await new Response(result.stream).text();
         const parsed = JSON.parse(text) as StateDocument;
@@ -91,16 +105,25 @@ export class BlobStore extends DocumentStore {
         };
       } catch (err) {
         const error = err instanceof Error ? err : new Error(String(err));
-        // A missing document on first run is expected, as is being refused
-        // while we are still probing which access mode the store allows.
-        if (isMissingDocument(err)) continue;
-        if (probing) continue;
-        console.warn("[blob-store] read failed:", error.message);
+        if (isMissingDocument(err)) {
+          sawMissing = true;
+          continue;
+        }
+        // Being refused under one access mode is expected while probing which
+        // one the store allows, so it is only fatal if no mode worked.
         hardError = error;
       }
     }
 
-    if (hardError) throw hardError;
+    // One mode saying "no document" settles it: the store is reachable and
+    // there is genuinely nothing there. Without that, every mode failed for
+    // some other reason, and calling it empty would let the next save write an
+    // empty document over whatever is really stored.
+    if (!sawMissing && hardError) {
+      console.warn("[blob-store] read failed:", hardError.message);
+      throw hardError;
+    }
+
     // Nothing stored yet. No version to be conditional on, so the very first
     // write of a brand new store is the one case that is last-writer-wins.
     return { doc: emptyState(), version: null };
@@ -110,19 +133,41 @@ export class BlobStore extends DocumentStore {
     doc: StateDocument,
     version: string | null,
   ): Promise<void> {
+    const body = JSON.stringify(doc);
+    const conditional = conditionalWrites && version !== null;
+
+    try {
+      await this.put(body, conditional ? version : null);
+      return;
+    } catch (err) {
+      // Losing the race is not a failure: let the caller re-apply on top of
+      // the document that won.
+      if (err instanceof BlobPreconditionFailedError) throw new ConcurrentWrite();
+      if (!conditional) throw err;
+
+      // The condition itself is what the store would not take.
+      conditionalWrites = false;
+      console.warn(
+        "[blob-store] conditional writes refused, falling back to unconditional:",
+        err instanceof Error ? err.message : String(err),
+      );
+      await this.put(body, null);
+    }
+  }
+
+  /** One put attempt, across whichever access modes are still plausible. */
+  private async put(body: string, version: string | null): Promise<void> {
     const modes: Access[] = accessMode ? [accessMode] : ["private", "public"];
     let lastError: unknown;
 
     for (const access of modes) {
       try {
-        await put(statePath(), JSON.stringify(doc), {
+        await put(statePath(), body, {
           access,
           addRandomSuffix: false,
           allowOverwrite: true,
           contentType: "application/json",
           cacheControlMaxAge: 0,
-          // Optimistic concurrency: refused outright if anything landed since
-          // we loaded, rather than silently overwriting another instance.
           ...(version ? { ifMatch: version } : {}),
           ...blobCredentials(),
         });
@@ -132,9 +177,7 @@ export class BlobStore extends DocumentStore {
         accessMode = access;
         return;
       } catch (err) {
-        // Losing the race is not an access problem: stop, and let the caller
-        // re-apply on top of the document that won.
-        if (err instanceof BlobPreconditionFailedError) throw new ConcurrentWrite();
+        if (err instanceof BlobPreconditionFailedError) throw err;
         lastError = err;
       }
     }
