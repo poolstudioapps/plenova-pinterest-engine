@@ -108,6 +108,40 @@ piège classique.
 
 ---
 
+### Si la vérification refuse encore
+
+L'erreur `url_ownership_unverified` (« Please review our URL ownership
+verification rules ») veut dire que TikTok ne reconnaît pas le domaine des
+images. Trois causes, dans cet ordre de probabilité :
+
+1. **La propriété n'est pas rattachée à cette application.** Vérifier un
+   domaine ne suffit pas : il faut l'ajouter dans le widget *URL properties*
+   **de l'app concernée**. Une app recréée ne récupère pas les propriétés de
+   l'ancienne.
+2. **La valeur TXT ne correspond plus.** Le portail régénère la chaîne quand on
+   relance la vérification. Comparer ce qu'affiche le portail avec ce que
+   renvoie `Resolve-DnsName latelierugc.com -Type TXT`.
+3. **La vérification a été lancée sans jamais aboutir.** Le statut doit être
+   *Verified*, pas *Pending*.
+
+Règle officielle, vérifiée dans la doc TikTok : vérifier un domaine couvre ses
+**sous-domaines**, pas son parent. Vérifier `latelierugc.com` couvre donc bien
+`studio.latelierugc.com`. Vérifier `studio.latelierugc.com` ne couvrirait pas
+la racine.
+
+### Vérification par fichier, sans DNS
+
+Le tool sait servir le fichier de vérification que TikTok propose en
+alternative au DNS :
+
+1. Dans le portail, choisir la propriété **URL prefix**
+   `https://studio.latelierugc.com/`, méthode fichier.
+2. Ouvrir le fichier `tiktokXXXX.txt` proposé, copier son contenu.
+3. Sur Vercel, ajouter la variable `TIKTOK_VERIFICATION` avec ce contenu, puis
+   redéployer.
+4. Cliquer *Verify*. Le fichier répond à n'importe quel nom de la forme
+   `tiktok<alphanumérique>.txt`, donc le nom exact n'a pas d'importance.
+
 ## 5. DNS du domaine
 
 | Type | Name | Valeur | Proxy |

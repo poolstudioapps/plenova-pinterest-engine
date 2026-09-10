@@ -29,6 +29,8 @@ const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
  *  - /api/cron         guarded by CRON_SECRET instead; see the route.
  *  - /api/pull         TikTok's servers fetch slide images with no cookie;
  *                      guarded by a signature in the URL instead.
+ *  - /tiktokXXXX.txt   TikTok fetches its own ownership-verification file
+ *                      before it will pull anything at all.
  *  - /login, /api/auth otherwise you could never sign in.
  */
 const PUBLIC_PREFIXES = [
@@ -42,7 +44,11 @@ const PUBLIC_PREFIXES = [
   "/api/tiktok/callback",
 ];
 
+/** TikTok's verification file sits at the root, so it cannot be a prefix. */
+const TIKTOK_VERIFICATION_FILE = /^\/tiktok[A-Za-z0-9]+\.txt$/;
+
 export function isPublicPath(pathname: string): boolean {
+  if (TIKTOK_VERIFICATION_FILE.test(pathname)) return true;
   return PUBLIC_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );
