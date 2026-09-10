@@ -34,13 +34,13 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   /**
-   * Skip Next internals and anything that looks like a static file.
+   * Skip Next internals and the font the slide renderer fetches.
    *
-   * The trailing extension check matters: the slide renderer fetches
-   * /fonts/TikTokSans.woff2 from the browser, and without this the gate would
-   * answer that request with a redirect to the login page instead of the font.
-   * It happens to work while a session cookie is present, but running auth over
-   * static assets is wasted work and fails in ways that are hard to read.
+   * Listed literally rather than matched by file extension. An earlier version
+   * used a "has a dot in it" pattern, but `\.` inside a TypeScript string is
+   * just `.`, which matches any character - so every path was excluded and the
+   * gate silently stopped protecting anything. Naming the paths cannot fail
+   * that way.
    */
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\.[a-zA-Z0-9]+$).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|fonts/).*)"],
 };
