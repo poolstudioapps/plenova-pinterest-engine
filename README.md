@@ -130,6 +130,14 @@ The state document is stored with `access: 'private'`; only generated Pin images
 are public, because Pinterest fetches them by URL. OAuth tokens are AES-256-GCM
 encrypted before they ever reach an adapter.
 
+Everything lives in one JSON document, which makes concurrency the thing to get
+right. Writes are serialised inside an instance by a promise chain, and between
+instances by an ETag: every save is conditional on the version it read, Blob
+refuses it if anything landed in between, and the mutation is re-applied on top
+of the document that won. A read that fails throws rather than returning an
+empty document — callers write back what they read, so answering a transient
+error with "there is nothing here" would erase the store on the next save.
+
 This interface is the seam for a Postgres/Supabase adapter later — no route
 handler needs to change.
 
@@ -179,6 +187,18 @@ well inside Pinterest's write limits.
    the Pinterest app.
 
 ---
+
+### Checking a deployment
+
+`GET /api/health` is public and reports the commit the running build came from:
+
+```
+{"ok":true,"commit":"284c1c4","builtFor":"production","time":"..."}
+```
+
+A failed Vercel build leaves the previous deployment serving and every page
+answers exactly as before, so this is the only thing that says whether a push
+actually shipped.
 
 ## Status against the spec
 
