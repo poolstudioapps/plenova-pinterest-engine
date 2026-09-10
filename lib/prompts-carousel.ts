@@ -31,6 +31,8 @@ export interface CarouselSlideDraft {
   imagePrompt: string;
   /** Short query used to find a real reference photograph. */
   photoQuery: string;
+  /** The species shown on this slide, so the image can be filed correctly. */
+  plantTag: string;
 }
 
 export interface CarouselConceptDraft {
@@ -80,8 +82,20 @@ export function carouselSchema(languages: ContentLocale[]) {
               description:
                 "Two to four English words to look this scene up in a stock photo library.",
             },
+            plantTag: {
+              type: "string",
+              description:
+                "The botanical or common English name of the ONE plant shown on this slide, e.g. 'Monstera deliciosa'. Empty only if no specific plant appears.",
+            },
           },
-          required: ["kind", "title", "subtitle", "imagePrompt", "photoQuery"],
+          required: [
+            "kind",
+            "title",
+            "subtitle",
+            "imagePrompt",
+            "photoQuery",
+            "plantTag",
+          ],
         },
       },
       caption: multiText("TikTok caption, without hashtags."),
@@ -191,6 +205,11 @@ export function buildCarouselPrompt(input: CarouselPromptInput): string {
     "## Photo queries",
     "For each slide also give photoQuery: two to four plain English words that would find a similar scene in a stock photo library.",
     "Keep it broad - 'monstera living room' finds something, 'hands testing soil moisture of a variegated monstera' finds nothing.",
+    "",
+    "## Plant tag",
+    "For each slide give plantTag: the botanical or common English name of the single plant that slide shows.",
+    "On a plant listicle this differs on every slide - that is the point, it is how each image gets filed under the right species.",
+    "Leave it empty only when no specific plant appears in the frame.",
     "",
     "## Caption and hashtags",
     "Caption: 1 to 3 sentences, no hashtags inside it, ending on a light invitation to save the post.",

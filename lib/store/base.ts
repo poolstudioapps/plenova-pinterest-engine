@@ -13,6 +13,8 @@ import type { ContentLocale } from "@/lib/i18n";
 import {
   applyFilter,
   emptyState,
+  normaliseAccounts,
+  normaliseCarousel,
   type EngineStore,
   type PinFilter,
   type StateDocument,
@@ -160,11 +162,8 @@ export abstract class DocumentStore implements EngineStore {
    * decrypt instead of N.
    */
   private async readAccounts(): Promise<TikTokAccounts> {
-    return (
-      (await this.readConnection<TikTokAccounts>(
-        (doc) => doc.tiktok ?? null,
-        "TikTok",
-      )) ?? {}
+    return normaliseAccounts(
+      await this.readConnection<unknown>((doc) => doc.tiktok ?? null, "TikTok"),
     );
   }
 
@@ -196,14 +195,15 @@ export abstract class DocumentStore implements EngineStore {
 
   async listCarousels(): Promise<CarouselRecord[]> {
     const doc = await this.read();
-    return Object.values(doc.carousels ?? {}).sort((a, b) =>
-      b.createdAt.localeCompare(a.createdAt),
-    );
+    return Object.values(doc.carousels ?? {})
+      .map(normaliseCarousel)
+      .filter((c): c is CarouselRecord => c !== null)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
   async getCarousel(id: string): Promise<CarouselRecord | null> {
     const doc = await this.read();
-    return doc.carousels?.[id] ?? null;
+    return normaliseCarousel(doc.carousels?.[id]);
   }
 
   async saveCarousel(carousel: CarouselRecord): Promise<void> {

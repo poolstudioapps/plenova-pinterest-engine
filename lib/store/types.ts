@@ -118,3 +118,97 @@ export function applyFilter(
   out = [...out].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   return filter.limit ? out.slice(0, filter.limit) : out;
 }
+
+
+/**
+ * Brings a stored carousel up to the current shape.
+ *
+ * Records written before carousels became multilingual and multi-account lack
+ * `languages`, `posts`, and per-language slide text. Reading one crashed the
+ * page rather than degrading, which is the wrong failure: stored data outlives
+ * every schema, so the reader has to tolerate what the writer used to produce.
+ */
+export function normaliseCarousel(raw: unknown): CarouselRecord | null {
+  if (!raw || typeof raw !== "object") return null;
+  const c = raw as Record<string, any>;
+  if (typeof c.id !== "string") return null;
+
+  const languages: ContentLocale[] = Array.isArray(c.languages)
+    ? c.languages
+    : // Older records carried a single `locale`.
+      [(c.locale as ContentLocale) ?? "en"];
+  const primary = languages[0] ?? "en";
+
+  const slides = Array.isArray(c.slides)
+    ? c.slides.map((s: Record<string, any>) => ({
+        kind: s?.kind ?? "content",
+        text:
+          s?.text && typeof s.text === "object"
+            ? s.text
+            : // Flat title/subtitle became a per-language dictionary.
+              { [primary]: { title: s?.title ?? "", subtitle: s?.subtitle ?? "" } },
+        imagePrompt: s?.imagePrompt ?? "",
+        photoQuery: s?.photoQuery ?? "",
+        mediaId: s?.mediaId ?? null,
+        imageUrl: s?.imageUrl ?? null,
+        composed:
+          s?.composed && typeof s.composed === "object"
+            ? s.composed
+            : s?.composedUrl
+              ? { [primary]: s.composedUrl }
+              : {},
+      }))
+    : [];
+
+  return {
+    id: c.id,
+    languages,
+    theme: c.theme ?? c.title ?? "",
+    caption:
+      c.caption && typeof c.caption === "object"
+        ? c.caption
+        : { [primary]: c.description ?? "" },
+    hashtags:
+      c.hashtags && !Array.isArray(c.hashtags) && typeof c.hashtags === "object"
+        ? c.hashtags
+        : { [primary]: Array.isArray(c.hashtags) ? c.hashtags : [] },
+    slides,
+    coverIndex: typeof c.coverIndex === "number" ? c.coverIndex : 1,
+    plantSlug: c.plantSlug ?? null,
+    plantName: c.plantName ?? null,
+    status: c.status ?? "draft",
+    posts: Array.isArray(c.posts) ? c.posts : [],
+    error: c.error ?? null,
+    progress: c.progress ?? null,
+    createdAt: c.createdAt ?? new Date(0).toISOString(),
+    updatedAt: c.updatedAt ?? new Date(0).toISOString(),
+  } as CarouselRecord;
+}
+
+/**
+ * Brings a decrypted TikTok envelope up to the current shape.
+ *
+ * It used to hold one connection; it now holds a map keyed by open id. Reading
+ * the old form as a map yielded its own field values as if they were accounts.
+ */
+export function normaliseAccounts(raw: unknown): Record<string, TikTokAccount> {
+  if (!raw || typeof raw !== "object") return {};
+  const value = raw as Record<string, any>;
+
+  // A single connection: it has a token at the top level rather than under a key.
+  if (typeof value.accessToken === "string") {
+    const openId = typeof value.openId === "string" ? value.openId : "";
+    if (!openId) return {};
+    return {
+      [openId]: { ...(value as TikTokAccount), language: value.language ?? "en" },
+    };
+  }
+
+  const out: Record<string, TikTokAccount> = {};
+  for (const [key, account] of Object.entries(value)) {
+    if (account && typeof account === "object" && typeof account.accessToken === "string") {
+      out[key] = { ...(account as TikTokAccount), language: account.language ?? "en" };
+    }
+  }
+  return out;
+}

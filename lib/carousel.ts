@@ -1,6 +1,9 @@
 import "server-only";
 import { getPlant } from "@/lib/data/plants";
-import { plantName as localizedPlantName } from "@/lib/data/localize";
+import {
+  matchPlantSlug,
+  plantName as localizedPlantName,
+} from "@/lib/data/localize";
 import { getVisualStyle } from "@/lib/data/visual-styles";
 import { badRequest, notFound } from "@/lib/errors";
 import {
@@ -186,8 +189,14 @@ async function generateCarousel(
         imagePrompt: draft.imagePrompt,
         photoQuery: draft.photoQuery,
         source,
-        plantSlug: plant?.slug ?? "carousel",
-        plantName: plant ? localizedPlantName(plant, "en") : theme,
+        // The slide names its own species, which matters on a listicle where
+        // every slide shows a different one. Falls back to the carousel's
+        // plant, then to an unfiled bucket.
+        plantSlug:
+          (draft.plantTag ? matchPlantSlug(draft.plantTag) : null) ??
+          plant?.slug ??
+          "unfiled",
+        plantName: draft.plantTag || (plant ? localizedPlantName(plant, "en") : theme),
         variety: input.variety ?? null,
         varietySlug: vSlug,
         theme,

@@ -288,6 +288,8 @@ export async function generateCarouselConcept(
             typeof s.imagePrompt === "string" ? s.imagePrompt.trim() : "",
           photoQuery:
             typeof s.photoQuery === "string" ? s.photoQuery.trim() : "",
+          plantTag:
+            typeof s.plantTag === "string" ? s.plantTag.trim() : "",
         };
       })
       // A slide with no image brief, or missing the primary language, cannot
