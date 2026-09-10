@@ -42,6 +42,20 @@ export default async function TikTokPage({
         </div>
       ) : null}
 
+      {/*
+        * Shown whenever the account is not connected: an unapproved app sits in
+        * Development Mode, where TikTok rejects any account that is not a
+        * registered Test User - with a bare "client_key" error that points at
+        * the wrong thing entirely.
+        */}
+      {!status.connected && isTikTokConfigured() ? (
+        <div className="mb-6">
+          <Notice tone="warn" title={t("tiktok.devMode")}>
+            {t("tiktok.devModeBody")}
+          </Notice>
+        </div>
+      ) : null}
+
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,340px)]">
         <TikTokPanel uiLocale={locale} status={status} />
 
@@ -58,6 +72,18 @@ export default async function TikTokPage({
               <p className="mt-1 text-[12px] text-[var(--color-ink-faint)]">
                 {t("tiktok.redirectHint")}
               </p>
+            </div>
+            <div>
+              <dt className="text-[var(--color-ink-soft)]">{t("tiktok.clientKey")}</dt>
+              <dd className="mt-0.5 font-mono text-[12px]">
+                {config.tiktok.clientKey
+                  ? `••••${config.tiktok.clientKey.slice(-4)}`
+                  : t("tiktok.clientKeyMissing")}
+              </dd>
+              <dd className="mt-0.5 font-mono text-[12px]">
+                {t("tiktok.secret")}:{" "}
+                {config.tiktok.clientSecret ? "••••••" : t("tiktok.clientKeyMissing")}
+              </dd>
             </div>
             <div>
               <dt className="text-[var(--color-ink-soft)]">{t("tiktok.scopes")}</dt>

@@ -91,6 +91,12 @@ const EN: Dict = {
   "tiktok.redirectUri": "Redirect URI",
   "tiktok.redirectHint":
     "Must match the value registered on the TikTok app exactly.",
+  "tiktok.clientKey": "Client key",
+  "tiktok.clientKeyMissing": "not set",
+  "tiktok.secret": "Secret",
+  "tiktok.devMode": "App in Development Mode",
+  "tiktok.devModeBody":
+    "Until TikTok approves the app it stays in Development Mode, where only accounts added as Test Users can sign in. Add your TikTok account under App permissions, Test users in the developer portal, then try again.",
   "tiktok.scopes": "Requested scopes",
 
   "carousels.title": "Carousels",
@@ -356,6 +362,12 @@ const FR: Dict = {
   "tiktok.redirectUri": "URI de redirection",
   "tiktok.redirectHint":
     "Doit correspondre exactement à la valeur enregistrée sur l'app TikTok.",
+  "tiktok.clientKey": "Client key",
+  "tiktok.clientKeyMissing": "non renseigné",
+  "tiktok.secret": "Secret",
+  "tiktok.devMode": "App en Development Mode",
+  "tiktok.devModeBody":
+    "Tant que TikTok n'a pas approuvé l'app, elle reste en Development Mode : seuls les comptes ajoutés comme Test Users peuvent se connecter. Ajoute ton compte TikTok dans App permissions, Test users du portail développeur, puis réessaie.",
   "tiktok.scopes": "Scopes demandés",
 
   "carousels.title": "Carrousels",
