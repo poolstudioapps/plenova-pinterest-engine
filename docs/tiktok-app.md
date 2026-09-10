@@ -32,9 +32,19 @@ vérifié chez TikTok.
 
 | Usage | URL |
 | --- | --- |
+| **Web/Desktop URL** (site officiel) | `https://studio.latelierugc.com` |
 | Redirect URI (Login Kit) | `https://studio.latelierugc.com/api/tiktok/callback` |
 | Terms of Service | `https://studio.latelierugc.com/legal/terms` |
 | Privacy Policy | `https://studio.latelierugc.com/legal/privacy` |
+
+> Ne pas confondre les deux premières. **Web/Desktop URL** attend la page
+> d'accueil du service, pas un endpoint. C'est aussi l'URL à laquelle les
+> guidelines font référence lorsqu'elles exigent que le domaine visible dans la
+> vidéo de démo corresponde au site déclaré — donc celle que tu filmeras.
+>
+> La page d'accueil est l'écran de connexion : il présente l'outil et renvoie
+> vers les deux pages légales, pour qu'un reviewer qui l'ouvre comprenne
+> immédiatement de quoi il s'agit.
 
 Les deux pages légales sont générées par le tool (`app/legal/`) et restent
 **publiques** malgré la protection par mot de passe — les reviewers TikTok
@@ -265,6 +275,7 @@ pas basculé vers Vercel**. C'est la seule action qui casserait l'ancien outil.
 | Direct Post activé | ✅ |
 | 3 scopes demandés | ✅ |
 | Redirect URI enregistrée | ✅ |
+| Web/Desktop URL déclarée | ✅ |
 | Domaine `latelierugc.com` vérifié | ✅ |
 | `studio.latelierugc.com` en ligne (HTTPS, TLS valide) | ✅ |
 | Pages légales publiques et lisibles | ✅ |
