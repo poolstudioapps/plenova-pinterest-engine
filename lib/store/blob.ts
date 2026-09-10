@@ -51,15 +51,20 @@ type Access = "private" | "public";
 let accessMode: Access | null = null;
 
 /**
- * Conditional writes are used until the store shows it will not take them.
+ * Conditional writes are off, and the reason is measured rather than assumed.
  *
- * `ifMatch` is the right tool here, but it depends on the Blob API accepting
- * it, and a store that rejects it would otherwise fail every single save. So a
- * conditional write that fails for any reason other than losing the race is
- * retried without the condition, and the process stops trying to be
- * conditional. Losing the safety is bad; refusing to save anything is worse.
+ * `ifMatch` is the documented way to do compare-and-swap here, and it was
+ * tried: against this store it refused writes that had no competitor at all,
+ * six attempts with backoff in a row, and publishing failed outright. Whatever
+ * the cause - the etag a read returns not being the one a write compares
+ * against - the effect is that the condition blocks ordinary saves.
+ *
+ * What replaced it is structural instead. Composing a carousel used to rewrite
+ * the whole document twenty-eight times; it now does it twice, so the window
+ * where two writes can overlap is small enough to live with, which is how this
+ * worked before conditional writes existed at all.
  */
-let conditionalWrites = true;
+const CONDITIONAL_WRITES = false;
 
 export class BlobStore extends DocumentStore {
   /**
@@ -133,25 +138,14 @@ export class BlobStore extends DocumentStore {
     doc: StateDocument,
     version: string | null,
   ): Promise<void> {
-    const body = JSON.stringify(doc);
-    const conditional = conditionalWrites && version !== null;
-
+    const conditional = CONDITIONAL_WRITES && version !== null;
     try {
-      await this.put(body, conditional ? version : null);
-      return;
+      await this.put(JSON.stringify(doc), conditional ? version : null);
     } catch (err) {
-      // Losing the race is not a failure: let the caller re-apply on top of
-      // the document that won.
+      // Kept for the day the condition is turned back on: losing the race is
+      // not a failure, it means re-applying on top of the document that won.
       if (err instanceof BlobPreconditionFailedError) throw new ConcurrentWrite();
-      if (!conditional) throw err;
-
-      // The condition itself is what the store would not take.
-      conditionalWrites = false;
-      console.warn(
-        "[blob-store] conditional writes refused, falling back to unconditional:",
-        err instanceof Error ? err.message : String(err),
-      );
-      await this.put(body, null);
+      throw err;
     }
   }
 
