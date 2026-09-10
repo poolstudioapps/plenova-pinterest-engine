@@ -235,6 +235,8 @@ export interface SlideText {
 
 export interface CarouselSlide {
   kind: "hook" | "content" | "cta";
+  /** True on the one content slide that also mentions Plenova. */
+  hasPlenovaMention?: boolean;
   /** Overlay copy per language. One image, several texts over it. */
   text: Partial<Record<ContentLocale, SlideText>>;
   imagePrompt: string;

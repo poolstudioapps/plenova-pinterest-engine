@@ -39,16 +39,3 @@ export function pinId(): string {
   const rand = Math.random().toString(36).slice(2, 10);
   return `pin_${time}${rand}`;
 }
-
-/**
- * Normalised fingerprint of the *copy itself*, used as a second duplicate
- * signal: two Pins in different slots can still end up with the same title.
- */
-export function titleFingerprint(title: string): string {
-  const normalised = title
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-  return createHash("sha256").update(normalised).digest("hex").slice(0, 16);
-}

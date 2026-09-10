@@ -37,6 +37,11 @@ export interface CarouselSlideDraft {
 
 export interface CarouselConceptDraft {
   slides: CarouselSlideDraft[];
+  /**
+   * 1-based position of the content slide carrying the mid-carousel Plenova
+   * mention. Never the hook or the call to action.
+   */
+  midCtaIndex: number;
   caption: MultiText;
   hashtags: Partial<Record<ContentLocale, string[]>>;
 }
@@ -98,6 +103,11 @@ export function carouselSchema(languages: ContentLocale[]) {
           ],
         },
       },
+      midCtaIndex: {
+        type: "integer",
+        description:
+          "1-based position of the content slide whose subtitle carries the Plenova mention. Must be a content slide - never the first or the last.",
+      },
       caption: multiText("TikTok caption, without hashtags."),
       hashtags: {
         type: "object",
@@ -111,7 +121,7 @@ export function carouselSchema(languages: ContentLocale[]) {
         required: [...languages],
       },
     },
-    required: ["slides", "caption", "hashtags"],
+    required: ["slides", "midCtaIndex", "caption", "hashtags"],
   };
 }
 
@@ -194,6 +204,12 @@ export function buildCarouselPrompt(input: CarouselPromptInput): string {
     "## Slide roles",
     "Slide 1 (hook): states the promise and makes someone stop scrolling. No plant name unless the theme is about one plant.",
     "Last slide (cta): invites the reader to Plenova for identification and care reminders. Warm, never pushy.",
+    "",
+    "## The mid-carousel mention",
+    "Exactly ONE content slide - never the first, never the last - must also mention Plenova, and you choose which in midCtaIndex.",
+    "It belongs at the end of that slide's subtitle, in one short clause, and it has to earn its place: tie it to what that slide is actually about.",
+    "Good: a watering slide ending 'Plenova te rappelle quand arroser.' Bad: 'Télécharge Plenova !' bolted onto a slide about leaf shape.",
+    "Pick the slide where the app genuinely helps with that specific problem. If nothing fits naturally, pick the middle slide and keep the mention very light.",
     "",
     "## Image prompts",
     "Write each as a single self-contained paragraph a photographer could shoot from.",

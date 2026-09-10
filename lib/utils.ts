@@ -38,18 +38,23 @@ export const PINTEREST_LIMITS = {
   altTextMax: 500,
 } as const;
 
+/**
+ * Shortens text to `max` characters INCLUDING the ellipsis.
+ *
+ * The ellipsis has to be budgeted for, not appended afterwards: this enforces
+ * Pinterest's and TikTok's hard limits, and a result one character over is a
+ * rejected publish rather than a cosmetic issue.
+ */
 export function truncate(input: string, max: number): string {
   const trimmed = input.trim();
   if (trimmed.length <= max) return trimmed;
-  // Cut on a word boundary so we never publish a half word.
-  const slice = trimmed.slice(0, max - 1);
-  const lastSpace = slice.lastIndexOf(" ");
-  return `${(lastSpace > max * 0.6 ? slice.slice(0, lastSpace) : slice).trimEnd()}...`;
-}
 
-export function titleCaseSlug(slug: string): string {
-  return slug
-    .split("-")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
+  const ellipsis = "...";
+  const room = Math.max(1, max - ellipsis.length);
+  const slice = trimmed.slice(0, room);
+
+  // Prefer a word boundary, but only when it does not gut the text.
+  const lastSpace = slice.lastIndexOf(" ");
+  const body = lastSpace > room * 0.6 ? slice.slice(0, lastSpace) : slice;
+  return `${body.trimEnd()}${ellipsis}`;
 }

@@ -16,7 +16,7 @@ import { extensionFor, hostImageAt } from "@/lib/images";
 import { mediaPath, varietySlug } from "@/lib/media";
 import { findReference, isPexelsConfigured } from "@/lib/pexels";
 import { getStore } from "@/lib/store";
-import { publishCarousel } from "@/lib/tiktok";
+import { getPublishStatus, publishCarousel } from "@/lib/tiktok";
 import type {
   CarouselPost,
   CarouselRecord,
@@ -222,6 +222,8 @@ async function generateCarousel(
 
     slides.push({
       kind: draft.kind,
+      // midCtaIndex is 1-based, as the model was asked for.
+      hasPlenovaMention: index + 1 === concept.midCtaIndex,
       text,
       imagePrompt: draft.imagePrompt,
       photoQuery: draft.photoQuery,
@@ -512,6 +514,11 @@ export async function publishToAccounts(
         brandOrganicToggle: options.brandOrganicToggle,
       });
 
+      // A publish id only means TikTok accepted the request. It then fetches
+      // every slide and can still fail - a rejected image, a blocked domain.
+      // Reporting success on the id alone would be reporting a lie.
+      const outcome = await confirmPublish(openId, publishId);
+
       posts.push({
         openId,
         username: account.username,
@@ -520,9 +527,11 @@ export async function publishToAccounts(
         privacyLevel: options.privacyLevel ?? null,
         brandContentToggle: Boolean(options.brandContentToggle),
         brandOrganicToggle: Boolean(options.brandOrganicToggle),
-        publishId,
-        publishedAt: new Date().toISOString(),
-        error: null,
+        publishId: outcome.failed ? null : publishId,
+        publishedAt: outcome.failed ? null : new Date().toISOString(),
+        error: outcome.failed
+          ? `TikTok rejected the post: ${outcome.reason ?? "unknown reason"}`
+          : null,
       });
     } catch (err) {
       posts.push(
@@ -579,4 +588,34 @@ function failedPost(
     publishedAt: null,
     error,
   };
+}
+
+
+/**
+ * Waits briefly for TikTok to confirm a post.
+ *
+ * Publishing is asynchronous: the init call returns an id, then TikTok pulls
+ * every slide and can still reject the whole thing. A short bounded check
+ * catches the immediate failures - a blocked image, an unreachable domain -
+ * without holding the request open for a job that may take minutes.
+ *
+ * Anything still processing counts as accepted: it usually completes, and the
+ * publish id is recorded either way so it can be checked later.
+ */
+async function confirmPublish(
+  openId: string,
+  publishId: string,
+): Promise<{ failed: boolean; reason: string | null }> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    try {
+      const { status, failReason } = await getPublishStatus(openId, publishId);
+      if (status === "FAILED") return { failed: true, reason: failReason };
+      if (status === "PUBLISH_COMPLETE") return { failed: false, reason: null };
+    } catch {
+      // The status endpoint being unavailable is not evidence of failure.
+      return { failed: false, reason: null };
+    }
+  }
+  return { failed: false, reason: null };
 }

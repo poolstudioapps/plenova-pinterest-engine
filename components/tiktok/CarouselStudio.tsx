@@ -559,6 +559,14 @@ export function CarouselStudio({
                             )}
                             <p className="text-[12px] font-medium leading-snug">
                               {i + 1}. {text?.title ?? "—"}
+                              {slide.hasPlenovaMention ? (
+                                <span
+                                  title={t("carousels.mentionHint")}
+                                  className="ml-1 text-[var(--color-accent)]"
+                                >
+                                  ◆
+                                </span>
+                              ) : null}
                             </p>
                             <p className="text-[11.5px] leading-snug text-[var(--color-ink-faint)]">
                               {text?.subtitle ?? ""}

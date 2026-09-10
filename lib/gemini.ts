@@ -266,7 +266,12 @@ export async function generateCarouselConcept(
     const text = response.text;
     if (!text) throw upstream("Gemini returned an empty carousel concept.");
 
-    let parsed: { slides?: unknown; caption?: unknown; hashtags?: unknown };
+    let parsed: {
+      slides?: unknown;
+      midCtaIndex?: unknown;
+      caption?: unknown;
+      hashtags?: unknown;
+    };
     try {
       parsed = JSON.parse(text) as typeof parsed;
     } catch {
@@ -320,7 +325,20 @@ export async function generateCarouselConcept(
       ).slice(0, 12);
     }
 
-    return { slides, caption: pickText(parsed.caption), hashtags };
+    // Clamp to a content slide: the model occasionally points at the hook or
+    // the call to action, which already carry their own message.
+    const rawMid = Number((parsed as { midCtaIndex?: unknown }).midCtaIndex);
+    const midCtaIndex =
+      Number.isInteger(rawMid) && rawMid >= 2 && rawMid <= slides.length - 1
+        ? rawMid
+        : Math.max(2, Math.min(slides.length - 1, Math.ceil(slides.length / 2)));
+
+    return {
+      slides,
+      midCtaIndex,
+      caption: pickText(parsed.caption),
+      hashtags,
+    };
   } catch (err) {
     if (err && typeof err === "object" && "code" in err) throw err;
     wrapUpstream(err, "designing the carousel");

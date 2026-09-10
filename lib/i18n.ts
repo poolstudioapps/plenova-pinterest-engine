@@ -130,6 +130,7 @@ const EN: Dict = {
   "carousels.languagesHint":
     "Each account posts in its assigned language. Writing a language nothing publishes in just costs a generation.",
   "carousels.posts": "Posted to",
+  "carousels.mentionHint": "This slide carries the Plenova mention",
 
   "publish.accounts": "Accounts",
   "publish.selected": "{n} selected",
@@ -212,8 +213,10 @@ const EN: Dict = {
 
   "publish.title": "Publish to TikTok",
   "publish.mode": "How to post",
-  "publish.modeDirect": "Post directly to the profile",
-  "publish.modeDraft": "Send to drafts, finish in TikTok",
+  "publish.modeDirect": "Publish now",
+  "publish.modeDirectHint": "Goes live on the profile immediately.",
+  "publish.modeDraft": "Send to drafts",
+  "publish.modeDraftHint": "Lands in the TikTok inbox to finish and post by hand.",
   "publish.privacy": "Who can view this post",
   "publish.privacyHint":
     "Options come from your TikTok account and are honoured exactly as chosen.",
@@ -443,6 +446,7 @@ const FR: Dict = {
   "carousels.languagesHint":
     "Chaque compte publie dans la langue qui lui est assignée. Rédiger une langue que personne ne publie coûte une génération pour rien.",
   "carousels.posts": "Publié sur",
+  "carousels.mentionHint": "Cette slide porte la mention Plenova",
 
   "publish.accounts": "Comptes",
   "publish.selected": "{n} sélectionné(s)",
@@ -526,8 +530,10 @@ const FR: Dict = {
 
   "publish.title": "Publier sur TikTok",
   "publish.mode": "Mode de publication",
-  "publish.modeDirect": "Publier directement sur le profil",
-  "publish.modeDraft": "Envoyer en brouillon, finir dans TikTok",
+  "publish.modeDirect": "Publier maintenant",
+  "publish.modeDirectHint": "Part en ligne sur le profil immédiatement.",
+  "publish.modeDraft": "Envoyer en brouillon",
+  "publish.modeDraftHint": "Arrive dans la boîte TikTok, à finir et publier à la main.",
   "publish.privacy": "Qui peut voir cette publication",
   "publish.privacyHint":
     "Les options viennent de ton compte TikTok et sont respectées telles quelles.",

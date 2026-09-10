@@ -142,6 +142,7 @@ export function normaliseCarousel(raw: unknown): CarouselRecord | null {
   const slides = Array.isArray(c.slides)
     ? c.slides.map((s: Record<string, any>) => ({
         kind: s?.kind ?? "content",
+        hasPlenovaMention: Boolean(s?.hasPlenovaMention),
         text:
           s?.text && typeof s.text === "object"
             ? s.text
