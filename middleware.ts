@@ -33,6 +33,14 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Skip Next internals and static files; everything else goes through.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  /**
+   * Skip Next internals and anything that looks like a static file.
+   *
+   * The trailing extension check matters: the slide renderer fetches
+   * /fonts/TikTokSans.woff2 from the browser, and without this the gate would
+   * answer that request with a redirect to the login page instead of the font.
+   * It happens to work while a session cookie is present, but running auth over
+   * static assets is wasted work and fails in ways that are hard to read.
+   */
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\.[a-zA-Z0-9]+$).*)"],
 };
