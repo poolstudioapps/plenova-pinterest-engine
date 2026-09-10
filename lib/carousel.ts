@@ -563,6 +563,13 @@ export async function updateSlide(
  * Always on our own domain, never the Blob hostname: TikTok pulls these itself
  * and rejects any domain not verified in its developer portal. The Blob
  * hostname belongs to Vercel and cannot be verified, so it is relayed.
+ *
+ * Composites only, never the bare photograph. Two reasons, and either alone
+ * would be enough: a slide without its text burned in is not the post anyone
+ * meant to publish, and the bare image comes out of the model at 2K, which is
+ * over TikTok's limit and fails the whole carousel with
+ * picture_size_check_failed. The composite is drawn into a 1080x1350 canvas,
+ * so it is within the limit by construction.
  */
 export function slideUrlsFor(
   carousel: CarouselRecord,
@@ -570,7 +577,7 @@ export function slideUrlsFor(
 ): string[] {
   return carousel.slides
     .map((slide, index) => {
-      if (!slide.composed[language] && !slide.imageUrl) return null;
+      if (!slide.composed[language]) return null;
       const label = `${carousel.id}:${index}:${language}`;
       return `${config.app.url}/api/pull/${carousel.id}/${index}/${language}/${signLabel(label)}.jpg`;
     })
@@ -668,6 +675,22 @@ export async function publishToAccounts(
           language,
           options,
           `This carousel has nothing written in ${language}.`,
+        ),
+      );
+      await persist("publishing");
+      continue;
+    }
+
+    // Every slide, or none. A partial run would post a shorter carousel than
+    // the one on screen, silently dropping whatever had not been rendered.
+    if (urls.length !== carousel.slides.length) {
+      posts.push(
+        failedPost(
+          openId,
+          account.username,
+          language,
+          options,
+          `Only ${urls.length} of ${carousel.slides.length} slides have their text burned in for ${language}. Open the carousel and wait for it to finish, then publish.`,
         ),
       );
       await persist("publishing");

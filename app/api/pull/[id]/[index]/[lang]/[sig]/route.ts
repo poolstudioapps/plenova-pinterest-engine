@@ -47,7 +47,9 @@ export async function GET(_request: Request, { params }: Params) {
 
     const carousel = await getStore().getCarousel(id);
     const slide = carousel?.slides[position];
-    const source = slide?.composed[lang] ?? slide?.imageUrl;
+    // The composite only. The bare photograph is 2K straight out of the model,
+    // which is over TikTok's picture size limit and would fail the whole post.
+    const source = slide?.composed[lang];
     if (!source) throw notFound("No such slide.");
 
     if (source.startsWith("data:")) {
