@@ -208,6 +208,28 @@ Sans cette interface, la revue est refusée.
 
 ---
 
+## 7 bis. Development Mode — le piège de la première connexion
+
+Tant que TikTok n'a pas approuvé l'app, elle est en **Development Mode**. Dans
+cet état, seuls les comptes explicitement enregistrés comme **Test Users**
+peuvent compléter l'OAuth. Tout autre compte est refusé avec :
+
+> Something went wrong — correct the following and try again: **client_key**
+
+Le message pointe vers la clé, alors que la clé n'a rien à voir. C'est le compte
+qui est refusé.
+
+**Correctif** : portail développeur → **App permissions → Test users → Add test
+user**, et ajoute le compte TikTok de Plenova (username ou e-mail). Jusqu'à 10
+comptes par app. Une fois l'app approuvée et passée en Live Mode, n'importe quel
+compte peut se connecter.
+
+L'onglet TikTok du tool affiche ce rappel tant qu'aucun compte n'est connecté,
+ainsi qu'une clé masquée et l'état du secret, pour distinguer d'un coup d'œil un
+problème de configuration d'un problème de compte.
+
+---
+
 ## 8. Soumission à la revue
 
 **Bloquant : une vidéo de démo est obligatoire.** Le code doit donc exister et
@@ -281,6 +303,7 @@ pas basculé vers Vercel**. C'est la seule action qui casserait l'ancien outil.
 | Pages légales publiques et lisibles | ✅ |
 | Intégration TikTok dans le tool | ✅ OAuth PKCE, creator_info, publication directe + brouillon |
 | Onglets TikTok et Carrousels | ✅ |
-| Variables d'environnement TikTok | ⬜ **à poser maintenant** |
+| Variables d'environnement TikTok | ✅ posées et déployées |
+| Compte TikTok ajouté en Test User | ⬜ **requis pour se connecter** |
 | Vidéo de démo | ⬜ nécessite le code |
 | Soumission | ⬜ **ne pas soumettre avant la vidéo** |
