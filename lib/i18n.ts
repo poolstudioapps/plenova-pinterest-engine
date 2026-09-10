@@ -248,6 +248,10 @@ const EN: Dict = {
   "pinterest.trialBody":
     "The engine is authenticated with a manually supplied trial token. Boards can be read, but publishing needs the pins:write scope, which trial access does not grant.",
 
+  "login.password": "Password",
+  "login.cta": "Sign in",
+  "login.failed": "Incorrect password.",
+
   "common.language": "Language",
   "common.uiLanguage": "Dashboard language",
 };
@@ -441,6 +445,10 @@ const FR: Dict = {
   "pinterest.trialTitle": "Jeton d'essai en lecture seule",
   "pinterest.trialBody":
     "Le moteur est authentifié avec un jeton d'essai fourni manuellement. Les tableaux sont lisibles, mais la publication exige le scope pins:write, que l'accès d'essai n'accorde pas.",
+
+  "login.password": "Mot de passe",
+  "login.cta": "Se connecter",
+  "login.failed": "Mot de passe incorrect.",
 
   "common.language": "Langue",
   "common.uiLanguage": "Langue du tableau de bord",
