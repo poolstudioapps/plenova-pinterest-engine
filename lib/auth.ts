@@ -30,6 +30,7 @@ const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
  *  - /login, /api/auth otherwise you could never sign in.
  */
 const PUBLIC_PREFIXES = [
+  "/api/health",
   "/legal",
   "/login",
   "/api/auth",

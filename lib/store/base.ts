@@ -73,7 +73,15 @@ export abstract class DocumentStore implements EngineStore {
 
     if (attemptsLeft <= 1) return result;
 
-    const after = await this.read();
+    // The write already landed. If we cannot read it back we simply do not
+    // know whether anyone overtook us, and reporting a failure for a write
+    // that succeeded would be worse than missing a rare clash.
+    let after: StateDocument;
+    try {
+      after = await this.read();
+    } catch {
+      return result;
+    }
     if (after.writeToken === token) return result;
 
     return this.applyMutation(fn, attemptsLeft - 1);
