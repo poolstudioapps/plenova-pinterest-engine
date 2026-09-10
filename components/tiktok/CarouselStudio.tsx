@@ -75,6 +75,9 @@ export function CarouselStudio({
   );
   const [composing, setComposing] = useState<string | null>(null);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
+  // Carousels this session has already tried to compose, so a failure is not
+  // retried in a loop.
+  const autoComposed = useRef<Set<string>>(new Set());
 
   function toggleLanguage(lang: ContentLocale) {
     setLanguages((current) =>
@@ -179,8 +182,10 @@ export function CarouselStudio({
       let done = 0;
 
       for (const language of carousel.languages) {
-        const slides = carousel.slides.map((s) => ({
-          ...s,
+        const slides = carousel.slides.map((s, i) => ({
+          // Fetched through the carousel, not the media library: the slide
+          // owns its image, and the library entry may be missing.
+          src: `/api/carousels/${carousel.id}/slides/${i}/raw`,
           title: s.text[language]?.title ?? "",
           subtitle: s.text[language]?.subtitle ?? "",
         }));
@@ -225,6 +230,30 @@ export function CarouselStudio({
       setComposing(null);
     }
   }
+
+  /**
+   * Burns the text in as soon as a carousel finishes, without being asked.
+   *
+   * The rendering needs a browser, so it cannot run alongside the server-side
+   * generation - but waiting for a click meant carousels sat there as bare
+   * photographs. This closes the gap whenever the page is open; the button
+   * stays for anything generated while it was not.
+   */
+  useEffect(() => {
+    if (composing) return;
+    const pending = carousels.find(
+      (c) =>
+        c.status === "draft" &&
+        c.slides.length > 0 &&
+        !autoComposed.current.has(c.id) &&
+        c.slides.some((s) => c.languages.some((l) => !s.composed[l])),
+    );
+    if (!pending) return;
+    autoComposed.current.add(pending.id);
+    void compose(pending);
+    // compose is stable enough for this: it only reads state it is given.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carousels, composing]);
 
   function applyPublished(updated: CarouselRecord) {
     setCarousels((current) =>

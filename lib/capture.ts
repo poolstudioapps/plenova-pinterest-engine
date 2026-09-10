@@ -45,8 +45,8 @@ function bufferToBase64(buffer: ArrayBuffer): string {
 }
 
 /** Pulls an image through our own origin and returns it as a data URL. */
-async function loadBackground(mediaId: string): Promise<string> {
-  const res = await fetch(`/api/media/${encodeURIComponent(mediaId)}/raw`);
+async function loadBackground(src: string): Promise<string> {
+  const res = await fetch(src);
   if (!res.ok) throw new Error("Could not load the slide image.");
   const blob = await res.blob();
   return await new Promise<string>((resolve, reject) => {
@@ -58,18 +58,16 @@ async function loadBackground(mediaId: string): Promise<string> {
 }
 
 /** Renders one slide and returns it as a JPEG data URL. */
-/** One slide to compose: an image, and the words for one language. */
-export type CapturableSlide = SlideCopy & { mediaId: string | null };
+/** One slide to compose: where to fetch its image, and the words for it. */
+export type CapturableSlide = SlideCopy & { src: string };
 
 export async function captureSlide(
   slide: CapturableSlide,
   options: Partial<OverlayOptions> = {},
 ): Promise<string> {
-  if (!slide.mediaId) throw new Error("This slide has no image to compose on.");
-
   const [fontBase64, backgroundDataUrl] = await Promise.all([
     loadFont(),
-    loadBackground(slide.mediaId),
+    loadBackground(slide.src),
   ]);
 
   const html = buildSlideHtml({

@@ -377,6 +377,32 @@ export async function saveComposedSlide(
       : s,
   );
 
+  // File the composite alongside the bare photograph. It is what actually gets
+  // published, so it belongs in the library where it can be reviewed and
+  // reused - filed under the same species as the photograph it came from.
+  const bare = slide.mediaId ? await store.getMedia(slide.mediaId) : null;
+  const now = new Date().toISOString();
+  await store.saveMedia({
+    id: `${slide.mediaId ?? `med_${id}_${index}`}_${language}`,
+    plantSlug: bare?.plantSlug ?? carousel.plantSlug ?? "unfiled",
+    plantName: bare?.plantName ?? carousel.plantName ?? carousel.theme,
+    variety: bare?.variety ?? null,
+    varietySlug: bare?.varietySlug ?? null,
+    url: hosted.url,
+    mimeType,
+    aspectRatio: bare?.aspectRatio ?? "4:5",
+    prompt: slide.imagePrompt,
+    visualStyle: "carousel-slide",
+    angleSlug: null,
+    source: "carousel",
+    sourceId: `${id}_${index}`,
+    referencePhotographer: bare?.referencePhotographer ?? null,
+    tags: [language, "slide"],
+    usedCount: 1,
+    lastUsedAt: now,
+    createdAt: now,
+  });
+
   const updated: CarouselRecord = {
     ...carousel,
     slides,
