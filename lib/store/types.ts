@@ -79,12 +79,24 @@ export interface StateDocument {
   connection: string | null;
   /** Same envelope, for the TikTok account. */
   tiktok: string | null;
-  /**
-   * Stamped afresh on every write. Reading it back unchanged is how a writer
-   * knows no other serverless instance overwrote it - see DocumentStore.mutate.
-   * Optional: documents written before this existed must still load.
-   */
-  writeToken?: string;
+}
+
+/**
+ * A document together with whatever the adapter needs to tell whether it has
+ * changed since - an ETag on Blob, nothing at all where the process is the
+ * only writer.
+ */
+export interface VersionedDocument {
+  doc: StateDocument;
+  version: string | null;
+}
+
+/** Thrown when the document moved under a writer between load and store. */
+export class ConcurrentWrite extends Error {
+  constructor() {
+    super("The state document changed while this write was being prepared.");
+    this.name = "ConcurrentWrite";
+  }
 }
 
 export function emptyState(): StateDocument {
@@ -134,6 +146,15 @@ export function applyFilter(
  * page rather than degrading, which is the wrong failure: stored data outlives
  * every schema, so the reader has to tolerate what the writer used to produce.
  */
+/**
+ * A generation runs detached from the request that started it. If that
+ * function is killed - a timeout, a redeploy mid-run - nothing is left to
+ * write the failure down, and the record would spin on "generating" forever
+ * with no way to tell it apart from one still working. Progress is written
+ * after every slide, so a long silence is the signal.
+ */
+const STALE_GENERATION_MS = 15 * 60 * 1000;
+
 export function normaliseCarousel(raw: unknown): CarouselRecord | null {
   if (!raw || typeof raw !== "object") return null;
   const c = raw as Record<string, any>;
@@ -167,6 +188,12 @@ export function normaliseCarousel(raw: unknown): CarouselRecord | null {
       }))
     : [];
 
+  const lastTouched = Date.parse(c.updatedAt ?? "");
+  const stalled =
+    c.status === "generating" &&
+    Number.isFinite(lastTouched) &&
+    Date.now() - lastTouched > STALE_GENERATION_MS;
+
   return {
     id: c.id,
     languages,
@@ -183,10 +210,12 @@ export function normaliseCarousel(raw: unknown): CarouselRecord | null {
     coverIndex: typeof c.coverIndex === "number" ? c.coverIndex : 1,
     plantSlug: c.plantSlug ?? null,
     plantName: c.plantName ?? null,
-    status: c.status ?? "draft",
+    status: stalled ? "failed" : (c.status ?? "draft"),
     posts: Array.isArray(c.posts) ? c.posts : [],
-    error: c.error ?? null,
-    progress: c.progress ?? null,
+    error: stalled
+      ? "Generation stopped responding and was abandoned. Start it again."
+      : (c.error ?? null),
+    progress: stalled ? null : (c.progress ?? null),
     createdAt: c.createdAt ?? new Date(0).toISOString(),
     updatedAt: c.updatedAt ?? new Date(0).toISOString(),
   } as CarouselRecord;

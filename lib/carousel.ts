@@ -128,15 +128,26 @@ export async function runCarouselGeneration(
   try {
     await generateCarousel(id, input);
   } catch (err) {
-    const store = getStore();
-    const carousel = await store.getCarousel(id);
-    if (!carousel) return;
-    await store.saveCarousel({
-      ...carousel,
-      status: "failed",
-      error: err instanceof Error ? err.message : "Generation failed.",
-      updatedAt: new Date().toISOString(),
-    });
+    const reason = err instanceof Error ? err.message : "Generation failed.";
+    try {
+      const store = getStore();
+      const carousel = await store.getCarousel(id);
+      if (!carousel) return;
+      await store.saveCarousel({
+        ...carousel,
+        status: "failed",
+        error: reason,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (writeErr) {
+      // Nothing is listening for this rejection, and an unhandled one here
+      // would leave the record on "generating" with no trace at all. The
+      // staleness rule in normaliseCarousel is what finally frees it.
+      console.error(
+        `[carousel] ${id} failed (${reason}) and the failure could not be recorded:`,
+        writeErr,
+      );
+    }
   }
 }
 

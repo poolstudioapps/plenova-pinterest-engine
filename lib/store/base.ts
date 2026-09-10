@@ -1,10 +1,5 @@
 import "server-only";
-import {
-  decryptJson,
-  encryptJson,
-  hasEncryptionKey,
-  randomToken,
-} from "@/lib/crypto";
+import { decryptJson, encryptJson, hasEncryptionKey } from "@/lib/crypto";
 import type {
   CarouselRecord,
   MediaAsset,
@@ -17,11 +12,13 @@ import { filterMedia, type MediaFilter } from "@/lib/media";
 import type { ContentLocale } from "@/lib/i18n";
 import {
   applyFilter,
+  ConcurrentWrite,
   normaliseAccounts,
   normaliseCarousel,
   type EngineStore,
   type PinFilter,
   type StateDocument,
+  type VersionedDocument,
 } from "./types";
 
 /**
@@ -37,21 +34,33 @@ export abstract class DocumentStore implements EngineStore {
   abstract readonly name: string;
   abstract readonly persistent: boolean;
 
-  protected abstract read(): Promise<StateDocument>;
-  protected abstract write(doc: StateDocument): Promise<void>;
+  /** Loads the document with the token that identifies this exact version. */
+  protected abstract load(): Promise<VersionedDocument>;
+  /**
+   * Persists the document. Must throw ConcurrentWrite - and write nothing - if
+   * `version` no longer describes what is stored.
+   */
+  protected abstract store(
+    doc: StateDocument,
+    version: string | null,
+  ): Promise<void>;
+
+  /** The document alone, for the many callers that only read. */
+  protected async read(): Promise<StateDocument> {
+    return (await this.load()).doc;
+  }
 
   private queue: Promise<unknown> = Promise.resolve();
 
   /**
-   * Serialises a read-modify-write cycle against this instance, then verifies
+   * Serialises a read-modify-write cycle against this instance, and detects
    * the part it cannot serialise.
    *
    * A second serverless instance can read the same document and write it back
-   * after us, erasing our change. Blob has no conditional write, so instead
-   * every write stamps a unique token: reading that token back proves nobody
-   * overtook us. When someone did, their document is the current one, so we
-   * re-read and re-apply the mutation on top of their work rather than let
-   * either side vanish. Mutations are plain assignments into a freshly read
+   * after us, erasing our change. So the write is conditional on the version
+   * we read: the store refuses it if anything landed in between, and we
+   * re-apply the mutation on top of the document that did land rather than let
+   * either side vanish. Mutations are plain assignments into a freshly loaded
    * document, so re-applying one is safe.
    */
   protected mutate<T>(fn: (doc: StateDocument) => T | Promise<T>): Promise<T> {
@@ -65,26 +74,17 @@ export abstract class DocumentStore implements EngineStore {
     fn: (doc: StateDocument) => T | Promise<T>,
     attemptsLeft: number,
   ): Promise<T> {
-    const doc = await this.read();
+    const { doc, version } = await this.load();
     const result = await fn(doc);
-    const token = randomToken(8);
-    doc.writeToken = token;
-    await this.write(doc);
-
-    if (attemptsLeft <= 1) return result;
-
-    // The write already landed. If we cannot read it back we simply do not
-    // know whether anyone overtook us, and reporting a failure for a write
-    // that succeeded would be worse than missing a rare clash.
-    let after: StateDocument;
     try {
-      after = await this.read();
-    } catch {
-      return result;
+      await this.store(doc, version);
+    } catch (err) {
+      if (err instanceof ConcurrentWrite && attemptsLeft > 1) {
+        return this.applyMutation(fn, attemptsLeft - 1);
+      }
+      throw err;
     }
-    if (after.writeToken === token) return result;
-
-    return this.applyMutation(fn, attemptsLeft - 1);
+    return result;
   }
 
   async listPins(filter?: PinFilter): Promise<PinRecord[]> {
