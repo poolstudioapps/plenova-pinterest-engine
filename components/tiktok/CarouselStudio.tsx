@@ -13,6 +13,7 @@ import {
 } from "@/components/ui";
 import { PublishDialog } from "@/components/tiktok/PublishDialog";
 import { SlideEditor } from "@/components/tiktok/SlideEditor";
+import { SlidePreview } from "@/components/tiktok/SlidePreview";
 import type { AccountView } from "@/components/tiktok/TikTokPanel";
 import { captureSlides } from "@/lib/capture";
 import {
@@ -207,6 +208,7 @@ export function CarouselStudio({
           src: `/api/carousels/${carousel.id}/slides/${i}/raw`,
           title: s.text[language]?.title ?? "",
           subtitle: s.text[language]?.subtitle ?? "",
+          cta: s.text[language]?.cta ?? "",
           // Each slide carries its own layout, so one edited slide does not
           // drag the rest of the carousel with it.
           overlay: s.overlay ?? defaultOverlay(overlayStyle),
@@ -565,16 +567,19 @@ export function CarouselStudio({
 
                     <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
                       {carousel.slides.map((slide, i) => {
-                        const url = slide.composed[lang] ?? slide.imageUrl;
                         const text = slide.text[lang];
                         return (
                           <div key={`${carousel.id}-s${i}`} className="space-y-1.5">
-                            {url ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={url}
-                                alt={text?.title ?? ""}
-                                className="aspect-[4/5] w-full rounded-[9px] object-cover"
+                            {slide.imageUrl ? (
+                              <SlidePreview
+                                className="w-full rounded-[9px]"
+                                src={`/api/carousels/${carousel.id}/slides/${i}/raw`}
+                                copy={{
+                                  title: text?.title ?? "",
+                                  subtitle: text?.subtitle ?? "",
+                                  cta: text?.cta ?? "",
+                                }}
+                                overlay={slide.overlay ?? defaultOverlay()}
                               />
                             ) : (
                               <div className="aspect-[4/5] w-full rounded-[9px] bg-[var(--color-line)]" />

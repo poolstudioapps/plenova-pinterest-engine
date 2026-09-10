@@ -289,6 +289,7 @@ export async function generateCarouselConcept(
             : "content") as CarouselSlideDraft["kind"],
           title: pickText(s.title),
           subtitle: pickText(s.subtitle),
+          cta: pickText(s.cta),
           imagePrompt:
             typeof s.imagePrompt === "string" ? s.imagePrompt.trim() : "",
           photoQuery:

@@ -27,8 +27,6 @@ interface Props {
   onPublished: (carousel: CarouselRecord) => void;
 }
 
-const POST_MODE_KEY = "plenova_post_mode";
-
 const PRIVACY_LABELS: Record<string, string> = {
   PUBLIC_TO_EVERYONE: "Everyone",
   MUTUAL_FOLLOW_FRIENDS: "Friends",
@@ -68,17 +66,6 @@ export function PublishDialog({
   );
   const [creator, setCreator] = useState<TikTokCreatorInfo | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  // Remembered between sessions: an operator who works in drafts works in
-  // drafts every time, and re-picking it on every publish is friction.
-  const [postMode, setPostMode] = useState<"DIRECT_POST" | "MEDIA_UPLOAD">(() => {
-    try {
-      const saved = localStorage.getItem(POST_MODE_KEY);
-      return saved === "MEDIA_UPLOAD" ? "MEDIA_UPLOAD" : "DIRECT_POST";
-    } catch {
-      // Private windows and blocked storage both throw; the default is fine.
-      return "DIRECT_POST";
-    }
-  });
   const [privacy, setPrivacy] = useState("");
   const [brandContent, setBrandContent] = useState(false);
   const [brandOrganic, setBrandOrganic] = useState(false);
@@ -129,7 +116,7 @@ export function PublishDialog({
     );
   }
 
-  async function publish() {
+  async function publish(postMode: "DIRECT_POST" | "MEDIA_UPLOAD") {
     if (postMode === "DIRECT_POST" && !privacy) {
       setMessage({ tone: "danger", text: t("publish.needPrivacy") });
       return;
@@ -264,98 +251,45 @@ export function PublishDialog({
             </div>
           ) : creator ? (
             <>
-              <div>
-                <p className="mb-1.5 text-[13px] font-medium">
-                  {t("publish.mode")}
-                </p>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {(
-                    [
-                      {
-                        value: "DIRECT_POST" as const,
-                        label: t("publish.modeDirect"),
-                        hint: t("publish.modeDirectHint"),
-                      },
-                      {
-                        value: "MEDIA_UPLOAD" as const,
-                        label: t("publish.modeDraft"),
-                        hint: t("publish.modeDraftHint"),
-                      },
-                    ]
-                  ).map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => {
-                        setPostMode(option.value);
-                        try {
-                          localStorage.setItem(POST_MODE_KEY, option.value);
-                        } catch {
-                          // Remembering is a convenience, never a requirement.
-                        }
-                      }}
-                      aria-pressed={postMode === option.value}
-                      className={cn(
-                        "rounded-[10px] border px-3 py-2.5 text-left transition-colors",
-                        postMode === option.value
-                          ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)]"
-                          : "border-[var(--color-line)] hover:border-[var(--color-line-strong)]",
-                      )}
-                    >
-                      <span className="block text-[13px] font-medium">
-                        {option.label}
-                      </span>
-                      <span className="mt-0.5 block text-[11.5px] leading-snug text-[var(--color-ink-faint)]">
-                        {option.hint}
-                      </span>
-                    </button>
+              <Field
+                label={t("publish.privacy")}
+                htmlFor="privacy"
+                hint={t("publish.privacyHint")}
+              >
+                <Select
+                  id="privacy"
+                  value={privacy}
+                  onChange={(e) => setPrivacy(e.target.value)}
+                >
+                  <option value="">—</option>
+                  {creator.privacyOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {PRIVACY_LABELS[option] ?? option}
+                    </option>
                   ))}
-                </div>
+                </Select>
+              </Field>
+
+              <div className="space-y-2.5">
+                <label className="flex items-start gap-2.5 text-[13px] text-[var(--color-ink-soft)]">
+                  <input
+                    type="checkbox"
+                    checked={brandContent}
+                    onChange={(e) => setBrandContent(e.target.checked)}
+                    className="mt-0.5 size-4 accent-[var(--color-accent)]"
+                  />
+                  <span>{t("publish.brandContent")}</span>
+                </label>
+                <label className="flex items-start gap-2.5 text-[13px] text-[var(--color-ink-soft)]">
+                  <input
+                    type="checkbox"
+                    checked={brandOrganic}
+                    onChange={(e) => setBrandOrganic(e.target.checked)}
+                    className="mt-0.5 size-4 accent-[var(--color-accent)]"
+                  />
+                  <span>{t("publish.brandOrganic")}</span>
+                </label>
               </div>
-
-              {postMode === "DIRECT_POST" ? (
-                <>
-                  <Field
-                    label={t("publish.privacy")}
-                    htmlFor="privacy"
-                    hint={t("publish.privacyHint")}
-                  >
-                    <Select
-                      id="privacy"
-                      value={privacy}
-                      onChange={(e) => setPrivacy(e.target.value)}
-                    >
-                      <option value="">—</option>
-                      {creator.privacyOptions.map((option) => (
-                        <option key={option} value={option}>
-                          {PRIVACY_LABELS[option] ?? option}
-                        </option>
-                      ))}
-                    </Select>
-                  </Field>
-
-                  <div className="space-y-2.5">
-                    <label className="flex items-start gap-2.5 text-[13px] text-[var(--color-ink-soft)]">
-                      <input
-                        type="checkbox"
-                        checked={brandContent}
-                        onChange={(e) => setBrandContent(e.target.checked)}
-                        className="mt-0.5 size-4 accent-[var(--color-accent)]"
-                      />
-                      <span>{t("publish.brandContent")}</span>
-                    </label>
-                    <label className="flex items-start gap-2.5 text-[13px] text-[var(--color-ink-soft)]">
-                      <input
-                        type="checkbox"
-                        checked={brandOrganic}
-                        onChange={(e) => setBrandOrganic(e.target.checked)}
-                        className="mt-0.5 size-4 accent-[var(--color-accent)]"
-                      />
-                      <span>{t("publish.brandOrganic")}</span>
-                    </label>
-                  </div>
-                </>
-              ) : null}
             </>
           ) : null}
 
@@ -379,17 +313,33 @@ export function PublishDialog({
             </Notice>
           ) : null}
 
-          <div className="flex justify-end gap-2 pt-1">
+          <p className="text-[11.5px] leading-snug text-[var(--color-ink-faint)]">
+            {t("publish.actionHint")}
+          </p>
+
+          <div className="flex flex-wrap justify-end gap-2 pt-1">
             <Button variant="ghost" onClick={onClose}>
               {t("publish.cancel")}
             </Button>
+            {/*
+              Two buttons rather than a mode to pick first. Sending a draft is
+              the safe half of this screen and it should not be reachable only
+              by having changed a setting further up.
+            */}
             <Button
-              variant="primary"
-              onClick={publish}
+              onClick={() => publish("MEDIA_UPLOAD")}
               loading={busy}
               disabled={selected.length === 0}
             >
-              {t("publish.confirmMulti", { n: selected.length })}
+              {t("publish.sendDraft", { n: selected.length })}
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => publish("DIRECT_POST")}
+              loading={busy}
+              disabled={selected.length === 0}
+            >
+              {t("publish.postNow", { n: selected.length })}
             </Button>
           </div>
         </div>

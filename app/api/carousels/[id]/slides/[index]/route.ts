@@ -31,8 +31,9 @@ export async function PATCH(request: Request, { params }: Params) {
       throw badRequest("Request body must be valid JSON.");
     }
 
-    const text: Partial<Record<ContentLocale, { title: string; subtitle: string }>> =
-      {};
+    const text: Partial<
+      Record<ContentLocale, { title: string; subtitle: string; cta?: string }>
+    > = {};
     if (body.text !== undefined) {
       if (!body.text || typeof body.text !== "object") {
         throw badRequest("text must be an object keyed by language.");
@@ -41,10 +42,15 @@ export async function PATCH(request: Request, { params }: Params) {
         if (!isContentLocale(language)) {
           throw badRequest(`${language} is not a supported content locale.`);
         }
-        const entry = (value ?? {}) as { title?: unknown; subtitle?: unknown };
+        const entry = (value ?? {}) as {
+          title?: unknown;
+          subtitle?: unknown;
+          cta?: unknown;
+        };
         text[language] = {
           title: String(entry.title ?? "").slice(0, 400),
           subtitle: String(entry.subtitle ?? "").slice(0, 600),
+          cta: String(entry.cta ?? "").slice(0, 400),
         };
       }
     }

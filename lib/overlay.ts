@@ -54,6 +54,8 @@ export interface SlideOverlay {
   style: OverlayStyle;
   title: OverlayBlock;
   subtitle: OverlayBlock;
+  /** Renders only when the slide has CTA text, so every slide can carry one. */
+  cta: OverlayBlock;
 }
 
 export const TITLE_DEFAULTS: OverlayBlock = {
@@ -84,11 +86,26 @@ export const SUBTITLE_DEFAULTS: OverlayBlock = {
   strokeWidth: 15,
 };
 
+export const CTA_DEFAULTS: OverlayBlock = {
+  x: 540,
+  y: 1180,
+  width: 860,
+  height: 140,
+  fontSize: 40,
+  fontWeight: 600,
+  align: "center",
+  lineHeight: 1.25,
+  style: null,
+  strokeColor: "#11481D",
+  strokeWidth: 14,
+};
+
 export function defaultOverlay(style: OverlayStyle = "stroke"): SlideOverlay {
   return {
     style,
     title: { ...TITLE_DEFAULTS },
     subtitle: { ...SUBTITLE_DEFAULTS },
+    cta: { ...CTA_DEFAULTS },
   };
 }
 
@@ -105,6 +122,7 @@ export function normaliseOverlay(
     style,
     title: normaliseBlock(o.title, TITLE_DEFAULTS),
     subtitle: normaliseBlock(o.subtitle, SUBTITLE_DEFAULTS),
+    cta: normaliseBlock(o.cta, CTA_DEFAULTS),
   };
 }
 
@@ -227,6 +245,7 @@ export function blockBoxStyle(block: OverlayBlock): string {
 export interface SlideCopy {
   title: string;
   subtitle: string;
+  cta?: string;
 }
 
 export interface BuildSlideHtmlInput {
@@ -264,5 +283,6 @@ export function buildSlideHtml(input: BuildSlideHtmlInput): string {
   <img src="${input.backgroundDataUrl}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;" />
   ${block(slide.title, overlay.title)}
   ${block(slide.subtitle, overlay.subtitle)}
+  ${block(slide.cta ?? "", overlay.cta)}
 </div>`;
 }

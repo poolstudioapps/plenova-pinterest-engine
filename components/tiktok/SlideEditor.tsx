@@ -33,9 +33,9 @@ interface Props {
   onSaved: (carousel: CarouselRecord) => void;
 }
 
-type BlockKey = "title" | "subtitle";
+type BlockKey = "title" | "subtitle" | "cta";
 
-const BLOCKS: BlockKey[] = ["title", "subtitle"];
+const BLOCKS: BlockKey[] = ["title", "subtitle", "cta"];
 
 const STYLE_LABELS: Record<OverlayStyle, TranslationKey> = {
   stroke: "editor.styleStroke",
@@ -77,13 +77,15 @@ export function SlideEditor({
     slide?.overlay ? normaliseOverlay(slide.overlay) : defaultOverlay(),
   );
   const [texts, setTexts] = useState<
-    Record<string, { title: string; subtitle: string }>
+    Record<string, { title: string; subtitle: string; cta: string }>
   >(() => {
-    const out: Record<string, { title: string; subtitle: string }> = {};
+    const out: Record<string, { title: string; subtitle: string; cta: string }> =
+      {};
     for (const lang of carousel.languages) {
       out[lang] = {
         title: slide?.text[lang]?.title ?? "",
         subtitle: slide?.text[lang]?.subtitle ?? "",
+        cta: slide?.text[lang]?.cta ?? "",
       };
     }
     return out;
@@ -107,7 +109,7 @@ export function SlideEditor({
     return () => observer.disconnect();
   }, []);
 
-  const current = texts[displayLang] ?? { title: "", subtitle: "" };
+  const current = texts[displayLang] ?? { title: "", subtitle: "", cta: "" };
 
   function setBlock(key: BlockKey, patch: Partial<OverlayBlock>) {
     setOverlay((o) => ({ ...o, [key]: { ...o[key], ...patch } }));
@@ -116,7 +118,10 @@ export function SlideEditor({
   function setText(key: BlockKey, value: string) {
     setTexts((all) => ({
       ...all,
-      [displayLang]: { ...(all[displayLang] ?? { title: "", subtitle: "" }), [key]: value },
+      [displayLang]: {
+        ...(all[displayLang] ?? { title: "", subtitle: "", cta: "" }),
+        [key]: value,
+      },
     }));
   }
 
@@ -397,7 +402,11 @@ export function SlideEditor({
                 key={key}
                 t={t}
                 label={t(
-                  key === "title" ? "editor.blockTitle" : "editor.blockSubtitle",
+                  key === "title"
+                    ? "editor.blockTitle"
+                    : key === "subtitle"
+                      ? "editor.blockSubtitle"
+                      : "editor.blockCta",
                 )}
                 block={overlay[key]}
                 text={current[key]}
@@ -406,12 +415,15 @@ export function SlideEditor({
                 onText={(value) => setText(key, value)}
                 onChange={(patch) => setBlock(key, patch)}
                 emptyHint={
-                  current[key].trim()
-                    ? null
-                    : t("editor.empty", {
-                        lang: CONTENT_LOCALE_LABELS[displayLang],
-                      })
+                  key === "cta"
+                    ? t("editor.ctaHint")
+                    : current[key].trim()
+                      ? null
+                      : t("editor.empty", {
+                          lang: CONTENT_LOCALE_LABELS[displayLang],
+                        })
                 }
+                hintTone={key === "cta" ? "muted" : "warn"}
               />
             ))}
 
@@ -453,6 +465,7 @@ interface ControlsProps {
   text: string;
   active: boolean;
   emptyHint: string | null;
+  hintTone: "warn" | "muted";
   onFocus: () => void;
   onText: (value: string) => void;
   onChange: (patch: Partial<OverlayBlock>) => void;
@@ -465,6 +478,7 @@ function BlockControls({
   text,
   active,
   emptyHint,
+  hintTone,
   onFocus,
   onText,
   onChange,
@@ -491,7 +505,16 @@ function BlockControls({
         className="w-full rounded-[8px] border border-[var(--color-line)] bg-[var(--color-surface)] px-2.5 py-1.5 text-[13px] outline-none focus:border-[var(--color-accent)]"
       />
       {emptyHint ? (
-        <p className="mt-1 text-[11px] text-[var(--color-danger)]">{emptyHint}</p>
+        <p
+          className={cn(
+            "mt-1 text-[11px]",
+            hintTone === "warn"
+              ? "text-[var(--color-danger)]"
+              : "text-[var(--color-ink-faint)]",
+          )}
+        >
+          {emptyHint}
+        </p>
       ) : null}
 
       <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2">

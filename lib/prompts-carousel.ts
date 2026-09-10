@@ -28,6 +28,8 @@ export interface CarouselSlideDraft {
   kind: "hook" | "content" | "cta";
   title: MultiText;
   subtitle: MultiText;
+  /** Present only on the slide carrying the Plenova mention. */
+  cta?: MultiText;
   imagePrompt: string;
   /** Short query used to find a real reference photograph. */
   photoQuery: string;
@@ -77,6 +79,9 @@ export function carouselSchema(languages: ContentLocale[]) {
             kind: { type: "string", enum: ["hook", "content", "cta"] },
             title: multiText("Large overlay text. Very short - 2 to 6 words."),
             subtitle: multiText("Secondary overlay line, 6 to 15 words."),
+            cta: multiText(
+              "Only on the ONE content slide named by midCtaIndex, and empty on every other slide: a short spoken-sounding Plenova mention tied to this slide's subject.",
+            ),
             imagePrompt: {
               type: "string",
               description:
@@ -150,6 +155,7 @@ export function buildCarouselSystemInstruction(
     "- Overlay text is read on a phone in under a second. Titles are 2 to 6 words. Never a full sentence.",
     "- No clickbait, no invented statistics, no fake urgency.",
     "- Second person, warm, direct. The tone of a knowledgeable friend, not a brand.",
+    "- No overlay line ends with a full stop. Native TikTok text carries no closing punctuation.",
   ].join("\n");
 }
 
@@ -201,22 +207,37 @@ export function buildCarouselPrompt(input: CarouselPromptInput): string {
     "  - subtitle = what it does to the plant and what to do instead",
     "  - imagePrompt = the visible consequence, or the wrong gesture being made",
     "",
-    "## Slide roles",
-    "Slide 1 (hook): states the promise and makes someone stop scrolling. No plant name unless the theme is about one plant.",
-    "Last slide (cta): invites the reader to Plenova for identification and care reminders. Warm, never pushy.",
+    "## Slide roles - this is the shape of every carousel",
     "",
-    "## The mid-carousel mention",
-    "Exactly ONE content slide - never the first, never the last - must also mention Plenova, and you choose which in midCtaIndex.",
-    "It belongs at the end of that slide's subtitle, in one short clause, and it has to earn its place: tie it to what that slide is actually about.",
-    "Good: a watering slide ending 'Plenova te rappelle quand arroser.' Bad: 'Télécharge Plenova !' bolted onto a slide about leaf shape.",
-    "Pick the slide where the app genuinely helps with that specific problem. If nothing fits naturally, pick the middle slide and keep the mention very light.",
+    "SLIDE 1 (hook): the cover.",
+    "  - title = the theme itself, in each language. Translate it, do not rewrite it into something else.",
+    "  - subtitle = EMPTY STRING in every language. The cover carries one line and nothing else.",
+    "",
+    "EVERY OTHER SLIDE (content): one item per slide, and the SAME two-part shape throughout.",
+    "  - title = the short label of that item, in the format the content type above dictates.",
+    "    On a plant listicle that is the plant name and nothing else.",
+    "  - subtitle = the explanation underneath, 6 to 15 words.",
+    "  - Never a leading number ('1. Pothos'), never a pointless article ('Le Pothos' where 'Pothos' says it).",
+    "",
+    "LAST SLIDE (payoff): still title plus explanation, same as the others.",
+    "  - It is the bonus - an extra tip, an honourable mention, the strongest closing point.",
+    "  - It is NOT an advert. Do not turn it into 'download Plenova'.",
+    "",
+    "## The Plenova mention",
+    "Exactly ONE content slide - never the first, never the last - also fills its `cta` field, and you choose which in midCtaIndex.",
+    "Every other slide leaves `cta` as an empty string in every language.",
+    "It is a third short line on that slide, not part of the subtitle, and it reads like a friend recommending something.",
+    "Tie it to what that slide is actually about, and never say 'link in bio'.",
+    "For a tips theme: 'perso je m'organise avec Plenova'. For a plants theme: 'perso je les ai toutes identifiées avec Plenova'. For a mistakes theme: 'Plenova m'a évité pas mal d'erreurs'.",
+    "Pick the slide where the app genuinely helps with that specific problem.",
     "",
     "## Image prompts",
     "Write each as a single self-contained paragraph a photographer could shoot from.",
     "Specify subject, species-accurate detail, setting, lighting, lens and mood.",
     "The aesthetic is premium editorial interior photography: real rooms, natural light, believable.",
     "Every slide must be visually distinct from the others - vary framing, room, angle and distance.",
-    "Forbid: watermarks, logos, brand marks, app UI, text of any kind, plastic-looking foliage, oversaturated HDR.",
+    "Forbid: any visible person - no face, no hands, no arms, no body - watermarks, logos, brand marks, app UI, phone mockups, text of any kind, plastic-looking foliage, oversaturated HDR.",
+    "Shot like someone took it on their phone in their own flat: soft natural light, no exaggerated bokeh, unsaturated colours.",
     "",
     "## Photo queries",
     "For each slide also give photoQuery: two to four plain English words that would find a similar scene in a stock photo library.",

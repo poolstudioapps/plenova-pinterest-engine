@@ -232,6 +232,12 @@ export type CarouselStatus =
 export interface SlideText {
   title: string;
   subtitle: string;
+  /**
+   * The Plenova mention, on the one content slide that carries it. Its own
+   * line rather than a clause bolted onto the subtitle, so it can be styled
+   * and placed like the recommendation it is meant to read as.
+   */
+  cta?: string;
 }
 
 export interface CarouselSlide {

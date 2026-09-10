@@ -5,7 +5,7 @@ import {
   plantName as localizedPlantName,
 } from "@/lib/data/localize";
 import { getVisualStyle } from "@/lib/data/visual-styles";
-import { badRequest, notFound } from "@/lib/errors";
+import { AppError, badRequest, notFound } from "@/lib/errors";
 import {
   generateCarouselConcept,
   generatePinImage,
@@ -22,6 +22,7 @@ import {
   type OverlayStyle,
   type SlideOverlay,
 } from "@/lib/overlay";
+import type { MultiText } from "@/lib/prompts-carousel";
 import type {
   CarouselPost,
   CarouselRecord,
@@ -232,17 +233,46 @@ async function generateCarousel(
       });
     }
 
+    // midCtaIndex is 1-based, as the model was asked for.
+    const isMentionSlide = index + 1 === concept.midCtaIndex;
+
+    /**
+     * A language the model skipped falls back to the first one it did write.
+     *
+     * The schema marks every language required, so this should not happen -
+     * but when it did, that language's slide was composed with no text at all
+     * and the carousel published a bare photograph. Wrong-language words are
+     * visibly wrong and can be fixed in the editor; missing words are silent.
+     */
+    const fallback = (field: MultiText): string => {
+      for (const lang of languages) {
+        const value = field[lang]?.trim();
+        if (value) return value;
+      }
+      return "";
+    };
+
     const text: CarouselSlide["text"] = {};
     for (const lang of languages) {
-      const title = draft.title[lang];
+      const title = draft.title[lang]?.trim() || fallback(draft.title);
       if (!title) continue;
-      text[lang] = { title, subtitle: draft.subtitle[lang] ?? "" };
+      // The mention is kept only on the slide the model chose for it, so a
+      // model that filled the field everywhere cannot turn the carousel into
+      // an advert.
+      const mention = isMentionSlide
+        ? (draft.cta?.[lang]?.trim() || fallback(draft.cta ?? {}))
+        : "";
+      text[lang] = {
+        title,
+        // The hook deliberately has no subtitle, so an empty one is not a gap.
+        subtitle: draft.subtitle[lang]?.trim() ?? "",
+        ...(mention ? { cta: mention } : {}),
+      };
     }
 
     slides.push({
       kind: draft.kind,
-      // midCtaIndex is 1-based, as the model was asked for.
-      hasPlenovaMention: index + 1 === concept.midCtaIndex,
+      hasPlenovaMention: isMentionSlide,
       text,
       imagePrompt: draft.imagePrompt,
       photoQuery: draft.photoQuery,
@@ -493,7 +523,11 @@ export async function updateSlide(
   for (const [language, value] of Object.entries(patch.text ?? {})) {
     const locale = language as ContentLocale;
     const before = slide.text[locale];
-    if (before?.title === value.title && before?.subtitle === value.subtitle) {
+    if (
+      before?.title === value.title &&
+      before?.subtitle === value.subtitle &&
+      (before?.cta ?? "") === (value.cta ?? "")
+    ) {
       continue;
     }
     text[locale] = value;
@@ -669,7 +703,7 @@ export async function publishToAccounts(
           account.username,
           language,
           options,
-          err instanceof Error ? err.message : "Publishing failed.",
+          reasonFrom(err),
         ),
       );
     }
@@ -694,6 +728,22 @@ export async function publishToAccounts(
     publishedCount,
     failedCount: posts.length - publishedCount,
   };
+}
+
+/**
+ * The reason an account failed, with TikTok's own words attached.
+ *
+ * The client error carries a generic sentence and puts the upstream message in
+ * `details.hint`, which was being dropped - so every failure read "TikTok API
+ * error" and named nothing that could be acted on.
+ */
+function reasonFrom(err: unknown): string {
+  const base = err instanceof Error ? err.message : "Publishing failed.";
+  const hint =
+    err instanceof AppError && err.details && typeof err.details === "object"
+      ? (err.details as { hint?: unknown }).hint
+      : undefined;
+  return typeof hint === "string" && hint.trim() ? `${base} ${hint}` : base;
 }
 
 function failedPost(
