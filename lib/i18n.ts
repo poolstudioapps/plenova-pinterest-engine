@@ -117,6 +117,16 @@ const EN: Dict = {
   "carousels.generatingHint":
     "Writing the slides, then painting each image. Allow a couple of minutes.",
   "carousels.caption": "Caption",
+  "carousels.compose": "Add text",
+  "carousels.recompose": "Redo text",
+  "carousels.overlayStyle": "Text style",
+  "carousels.styleStroke": "White with green outline",
+  "carousels.stylePill": "White pills (TikTok)",
+  "carousels.styleNone": "Plain white",
+  "carousels.overlayHint":
+    "Text is burned into the slides by your browser, so what you see is what publishes.",
+  "carousels.notComposed":
+    "Slides still have no text on them. Add it before publishing, or the carousel posts as bare photographs.",
   "carousels.empty": "No carousels yet",
   "carousels.emptyBody":
     "Describe a theme above and Gemini will design and illustrate the whole carousel.",
@@ -391,6 +401,16 @@ const FR: Dict = {
   "carousels.generatingHint":
     "Rédaction des slides, puis création de chaque image. Compte deux bonnes minutes.",
   "carousels.caption": "Légende",
+  "carousels.compose": "Incruster le texte",
+  "carousels.recompose": "Refaire le texte",
+  "carousels.overlayStyle": "Style du texte",
+  "carousels.styleStroke": "Blanc cerné de vert",
+  "carousels.stylePill": "Pastilles blanches (TikTok)",
+  "carousels.styleNone": "Blanc simple",
+  "carousels.overlayHint":
+    "Le texte est incrusté dans les slides par ton navigateur : ce que tu vois est ce qui sera publié.",
+  "carousels.notComposed":
+    "Les slides n'ont pas encore de texte. Incruste-le avant de publier, sinon le carrousel partira en photos nues.",
   "carousels.empty": "Aucun carrousel",
   "carousels.emptyBody":
     "Décris un thème ci-dessus et Gemini concevra puis illustrera tout le carrousel.",

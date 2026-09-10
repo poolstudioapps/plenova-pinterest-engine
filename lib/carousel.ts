@@ -87,6 +87,7 @@ export async function generateCarousel(
       imagePrompt: draft.imagePrompt,
       mediaId: asset.id,
       imageUrl: asset.url,
+      composedUrl: null,
     });
   }
 
@@ -102,7 +103,7 @@ export async function generateCarousel(
     description: [concept.caption, hashtagLine].filter(Boolean).join("\n\n"),
     hashtags: concept.hashtags,
     slides,
-    slideUrls: slides.map((s) => s.imageUrl!).filter(Boolean),
+    slideUrls: slides.map((s) => s.composedUrl ?? s.imageUrl!).filter(Boolean),
     coverIndex: 1,
 
     plantSlug: plant?.slug ?? null,
@@ -279,3 +280,46 @@ export async function publishCarouselRecord(
 
 /** The destination every Plenova post points at. */
 export const CAROUSEL_LINK = config.app.oneLink;
+
+
+/**
+ * Records a slide composed in the operator's browser.
+ *
+ * The bare photograph is kept as-is in the media library; only the carousel
+ * points at the composed version, so the same image can back another carousel
+ * with different text later.
+ */
+export async function saveComposedSlide(
+  carouselId: string,
+  index: number,
+  data: Buffer,
+  mimeType: string,
+): Promise<CarouselRecord> {
+  const store = getStore();
+  const carousel = await store.getCarousel(carouselId);
+  if (!carousel) throw notFound(`No carousel with id ${carouselId}.`);
+
+  const slide = carousel.slides[index];
+  if (!slide) throw badRequest(`Slide ${index} does not exist on this carousel.`);
+
+  const hosted = await hostImageAt(
+    `carousels/${carouselId}/slide-${index + 1}.${extensionFor(mimeType)}`,
+    data,
+    mimeType,
+  );
+
+  const slides = carousel.slides.map((s, i) =>
+    i === index ? { ...s, composedUrl: hosted.url } : s,
+  );
+
+  const updated: CarouselRecord = {
+    ...carousel,
+    slides,
+    slideUrls: slides
+      .map((s) => s.composedUrl ?? s.imageUrl)
+      .filter((u): u is string => Boolean(u)),
+    updatedAt: new Date().toISOString(),
+  };
+  await store.saveCarousel(updated);
+  return updated;
+}

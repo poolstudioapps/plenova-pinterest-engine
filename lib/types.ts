@@ -214,7 +214,10 @@ export interface CarouselSlide {
   subtitle: string;
   imagePrompt: string;
   mediaId: string | null;
+  /** The bare photograph, which stays reusable by other carousels. */
   imageUrl: string | null;
+  /** The photograph with its text burned in. This is what gets published. */
+  composedUrl: string | null;
 }
 
 /** A TikTok photo carousel: ordered slides plus one caption. */

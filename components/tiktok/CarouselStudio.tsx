@@ -12,6 +12,8 @@ import {
   Select,
 } from "@/components/ui";
 import { PublishDialog } from "@/components/tiktok/PublishDialog";
+import { captureSlides } from "@/lib/capture";
+import type { OverlayStyle } from "@/lib/overlay";
 import { translator, type Locale } from "@/lib/i18n";
 import type { CarouselRecord } from "@/lib/types";
 import { relativeTime } from "@/lib/utils";
@@ -53,6 +55,9 @@ export function CarouselStudio({
   const [error, setError] = useState<string | null>(null);
   const [publishing, setPublishing] = useState<CarouselRecord | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [composing, setComposing] = useState<string | null>(null);
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
+  const [overlayStyle, setOverlayStyle] = useState<OverlayStyle>("stroke");
 
   async function generate() {
     setBusy(true);
@@ -89,6 +94,54 @@ export function CarouselStudio({
     const res = await fetch(`/api/carousels/${id}`, { method: "DELETE" });
     if (!res.ok) return;
     setCarousels((current) => current.filter((c) => c.id !== id));
+  }
+
+  /**
+   * Burns each slide's text into its image, here in the browser.
+   *
+   * Done client-side because the design relies on CSS no server-side renderer
+   * implements - text stroke with paint-order, per-line pill backgrounds - and
+   * this browser is the same engine the preview uses.
+   */
+  async function compose(carousel: CarouselRecord) {
+    setComposing(carousel.id);
+    setError(null);
+    setProgress({ done: 0, total: carousel.slides.length });
+    try {
+      const captured = await captureSlides(
+        carousel.slides,
+        { style: overlayStyle },
+        (done, total) => setProgress({ done, total }),
+      );
+
+      let latest = carousel;
+      // One request per slide: a whole carousel of base64 JPEGs in one body
+      // would exceed the platform request limit.
+      for (const shot of captured) {
+        const res = await fetch(`/api/carousels/${carousel.id}/render`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ index: shot.index, dataUrl: shot.dataUrl }),
+        });
+        const data = (await res.json()) as {
+          carousel?: CarouselRecord;
+          error?: { message?: string };
+        };
+        if (!res.ok || !data.carousel) {
+          setError(data.error?.message ?? t("preview.requestFailed"));
+          return;
+        }
+        latest = data.carousel;
+      }
+
+      setCarousels((current) =>
+        current.map((c) => (c.id === latest.id ? latest : c)),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("preview.unreachable"));
+    } finally {
+      setComposing(null);
+    }
   }
 
   function applyPublished(updated: CarouselRecord) {
@@ -142,6 +195,23 @@ export function CarouselStudio({
               <option value="en">English</option>
             </Select>
           </Field>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-end gap-3 border-t border-[var(--color-line)] pt-4">
+          <Field label={t("carousels.overlayStyle")} htmlFor="ov">
+            <Select
+              id="ov"
+              value={overlayStyle}
+              onChange={(e) => setOverlayStyle(e.target.value as OverlayStyle)}
+            >
+              <option value="stroke">{t("carousels.styleStroke")}</option>
+              <option value="pill">{t("carousels.stylePill")}</option>
+              <option value="none">{t("carousels.styleNone")}</option>
+            </Select>
+          </Field>
+          <p className="pb-2 text-[12.5px] text-[var(--color-ink-faint)]">
+            {t("carousels.overlayHint")}
+          </p>
         </div>
 
         <div className="mt-3 flex flex-wrap gap-1.5">
@@ -230,12 +300,27 @@ export function CarouselStudio({
                       <p className="mt-1 line-clamp-2 text-[12px] text-[var(--color-danger)]">
                         {carousel.error}
                       </p>
+                    ) : carousel.slides.some((slide) => !slide.composedUrl) ? (
+                      <p className="mt-1 text-[12px] text-[var(--color-warn)]">
+                        {t("carousels.notComposed")}
+                      </p>
                     ) : null}
                   </div>
 
                   <div className="flex shrink-0 items-center gap-2">
                     <Badge className="uppercase">{carousel.locale}</Badge>
                     <Badge className="capitalize">{carousel.status}</Badge>
+                    <Button
+                      onClick={() => void compose(carousel)}
+                      loading={composing === carousel.id}
+                      disabled={composing !== null}
+                    >
+                      {composing === carousel.id
+                        ? `${progress.done}/${progress.total}`
+                        : carousel.slides.every((s) => s.composedUrl)
+                          ? t("carousels.recompose")
+                          : t("carousels.compose")}
+                    </Button>
                     <Button
                       onClick={() => setPublishing(carousel)}
                       disabled={!connected || carousel.status === "published"}
@@ -257,10 +342,10 @@ export function CarouselStudio({
                     <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
                       {carousel.slides.map((slide, i) => (
                         <div key={`${carousel.id}-s${i}`} className="space-y-1.5">
-                          {slide.imageUrl ? (
+                          {slide.composedUrl ?? slide.imageUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
-                              src={slide.imageUrl}
+                              src={slide.composedUrl ?? slide.imageUrl!}
                               alt={slide.title}
                               className="aspect-[4/5] w-full rounded-[9px] object-cover"
                             />
