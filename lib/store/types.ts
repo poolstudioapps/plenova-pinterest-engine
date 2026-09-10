@@ -79,6 +79,12 @@ export interface StateDocument {
   connection: string | null;
   /** Same envelope, for the TikTok account. */
   tiktok: string | null;
+  /**
+   * Stamped afresh on every write. Reading it back unchanged is how a writer
+   * knows no other serverless instance overwrote it - see DocumentStore.mutate.
+   * Optional: documents written before this existed must still load.
+   */
+  writeToken?: string;
 }
 
 export function emptyState(): StateDocument {

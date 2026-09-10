@@ -1,5 +1,10 @@
 import "server-only";
-import { decryptJson, encryptJson, hasEncryptionKey } from "@/lib/crypto";
+import {
+  decryptJson,
+  encryptJson,
+  hasEncryptionKey,
+  randomToken,
+} from "@/lib/crypto";
 import type {
   CarouselRecord,
   MediaAsset,
@@ -12,7 +17,6 @@ import { filterMedia, type MediaFilter } from "@/lib/media";
 import type { ContentLocale } from "@/lib/i18n";
 import {
   applyFilter,
-  emptyState,
   normaliseAccounts,
   normaliseCarousel,
   type EngineStore,
@@ -26,7 +30,8 @@ import {
  *
  * Writes are serialised through a promise chain: two concurrent generate calls
  * in the same instance would otherwise read-modify-write over each other and
- * silently drop a Pin.
+ * silently drop a Pin. Instances it cannot serialise are caught after the
+ * fact - see `mutate`.
  */
 export abstract class DocumentStore implements EngineStore {
   abstract readonly name: string;
@@ -37,17 +42,41 @@ export abstract class DocumentStore implements EngineStore {
 
   private queue: Promise<unknown> = Promise.resolve();
 
-  /** Serialises a read-modify-write cycle against this instance. */
+  /**
+   * Serialises a read-modify-write cycle against this instance, then verifies
+   * the part it cannot serialise.
+   *
+   * A second serverless instance can read the same document and write it back
+   * after us, erasing our change. Blob has no conditional write, so instead
+   * every write stamps a unique token: reading that token back proves nobody
+   * overtook us. When someone did, their document is the current one, so we
+   * re-read and re-apply the mutation on top of their work rather than let
+   * either side vanish. Mutations are plain assignments into a freshly read
+   * document, so re-applying one is safe.
+   */
   protected mutate<T>(fn: (doc: StateDocument) => T | Promise<T>): Promise<T> {
-    const run = this.queue.then(async () => {
-      const doc = await this.read();
-      const result = await fn(doc);
-      await this.write(doc);
-      return result;
-    });
+    const run = this.queue.then(() => this.applyMutation(fn, 3));
     // Keep the chain alive even if this link rejects.
     this.queue = run.catch(() => undefined);
     return run;
+  }
+
+  private async applyMutation<T>(
+    fn: (doc: StateDocument) => T | Promise<T>,
+    attemptsLeft: number,
+  ): Promise<T> {
+    const doc = await this.read();
+    const result = await fn(doc);
+    const token = randomToken(8);
+    doc.writeToken = token;
+    await this.write(doc);
+
+    if (attemptsLeft <= 1) return result;
+
+    const after = await this.read();
+    if (after.writeToken === token) return result;
+
+    return this.applyMutation(fn, attemptsLeft - 1);
   }
 
   async listPins(filter?: PinFilter): Promise<PinRecord[]> {
@@ -139,8 +168,10 @@ export abstract class DocumentStore implements EngineStore {
     pick: (doc: StateDocument) => string | null,
     label: string,
   ): Promise<T | null> {
-    const doc = await this.read();
-    const envelope = pick(doc);
+    return this.openEnvelope<T>(pick(await this.read()), label);
+  }
+
+  private openEnvelope<T>(envelope: string | null, label: string): T | null {
     if (!envelope) return null;
     if (!hasEncryptionKey()) {
       console.warn(
@@ -162,8 +193,12 @@ export abstract class DocumentStore implements EngineStore {
    * decrypt instead of N.
    */
   private async readAccounts(): Promise<TikTokAccounts> {
+    return this.accountsIn(await this.read());
+  }
+
+  private accountsIn(doc: StateDocument): TikTokAccounts {
     return normaliseAccounts(
-      await this.readConnection<unknown>((doc) => doc.tiktok ?? null, "TikTok"),
+      this.openEnvelope<unknown>(doc.tiktok ?? null, "TikTok"),
     );
   }
 
@@ -178,18 +213,19 @@ export abstract class DocumentStore implements EngineStore {
   }
 
   async saveTikTokAccount(account: TikTokAccount): Promise<void> {
-    const accounts = await this.readAccounts();
-    accounts[account.openId] = account;
     await this.mutate((doc) => {
+      const accounts = this.accountsIn(doc);
+      accounts[account.openId] = account;
       doc.tiktok = encryptJson(accounts);
     });
   }
 
   async deleteTikTokAccount(openId: string): Promise<void> {
-    const accounts = await this.readAccounts();
-    delete accounts[openId];
     await this.mutate((doc) => {
-      doc.tiktok = Object.keys(accounts).length > 0 ? encryptJson(accounts) : null;
+      const accounts = this.accountsIn(doc);
+      delete accounts[openId];
+      doc.tiktok =
+        Object.keys(accounts).length > 0 ? encryptJson(accounts) : null;
     });
   }
 
@@ -219,7 +255,4 @@ export abstract class DocumentStore implements EngineStore {
     });
   }
 
-  protected fallback(): StateDocument {
-    return emptyState();
-  }
 }

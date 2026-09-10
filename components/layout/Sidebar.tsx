@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LocaleSwitcher } from "@/components/layout/LocaleSwitcher";
-import { translator, type Locale } from "@/lib/i18n";
+import { translator, type Locale, type TranslationKey } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 /**
@@ -17,8 +17,8 @@ import { cn } from "@/lib/utils";
  */
 const GROUPS: {
   key: string;
-  labelKey?: string;
-  items: { href: string; key: string }[];
+  labelKey?: TranslationKey;
+  items: { href: string; key: TranslationKey }[];
 }[] = [
   {
     key: "top",

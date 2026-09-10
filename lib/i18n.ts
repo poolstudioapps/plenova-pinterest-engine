@@ -104,9 +104,12 @@ export const LOCALE_COOKIE = "plenova_locale";
 
 /* ------------------------------------------------------------ dictionary -- */
 
-type Dict = Record<string, string>;
-
-const EN: Dict = {
+/**
+ * English is the source of truth for what keys exist. Every other dictionary
+ * is typed against it, so a key added on one side and forgotten on the other
+ * is a compile error rather than a raw "publish.modeDraft" shown to a user.
+ */
+const EN = {
   "nav.dashboard": "Dashboard",
   "nav.account": "Account",
   "nav.groupPinterest": "Pinterest",
@@ -421,6 +424,10 @@ const EN: Dict = {
   "common.language": "Language",
   "common.uiLanguage": "Dashboard language",
 };
+
+export type TranslationKey = keyof typeof EN;
+
+type Dict = Record<TranslationKey, string>;
 
 const FR: Dict = {
   "nav.dashboard": "Tableau de bord",
@@ -743,7 +750,10 @@ const FR: Dict = {
 
 const DICTIONARIES: Record<Locale, Dict> = { en: EN, fr: FR };
 
-export type Translator = (key: string, vars?: Record<string, string | number>) => string;
+export type Translator = (
+  key: TranslationKey,
+  vars?: Record<string, string | number>,
+) => string;
 
 /** Returns a translator. Missing keys fall back to English, then to the key. */
 export function translator(locale: Locale): Translator {
