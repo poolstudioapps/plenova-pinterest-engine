@@ -1,69 +1,112 @@
 import "server-only";
+import { config } from "@/lib/config";
+import { getPlant } from "@/lib/data/plants";
+import { plantName as localizedPlantName } from "@/lib/data/localize";
 import { badRequest, notFound } from "@/lib/errors";
+import { generateCarouselConcept, generatePinImage } from "@/lib/gemini";
+import { extensionFor, hostImageAt } from "@/lib/images";
+import { mediaPath, varietySlug } from "@/lib/media";
 import { getStore } from "@/lib/store";
 import { publishCarousel } from "@/lib/tiktok";
-import type { CarouselRecord } from "@/lib/types";
+import type { CarouselRecord, CarouselSlide, MediaAsset } from "@/lib/types";
 import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n";
+import { getVisualStyle } from "@/lib/data/visual-styles";
 
 /**
- * Carousel orchestration.
+ * Carousel orchestration: theme in, publishable carousel out.
  *
- * A carousel is an ordered set of media-library assets plus one caption. It
- * deliberately reuses the same library the Pinterest side fills, which is the
- * whole point of indexing images by plant: a photograph paid for once by a Pin
- * becomes a TikTok slide for free.
+ * The order matters and was wrong in the first version. A carousel starts from
+ * a THEME. Gemini designs the slides - overlay copy and a photography brief
+ * each - and only then are the images generated from those briefs. Assembling
+ * a carousel out of whatever images already existed produced a slideshow with
+ * no argument running through it.
+ *
+ * Every generated image still lands in the media library, so it stays reusable
+ * by the Pinterest side and by later carousels.
  */
 
 function carouselId(): string {
   return `car_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
 }
 
-export interface CreateCarouselInput {
-  slideIds: string[];
-  title: string;
-  description: string;
+/** Slide images are square-ish 4:5, TikTok's carousel format. */
+const SLIDE_ASPECT = "4:5";
+
+export interface GenerateCarouselInput {
+  theme: string;
   locale?: Locale;
-  coverIndex?: number;
+  /** Optional: anchors the carousel to one species from the catalog. */
+  plantSlug?: string;
+  variety?: string;
 }
 
-export async function createCarousel(
-  input: CreateCarouselInput,
+export async function generateCarousel(
+  input: GenerateCarouselInput,
 ): Promise<CarouselRecord> {
-  if (input.slideIds.length === 0) {
-    throw badRequest("A carousel needs at least one slide.");
-  }
+  const theme = input.theme.trim();
+  if (theme.length < 3) throw badRequest("Describe the carousel theme.");
 
+  const locale = input.locale ?? DEFAULT_LOCALE;
   const store = getStore();
-  const assets = await Promise.all(input.slideIds.map((id) => store.getMedia(id)));
 
-  const missing = input.slideIds.filter((_, i) => !assets[i]);
-  if (missing.length > 0) {
-    throw badRequest(`Unknown media asset(s): ${missing.join(", ")}`);
+  const plant = input.plantSlug ? getPlant(input.plantSlug) : undefined;
+  if (input.plantSlug && !plant) {
+    throw badRequest(`Unknown plant: ${input.plantSlug}`);
   }
 
-  const resolved = assets.filter((a): a is NonNullable<typeof a> => Boolean(a));
-  const inline = resolved.find((a) => a.url.startsWith("data:"));
-  if (inline) {
-    throw badRequest(
-      "One slide is stored inline and TikTok could not fetch it. Attach a Blob store and regenerate that image.",
-    );
+  // Past themes go back into the prompt so a new carousel does not re-tread one.
+  const existing = await store.listCarousels();
+  const concept = await generateCarouselConcept({
+    theme,
+    locale,
+    plantName: plant ? localizedPlantName(plant, locale) : undefined,
+    existingThemes: existing.map((c) => c.theme).filter(Boolean),
+  });
+
+  const id = carouselId();
+  const vSlug = varietySlug(input.variety);
+
+  // Images are generated in order so a failure is reported against the slide it
+  // belongs to, rather than as one opaque batch error.
+  const slides: CarouselSlide[] = [];
+  for (const [index, draft] of concept.slides.entries()) {
+    const asset = await generateSlideImage({
+      id: `${id}_${index}`,
+      imagePrompt: draft.imagePrompt,
+      plantSlug: plant?.slug ?? "carousel",
+      plantName: plant ? localizedPlantName(plant, locale) : theme,
+      variety: input.variety ?? null,
+      varietySlug: vSlug,
+      theme,
+    });
+
+    slides.push({
+      kind: draft.kind,
+      title: draft.title,
+      subtitle: draft.subtitle,
+      imagePrompt: draft.imagePrompt,
+      mediaId: asset.id,
+      imageUrl: asset.url,
+    });
   }
 
-  // Every slide of a carousel should be the same plant; take it from the first.
-  const first = resolved[0]!;
   const now = new Date().toISOString();
+  const hashtagLine = concept.hashtags.map((h) => `#${h}`).join(" ");
 
   const record: CarouselRecord = {
-    id: carouselId(),
-    locale: input.locale ?? DEFAULT_LOCALE,
-    title: input.title.trim().slice(0, 90),
-    description: input.description.trim().slice(0, 4000),
-    slideIds: input.slideIds,
-    slideUrls: resolved.map((a) => a.url),
-    coverIndex: Math.min(Math.max(1, input.coverIndex ?? 1), resolved.length),
+    id,
+    locale,
+    theme,
+    // TikTok shows the first line as the title, so the hook doubles as it.
+    title: (slides[0]?.title ?? theme).slice(0, 90),
+    description: [concept.caption, hashtagLine].filter(Boolean).join("\n\n"),
+    hashtags: concept.hashtags,
+    slides,
+    slideUrls: slides.map((s) => s.imageUrl!).filter(Boolean),
+    coverIndex: 1,
 
-    plantSlug: first.plantSlug,
-    plantName: first.plantName,
+    plantSlug: plant?.slug ?? null,
+    plantName: plant ? localizedPlantName(plant, locale) : null,
 
     status: "draft",
     postMode: "DIRECT_POST",
@@ -80,35 +123,78 @@ export async function createCarousel(
   };
 
   await store.saveCarousel(record);
-  // Reuse accounting, so the picker can prefer images that have had less use.
-  await Promise.all(input.slideIds.map((id) => store.markMediaUsed(id)));
   return record;
+}
+
+/** Generates one slide image and files it in the media library. */
+async function generateSlideImage(input: {
+  id: string;
+  imagePrompt: string;
+  plantSlug: string;
+  plantName: string;
+  variety: string | null;
+  varietySlug: string | null;
+  theme: string;
+}): Promise<MediaAsset> {
+  // Slides carry their text as an overlay rather than baked in, so the image
+  // itself must stay clean - the editorial style forbids text outright.
+  const style = getVisualStyle("editorial-photo")!;
+  const image = await generatePinImage(input.imagePrompt, style);
+
+  const mediaId = `med_${input.id}`;
+  const path = mediaPath(
+    {
+      plantSlug: input.plantSlug,
+      varietySlug: input.varietySlug,
+      id: mediaId,
+    },
+    extensionFor(image.mimeType),
+  );
+  const hosted = await hostImageAt(path, image.data, image.mimeType);
+
+  const now = new Date().toISOString();
+  const asset: MediaAsset = {
+    id: mediaId,
+    plantSlug: input.plantSlug,
+    plantName: input.plantName,
+    variety: input.variety,
+    varietySlug: input.varietySlug,
+    url: hosted.url,
+    mimeType: image.mimeType,
+    aspectRatio: SLIDE_ASPECT,
+    prompt: input.imagePrompt,
+    visualStyle: "editorial-photo",
+    angleSlug: null,
+    source: "carousel",
+    sourceId: input.id,
+    tags: input.theme
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((w) => w.length > 3)
+      .slice(0, 6),
+    usedCount: 1,
+    lastUsedAt: now,
+    createdAt: now,
+  };
+
+  await getStore().saveMedia(asset);
+  return asset;
 }
 
 export async function updateCarousel(
   id: string,
-  patch: Partial<
-    Pick<CarouselRecord, "title" | "description" | "coverIndex" | "slideIds">
-  >,
+  patch: Partial<Pick<CarouselRecord, "title" | "description" | "coverIndex">>,
 ): Promise<CarouselRecord> {
   const store = getStore();
   const carousel = await store.getCarousel(id);
   if (!carousel) throw notFound(`No carousel with id ${id}.`);
 
-  let slideUrls = carousel.slideUrls;
-  if (patch.slideIds) {
-    const assets = await Promise.all(patch.slideIds.map((s) => store.getMedia(s)));
-    if (assets.some((a) => !a)) throw badRequest("One slide no longer exists.");
-    slideUrls = assets.map((a) => a!.url);
-  }
-
   const updated: CarouselRecord = {
     ...carousel,
     ...patch,
-    slideUrls,
     coverIndex: Math.min(
       Math.max(1, patch.coverIndex ?? carousel.coverIndex),
-      slideUrls.length,
+      Math.max(1, carousel.slideUrls.length),
     ),
     updatedAt: new Date().toISOString(),
   };
@@ -123,10 +209,8 @@ export interface PublishOutcome {
 }
 
 /**
- * Publishes to TikTok.
- *
- * As on the Pinterest side, a carousel only reaches `published` when TikTok
- * returns a publish id. Anything else records the failure and reports it.
+ * Publishes to TikTok. As on the Pinterest side, a carousel only reaches
+ * `published` when TikTok returns a publish id.
  */
 export async function publishCarouselRecord(
   id: string,
@@ -192,3 +276,6 @@ export async function publishCarouselRecord(
     return { carousel: failed, published: false, error: message };
   }
 }
+
+/** The destination every Plenova post points at. */
+export const CAROUSEL_LINK = config.app.oneLink;

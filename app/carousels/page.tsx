@@ -4,6 +4,7 @@ import { plantName } from "@/lib/data/localize";
 import { PLANTS } from "@/lib/data/plants";
 import { translator } from "@/lib/i18n";
 import { getUiLocale } from "@/lib/locale-server";
+import { isGeminiConfigured } from "@/lib/config";
 import { getStore } from "@/lib/store";
 import { getStatus } from "@/lib/tiktok";
 
@@ -38,6 +39,7 @@ export default async function CarouselsPage() {
         canDirectPost={status.canDirectPost}
         canDraft={status.canDraft}
         connected={status.connected}
+        canGenerate={isGeminiConfigured()}
       />
     </>
   );

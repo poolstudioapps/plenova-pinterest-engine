@@ -9,6 +9,15 @@ import {
   buildSystemInstruction,
   type CopyPromptInput,
 } from "@/lib/prompts";
+import {
+  CAROUSEL_SCHEMA,
+  REQUIRED_HASHTAGS,
+  buildCarouselPrompt,
+  buildCarouselSystemInstruction,
+  type CarouselConceptDraft,
+  type CarouselPromptInput,
+  type CarouselSlideDraft,
+} from "@/lib/prompts-carousel";
 import { PINTEREST_LIMITS, truncate } from "@/lib/utils";
 import type { VisualStyle } from "@/lib/types";
 
@@ -207,5 +216,89 @@ export async function generatePinImage(
   } catch (err) {
     if (err && typeof err === "object" && "code" in err) throw err;
     wrapUpstream(err, "generating the Pin image");
+  }
+}
+
+
+/**
+ * Designs a whole carousel from a theme: every slide's overlay copy, every
+ * image brief, the caption and the hashtags.
+ *
+ * This is the step that was missing when carousels were assembled from
+ * whatever images happened to already exist - the theme has to drive the
+ * images, not the other way round.
+ */
+export async function generateCarouselConcept(
+  input: CarouselPromptInput,
+): Promise<CarouselConceptDraft> {
+  const ai = getClient();
+
+  try {
+    const response = await ai.models.generateContent({
+      model: config.gemini.textModel,
+      contents: buildCarouselPrompt(input),
+      config: {
+        systemInstruction: buildCarouselSystemInstruction(input.locale),
+        responseMimeType: "application/json",
+        responseSchema: CAROUSEL_SCHEMA as unknown as Record<string, unknown>,
+        temperature: 1.0,
+      },
+    });
+
+    const text = response.text;
+    if (!text) throw upstream("Gemini returned an empty carousel concept.");
+
+    let parsed: { slides?: unknown; caption?: unknown; hashtags?: unknown };
+    try {
+      parsed = JSON.parse(text) as typeof parsed;
+    } catch {
+      throw upstream("Gemini returned a carousel that was not valid JSON.");
+    }
+
+    const slides = Array.isArray(parsed.slides)
+      ? (parsed.slides as CarouselSlideDraft[])
+          .filter(
+            (s) =>
+              s &&
+              typeof s.title === "string" &&
+              typeof s.imagePrompt === "string" &&
+              s.imagePrompt.trim().length > 0,
+          )
+          // TikTok caps a photo carousel at 35 slides.
+          .slice(0, 35)
+          .map((s) => ({
+            kind: (s.kind === "hook" || s.kind === "cta"
+              ? s.kind
+              : "content") as CarouselSlideDraft["kind"],
+            title: s.title.trim(),
+            subtitle: typeof s.subtitle === "string" ? s.subtitle.trim() : "",
+            imagePrompt: s.imagePrompt.trim(),
+          }))
+      : [];
+
+    if (slides.length < 2) {
+      throw upstream("Gemini returned too few usable slides for a carousel.");
+    }
+
+    const hashtags = Array.from(
+      new Set([
+        ...(Array.isArray(parsed.hashtags) ? parsed.hashtags : [])
+          .filter((h): h is string => typeof h === "string")
+          .map((h) => h.replace(/^#/, "").toLowerCase().trim())
+          .filter((h) => h.length > 1 && h.length < 40),
+        // Enforced rather than hoped for, as in the original engine.
+        ...REQUIRED_HASHTAGS,
+      ]),
+    ).slice(0, 12);
+
+    return {
+      slides,
+      caption:
+        typeof parsed.caption === "string" ? parsed.caption.trim() : "",
+      hashtags,
+    };
+  } catch (err) {
+    if (err && typeof err === "object" && "code" in err) throw err;
+    wrapUpstream(err, "designing the carousel");
   }
 }

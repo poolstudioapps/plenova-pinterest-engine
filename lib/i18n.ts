@@ -62,8 +62,12 @@ type Dict = Record<string, string>;
 
 const EN: Dict = {
   "nav.dashboard": "Dashboard",
+  "nav.account": "Account",
+  "nav.groupPinterest": "Pinterest",
+  "nav.groupTikTok": "TikTok",
+  "nav.groupShared": "Shared",
   "nav.generate": "Generate",
-  "nav.library": "Library",
+  "nav.library": "Pins",
   "nav.queue": "Queue",
   "nav.pinterest": "Pinterest",
   "nav.tiktok": "TikTok",
@@ -103,20 +107,19 @@ const EN: Dict = {
   "carousels.subtitle":
     "Build a TikTok carousel from the image library, then publish it. Images already paid for by a Pin cost nothing here.",
   "carousels.build": "New carousel",
-  "carousels.pickPlant": "Plant",
-  "carousels.pickSlides": "Slides",
-  "carousels.pickSlidesHint":
-    "Click images to add them, in order. TikTok allows up to 35 per carousel.",
-  "carousels.selected": "{n} selected",
-  "carousels.captionTitle": "Title",
-  "carousels.captionTitleHint": "90 characters max, shown as the first line.",
-  "carousels.captionDesc": "Description",
-  "carousels.create": "Create carousel",
-  "carousels.noImages":
-    "No images for this plant yet. Generate a Pin first and its image lands in the library.",
+  "carousels.buildHint":
+    "Describe the theme. Gemini writes every slide - hook, content, call to action - then paints an image for each one. A theme containing a number sets the slide count.",
+  "carousels.theme": "Theme",
+  "carousels.plantOptional": "Plant (optional)",
+  "carousels.anyPlant": "No specific plant",
+  "carousels.generate": "Generate carousel",
+  "carousels.generating": "Generating...",
+  "carousels.generatingHint":
+    "Writing the slides, then painting each image. Allow a couple of minutes.",
+  "carousels.caption": "Caption",
   "carousels.empty": "No carousels yet",
   "carousels.emptyBody":
-    "Pick a plant, choose slides from the library, and create your first carousel.",
+    "Describe a theme above and Gemini will design and illustrate the whole carousel.",
   "carousels.publish": "Publish to TikTok",
   "carousels.delete": "Delete",
   "carousels.slides": "{n} slides",
@@ -332,8 +335,12 @@ const EN: Dict = {
 
 const FR: Dict = {
   "nav.dashboard": "Tableau de bord",
+  "nav.account": "Compte",
+  "nav.groupPinterest": "Pinterest",
+  "nav.groupTikTok": "TikTok",
+  "nav.groupShared": "Partagé",
   "nav.generate": "Générer",
-  "nav.library": "Bibliothèque",
+  "nav.library": "Pins",
   "nav.queue": "File d'attente",
   "nav.pinterest": "Pinterest",
   "nav.tiktok": "TikTok",
@@ -374,20 +381,19 @@ const FR: Dict = {
   "carousels.subtitle":
     "Construis un carrousel TikTok depuis la bibliothèque d'images, puis publie-le. Les images déjà payées par un Pin ne coûtent rien ici.",
   "carousels.build": "Nouveau carrousel",
-  "carousels.pickPlant": "Plante",
-  "carousels.pickSlides": "Slides",
-  "carousels.pickSlidesHint":
-    "Clique les images pour les ajouter, dans l'ordre. TikTok en accepte 35 au maximum.",
-  "carousels.selected": "{n} sélectionnée(s)",
-  "carousels.captionTitle": "Titre",
-  "carousels.captionTitleHint": "90 caractères max, affiché en première ligne.",
-  "carousels.captionDesc": "Description",
-  "carousels.create": "Créer le carrousel",
-  "carousels.noImages":
-    "Aucune image pour cette plante. Génère d'abord un Pin, son image atterrira dans la bibliothèque.",
+  "carousels.buildHint":
+    "Décris le thème. Gemini écrit chaque slide — accroche, contenu, appel à l'action — puis peint une image pour chacune. Un thème contenant un nombre fixe le nombre de slides.",
+  "carousels.theme": "Thème",
+  "carousels.plantOptional": "Plante (optionnel)",
+  "carousels.anyPlant": "Aucune plante précise",
+  "carousels.generate": "Générer le carrousel",
+  "carousels.generating": "Génération...",
+  "carousels.generatingHint":
+    "Rédaction des slides, puis création de chaque image. Compte deux bonnes minutes.",
+  "carousels.caption": "Légende",
   "carousels.empty": "Aucun carrousel",
   "carousels.emptyBody":
-    "Choisis une plante, sélectionne des slides dans la bibliothèque, et crée ton premier carrousel.",
+    "Décris un thème ci-dessus et Gemini concevra puis illustrera tout le carrousel.",
   "carousels.publish": "Publier sur TikTok",
   "carousels.delete": "Supprimer",
   "carousels.slides": "{n} slides",

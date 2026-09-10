@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import {
   Badge,
   Button,
@@ -10,12 +10,11 @@ import {
   Input,
   Notice,
   Select,
-  Textarea,
 } from "@/components/ui";
 import { PublishDialog } from "@/components/tiktok/PublishDialog";
 import { translator, type Locale } from "@/lib/i18n";
-import type { CarouselRecord, MediaAsset } from "@/lib/types";
-import { cn, relativeTime } from "@/lib/utils";
+import type { CarouselRecord } from "@/lib/types";
+import { relativeTime } from "@/lib/utils";
 
 interface Props {
   uiLocale: Locale;
@@ -24,7 +23,16 @@ interface Props {
   canDirectPost: boolean;
   canDraft: boolean;
   connected: boolean;
+  canGenerate: boolean;
 }
+
+/** Starting points, so the field is never an intimidating blank box. */
+const THEME_EXAMPLES = [
+  "Top 5 des pothos rares",
+  "5 erreurs qui tuent ton monstera",
+  "5 astuces pour ne plus oublier d'arroser",
+  "Les plantes increvables pour appart sombre",
+];
 
 export function CarouselStudio({
   uiLocale,
@@ -33,61 +41,20 @@ export function CarouselStudio({
   canDirectPost,
   canDraft,
   connected,
+  canGenerate,
 }: Props) {
   const t = translator(uiLocale);
 
   const [carousels, setCarousels] = useState(initialCarousels);
-  const [plantSlug, setPlantSlug] = useState(plants[0]?.slug ?? "");
-  const [library, setLibrary] = useState<MediaAsset[]>([]);
-  const [selected, setSelected] = useState<string[]>([]);
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+  const [theme, setTheme] = useState("");
+  const [plantSlug, setPlantSlug] = useState("");
+  const [postLocale, setPostLocale] = useState<Locale>(uiLocale);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [publishing, setPublishing] = useState<CarouselRecord | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
 
-  // The library is scoped to the selected plant: that is how you actually look
-  // for slides, and it keeps the grid short.
-  useEffect(() => {
-    let cancelled = false;
-    setSelected([]);
-    void (async () => {
-      try {
-        const res = await fetch(
-          `/api/media?plantSlug=${encodeURIComponent(plantSlug)}&limit=100`,
-        );
-        if (!res.ok || cancelled) return;
-        const data = (await res.json()) as { media: MediaAsset[] };
-        if (!cancelled) setLibrary(data.media);
-      } catch {
-        // The picker is not essential; the page still lists existing carousels.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [plantSlug]);
-
-  const selectedAssets = useMemo(
-    () =>
-      selected
-        .map((id) => library.find((a) => a.id === id))
-        .filter((a): a is MediaAsset => Boolean(a)),
-    [selected, library],
-  );
-
-  function toggle(id: string) {
-    setSelected((current) =>
-      current.includes(id)
-        ? current.filter((x) => x !== id)
-        : // TikTok caps a photo carousel at 35 slides.
-          current.length >= 35
-          ? current
-          : [...current, id],
-    );
-  }
-
-  async function create() {
+  async function generate() {
     setBusy(true);
     setError(null);
     try {
@@ -95,11 +62,9 @@ export function CarouselStudio({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          slideIds: selected,
-          title: title.trim(),
-          description: description.trim(),
-          locale: uiLocale,
-          coverIndex: 1,
+          theme: theme.trim(),
+          locale: postLocale,
+          plantSlug: plantSlug || undefined,
         }),
       });
       const data = (await res.json()) as {
@@ -111,9 +76,8 @@ export function CarouselStudio({
         return;
       }
       setCarousels((current) => [data.carousel!, ...current]);
-      setSelected([]);
-      setTitle("");
-      setDescription("");
+      setExpanded(data.carousel.id);
+      setTheme("");
     } catch {
       setError(t("preview.unreachable"));
     } finally {
@@ -134,120 +98,94 @@ export function CarouselStudio({
     setPublishing(updated);
   }
 
-  const canCreate = selected.length > 0 && title.trim().length > 0;
-
   return (
     <div className="space-y-8">
       <Card className="p-5">
-        <h2 className="mb-4 text-[15px] font-semibold">{t("carousels.build")}</h2>
+        <h2 className="text-[15px] font-semibold">{t("carousels.build")}</h2>
+        <p className="mt-1 mb-4 text-[13px] leading-relaxed text-[var(--color-ink-soft)]">
+          {t("carousels.buildHint")}
+        </p>
 
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
-          <div className="space-y-4">
-            <Field label={t("carousels.pickPlant")} htmlFor="plant">
-              <Select
-                id="plant"
-                value={plantSlug}
-                onChange={(e) => setPlantSlug(e.target.value)}
-              >
-                {plants.map((p) => (
-                  <option key={p.slug} value={p.slug}>
-                    {p.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
+        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,200px)_minmax(0,160px)]">
+          <Field label={t("carousels.theme")} htmlFor="theme">
+            <Input
+              id="theme"
+              value={theme}
+              maxLength={200}
+              placeholder={THEME_EXAMPLES[0]}
+              onChange={(e) => setTheme(e.target.value)}
+            />
+          </Field>
 
-            <Field
-              label={t("carousels.captionTitle")}
-              htmlFor="title"
-              hint={`${title.length}/90 · ${t("carousels.captionTitleHint")}`}
+          <Field label={t("carousels.plantOptional")} htmlFor="plant">
+            <Select
+              id="plant"
+              value={plantSlug}
+              onChange={(e) => setPlantSlug(e.target.value)}
             >
-              <Input
-                id="title"
-                maxLength={90}
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-              />
-            </Field>
+              <option value="">{t("carousels.anyPlant")}</option>
+              {plants.map((p) => (
+                <option key={p.slug} value={p.slug}>
+                  {p.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
 
-            <Field label={t("carousels.captionDesc")} htmlFor="desc">
-              <Textarea
-                id="desc"
-                rows={4}
-                maxLength={4000}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
-            </Field>
-
-            <Button
-              variant="primary"
-              className="w-full"
-              onClick={create}
-              loading={busy}
-              disabled={!canCreate}
+          <Field label={t("generate.pinLanguage")} htmlFor="loc">
+            <Select
+              id="loc"
+              value={postLocale}
+              onChange={(e) => setPostLocale(e.target.value as Locale)}
             >
-              {t("carousels.create")}
-            </Button>
-
-            {error ? <Notice tone="danger">{error}</Notice> : null}
-          </div>
-
-          <div>
-            <p className="mb-1.5 text-[13px] font-medium">
-              {t("carousels.pickSlides")}{" "}
-              <span className="font-normal text-[var(--color-ink-faint)]">
-                — {t("carousels.selected", { n: selected.length })}
-              </span>
-            </p>
-            <p className="mb-3 text-[12.5px] text-[var(--color-ink-faint)]">
-              {t("carousels.pickSlidesHint")}
-            </p>
-
-            {library.length === 0 ? (
-              <Notice tone="info">{t("carousels.noImages")}</Notice>
-            ) : (
-              <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 lg:grid-cols-6">
-                {library.map((asset) => {
-                  const index = selected.indexOf(asset.id);
-                  const isSelected = index !== -1;
-                  return (
-                    <button
-                      key={asset.id}
-                      type="button"
-                      onClick={() => toggle(asset.id)}
-                      aria-pressed={isSelected}
-                      className={cn(
-                        "relative overflow-hidden rounded-[9px] border-2 transition-colors",
-                        isSelected
-                          ? "border-[var(--color-accent)]"
-                          : "border-transparent hover:border-[var(--color-line-strong)]",
-                      )}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={asset.url}
-                        alt={asset.variety ?? asset.plantName}
-                        className="aspect-pin w-full object-cover"
-                      />
-                      {isSelected ? (
-                        <span className="absolute top-1 right-1 grid size-5 place-items-center rounded-full bg-[var(--color-accent)] text-[11px] font-semibold text-white">
-                          {index + 1}
-                        </span>
-                      ) : null}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {selectedAssets.length > 0 ? (
-              <p className="mt-3 text-[12px] text-[var(--color-ink-faint)]">
-                {t("carousels.slides", { n: selectedAssets.length })}
-              </p>
-            ) : null}
-          </div>
+              <option value="fr">Français</option>
+              <option value="en">English</option>
+            </Select>
+          </Field>
         </div>
+
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {THEME_EXAMPLES.map((example) => (
+            <button
+              key={example}
+              type="button"
+              onClick={() => setTheme(example)}
+              className="rounded-full border border-[var(--color-line)] px-2.5 py-1 text-[12px] text-[var(--color-ink-soft)] transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-ink)]"
+            >
+              {example}
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <Button
+            variant="primary"
+            onClick={generate}
+            loading={busy}
+            disabled={!canGenerate || theme.trim().length < 3}
+          >
+            {busy ? t("carousels.generating") : t("carousels.generate")}
+          </Button>
+          {busy ? (
+            <span className="text-[12.5px] text-[var(--color-ink-faint)]">
+              {t("carousels.generatingHint")}
+            </span>
+          ) : null}
+        </div>
+
+        {!canGenerate ? (
+          <div className="mt-4">
+            <Notice tone="warn">{t("generate.needKey")}</Notice>
+          </div>
+        ) : null}
+
+        {error ? (
+          <div className="mt-4">
+            <Notice tone="danger" title={t("generate.failed")}>
+              {error}
+            </Notice>
+          </div>
+        ) : null}
       </Card>
 
       {carousels.length === 0 ? (
@@ -256,53 +194,102 @@ export function CarouselStudio({
           description={t("carousels.emptyBody")}
         />
       ) : (
-        <div className="space-y-3">
-          {carousels.map((carousel) => (
-            <Card key={carousel.id} className="flex flex-wrap items-center gap-4 p-4">
-              <div className="flex shrink-0 -space-x-3">
-                {carousel.slideUrls.slice(0, 4).map((url, i) => (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    key={`${carousel.id}-${i}`}
-                    src={url}
-                    alt=""
-                    className="size-14 rounded-[9px] border-2 border-[var(--color-surface)] object-cover"
-                  />
-                ))}
-              </div>
+        <div className="space-y-4">
+          {carousels.map((carousel) => {
+            const open = expanded === carousel.id;
+            return (
+              <Card key={carousel.id} className="overflow-hidden">
+                <div className="flex flex-wrap items-center gap-4 p-4">
+                  <button
+                    type="button"
+                    onClick={() => setExpanded(open ? null : carousel.id)}
+                    className="flex shrink-0 -space-x-3"
+                    aria-expanded={open}
+                  >
+                    {carousel.slideUrls.slice(0, 4).map((url, i) => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        key={`${carousel.id}-${i}`}
+                        src={url}
+                        alt=""
+                        className="size-14 rounded-[9px] border-2 border-[var(--color-surface)] object-cover"
+                      />
+                    ))}
+                  </button>
 
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[14px] font-medium">{carousel.title}</p>
-                <p className="mt-0.5 truncate text-[12.5px] text-[var(--color-ink-faint)]">
-                  {carousel.plantName} ·{" "}
-                  {t("carousels.slides", { n: carousel.slideUrls.length })} ·{" "}
-                  {relativeTime(carousel.createdAt)}
-                </p>
-                {carousel.error ? (
-                  <p className="mt-1 line-clamp-2 text-[12px] text-[var(--color-danger)]">
-                    {carousel.error}
-                  </p>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[14px] font-medium">
+                      {carousel.title}
+                    </p>
+                    <p className="mt-0.5 truncate text-[12.5px] text-[var(--color-ink-faint)]">
+                      {carousel.theme} ·{" "}
+                      {t("carousels.slides", { n: carousel.slides.length })} ·{" "}
+                      {relativeTime(carousel.createdAt)}
+                    </p>
+                    {carousel.error ? (
+                      <p className="mt-1 line-clamp-2 text-[12px] text-[var(--color-danger)]">
+                        {carousel.error}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Badge className="uppercase">{carousel.locale}</Badge>
+                    <Badge className="capitalize">{carousel.status}</Badge>
+                    <Button
+                      onClick={() => setPublishing(carousel)}
+                      disabled={!connected || carousel.status === "published"}
+                    >
+                      {t("carousels.publish")}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="text-[var(--color-danger)]"
+                      onClick={() => void remove(carousel.id)}
+                    >
+                      {t("carousels.delete")}
+                    </Button>
+                  </div>
+                </div>
+
+                {open ? (
+                  <div className="border-t border-[var(--color-line)] bg-[var(--color-surface-muted)] p-4">
+                    <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                      {carousel.slides.map((slide, i) => (
+                        <div key={`${carousel.id}-s${i}`} className="space-y-1.5">
+                          {slide.imageUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={slide.imageUrl}
+                              alt={slide.title}
+                              className="aspect-[4/5] w-full rounded-[9px] object-cover"
+                            />
+                          ) : (
+                            <div className="aspect-[4/5] w-full rounded-[9px] bg-[var(--color-line)]" />
+                          )}
+                          <p className="text-[12px] font-medium leading-snug">
+                            {i + 1}. {slide.title}
+                          </p>
+                          <p className="text-[11.5px] leading-snug text-[var(--color-ink-faint)]">
+                            {slide.subtitle}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="mt-4 border-t border-[var(--color-line)] pt-3">
+                      <p className="mb-1 text-[12.5px] font-medium">
+                        {t("carousels.caption")}
+                      </p>
+                      <p className="whitespace-pre-line text-[12.5px] leading-relaxed text-[var(--color-ink-soft)]">
+                        {carousel.description}
+                      </p>
+                    </div>
+                  </div>
                 ) : null}
-              </div>
-
-              <div className="flex shrink-0 items-center gap-2">
-                <Badge className="capitalize">{carousel.status}</Badge>
-                <Button
-                  onClick={() => setPublishing(carousel)}
-                  disabled={!connected || carousel.status === "published"}
-                >
-                  {t("carousels.publish")}
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="text-[var(--color-danger)]"
-                  onClick={() => void remove(carousel.id)}
-                >
-                  {t("carousels.delete")}
-                </Button>
-              </div>
-            </Card>
-          ))}
+              </Card>
+            );
+          })}
         </div>
       )}
 

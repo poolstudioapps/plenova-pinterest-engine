@@ -202,15 +202,32 @@ export type CarouselStatus =
   | "published"
   | "failed";
 
+/**
+ * One slide of a carousel.
+ *
+ * Gemini writes all four text fields; the image is generated from imagePrompt
+ * and lands in the media library like any other, so it can be reused later.
+ */
+export interface CarouselSlide {
+  kind: "hook" | "content" | "cta";
+  title: string;
+  subtitle: string;
+  imagePrompt: string;
+  mediaId: string | null;
+  imageUrl: string | null;
+}
+
 /** A TikTok photo carousel: ordered slides plus one caption. */
 export interface CarouselRecord {
   id: string;
   locale: Locale;
+  /** The theme the operator asked for, kept so it is not repeated later. */
+  theme: string;
   title: string;
   description: string;
-  /** Media library asset ids, in slide order. */
-  slideIds: string[];
-  /** Resolved public URLs at publish time, in the same order. */
+  hashtags: string[];
+  slides: CarouselSlide[];
+  /** Public URLs in slide order, resolved for publishing. */
   slideUrls: string[];
   /** 1-indexed, as TikTok expects. */
   coverIndex: number;
