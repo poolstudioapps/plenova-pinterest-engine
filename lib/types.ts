@@ -167,6 +167,10 @@ export interface PinterestConnection {
 
 export interface EngineStats {
   plants: number;
+  /** Images in the reusable library. */
+  mediaAssets: number;
+  /** How many generations were served from the library instead of the model. */
+  mediaReuses: number;
   angles: number;
   possibleCombinations: number;
   generated: number;

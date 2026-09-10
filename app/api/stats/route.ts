@@ -13,12 +13,18 @@ const VARIATIONS_PER_SLOT = 4;
 export async function GET() {
   return handle(async () => {
     const store = getStore();
-    const pins = await store.listPins();
+    const [pins, media] = await Promise.all([
+      store.listPins(),
+      store.listMedia(),
+    ]);
 
     const count = (s: string) => pins.filter((p) => p.status === s).length;
 
     const stats: EngineStats = {
       plants: PLANTS.length,
+      mediaAssets: media.length,
+      // usedCount starts at 1 on creation, so anything above that is a reuse.
+      mediaReuses: media.reduce((n, a) => n + Math.max(0, a.usedCount - 1), 0),
       angles: ANGLES.length,
       possibleCombinations:
         PLANTS.length * ANGLES.length * VARIATIONS_PER_SLOT,

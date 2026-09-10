@@ -42,8 +42,9 @@ export default async function DashboardPage() {
   const t = translator(locale);
 
   const store = getStore();
-  const [pins, connection] = await Promise.all([
+  const [pins, media, connection] = await Promise.all([
     store.listPins(),
+    store.listMedia(),
     getConnectionStatus(),
   ]);
   const report = readiness();
@@ -102,6 +103,19 @@ export default async function DashboardPage() {
         <Stat label={t("dashboard.queued")} value={count("queued")} />
         <Stat label={t("dashboard.scheduled")} value={count("scheduled")} />
         <Stat label={t("dashboard.failed")} value={count("failed")} />
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <Stat
+          label={t("dashboard.media")}
+          value={media.length}
+          hint={t("dashboard.mediaHint")}
+        />
+        <Stat
+          label={t("dashboard.reuses")}
+          value={media.reduce((n, a) => n + Math.max(0, a.usedCount - 1), 0)}
+          hint={t("dashboard.reusesHint")}
+        />
       </div>
 
       <div className="mt-8 grid gap-5 lg:grid-cols-3">

@@ -76,6 +76,7 @@ function resolveSlot(input: GenerateInput): ResolvedSlot {
       );
 
   const locale = input.locale ?? DEFAULT_LOCALE;
+  const vSlug = varietySlug(input.variety);
 
   return {
     plant,
@@ -89,6 +90,7 @@ function resolveSlot(input: GenerateInput): ResolvedSlot {
       visualStyle: style.slug,
       variation,
       locale,
+      varietySlug: vSlug,
     }),
   };
 }
@@ -110,7 +112,7 @@ export async function generatePin(input: GenerateInput): Promise<PinRecord> {
   const existing = await store.findByDedupeKey(slot.key);
   if (existing && !input.allowDuplicate) {
     throw duplicate(
-      `A Pin already exists for ${slot.plant.name} / ${slot.angle.label} (variation ${slot.variation}). Bump the variation or enable "allow duplicate".`,
+      `A Pin already exists for ${slot.plant.name}${input.variety ? ` '${input.variety}'` : ""} / ${slot.angle.label} (variation ${slot.variation}). Bump the variation or enable "allow duplicate".`,
       { existingPinId: existing.id },
     );
   }
@@ -129,7 +131,6 @@ export async function generatePin(input: GenerateInput): Promise<PinRecord> {
   });
 
   const id = existing?.id ?? pinId();
-  const store2 = store;
 
   // Reusing a library image skips the image model - the expensive half of a
   // generation, and the whole point of keeping a library per plant.
@@ -138,12 +139,12 @@ export async function generatePin(input: GenerateInput): Promise<PinRecord> {
   let mediaId: string | null;
 
   if (input.reuseMediaId) {
-    const asset = await store2.getMedia(input.reuseMediaId);
+    const asset = await store.getMedia(input.reuseMediaId);
     if (!asset) throw notFound(`No media asset with id ${input.reuseMediaId}.`);
     imageUrl = asset.url;
     imageIsInline = asset.url.startsWith("data:");
     mediaId = asset.id;
-    await store2.markMediaUsed(asset.id);
+    await store.markMediaUsed(asset.id);
   } else {
     const image = await generatePinImage(copy.imagePrompt, slot.style);
     const asset = await registerMedia({

@@ -3,8 +3,12 @@ import { createHash } from "node:crypto";
 /**
  * Duplicate prevention (spec §17).
  *
- * `dedupeKey` is the identity of a content slot: locale + plant + angle +
- * style + variation. Two Pins sharing a dedupe key are the same slot and must not both
+ * `dedupeKey` is the identity of a content slot: locale + plant + cultivar +
+ * angle + style + variation.
+ *
+ * The cultivar matters: a Monstera 'variegata' care guide is a legitimately
+ * different Pin from the plain species one - different image, different
+ * audience - not a duplicate of it. Two Pins sharing a dedupe key are the same slot and must not both
  * be generated. It is deterministic, so the check works without a database.
  */
 export function dedupeKey(input: {
@@ -13,12 +17,15 @@ export function dedupeKey(input: {
   visualStyle: string;
   variation: number;
   locale: string;
+  /** Slugified cultivar, or null for the plain species. */
+  varietySlug: string | null;
 }): string {
   // Locale is part of the slot identity: the same plant+angle in French and in
   // English are two legitimate Pins, not a duplicate.
   const raw = [
     input.locale,
     input.plantSlug,
+    input.varietySlug ?? "",
     input.angleSlug,
     input.visualStyle,
     String(input.variation),

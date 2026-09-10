@@ -41,6 +41,7 @@ export function LibraryClient({ uiLocale, initialPins, plants, angles }: Props) 
   const t = translator(uiLocale);
   const [pins, setPins] = useState(initialPins);
   const [pinLocale, setPinLocale] = useState("");
+  const [variety, setVariety] = useState("");
   const [plantSlug, setPlantSlug] = useState("");
   const [angleSlug, setAngleSlug] = useState("");
   const [status, setStatus] = useState("");
@@ -53,6 +54,7 @@ export function LibraryClient({ uiLocale, initialPins, plants, angles }: Props) 
     const q = search.toLowerCase().trim();
     return pins.filter((p) => {
       if (pinLocale && p.locale !== pinLocale) return false;
+      if (variety && (p.variety ?? "") !== variety) return false;
       if (plantSlug && p.plantSlug !== plantSlug) return false;
       if (angleSlug && p.angleSlug !== angleSlug) return false;
       if (status && p.status !== status) return false;
@@ -63,7 +65,15 @@ export function LibraryClient({ uiLocale, initialPins, plants, angles }: Props) 
         p.keywords.some((k) => k.includes(q))
       );
     });
-  }, [pins, pinLocale, plantSlug, angleSlug, status, search]);
+  }, [pins, pinLocale, variety, plantSlug, angleSlug, status, search]);
+
+  // Cultivars are free text, so the filter list is derived from the data
+  // rather than a fixed enum.
+  const varieties = useMemo(
+    () =>
+      [...new Set(pins.map((p) => p.variety).filter((v): v is string => !!v))].sort(),
+    [pins],
+  );
 
   function applyChange(updated: PinRecord) {
     setPins((current) =>
@@ -95,7 +105,7 @@ export function LibraryClient({ uiLocale, initialPins, plants, angles }: Props) 
 
   return (
     <div className="space-y-6">
-      <Card className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-5">
+      <Card className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-6">
         <Select value={plantSlug} onChange={(e) => setPlantSlug(e.target.value)}>
           <option value="">{t("library.allPlants")}</option>
           {plants.map((p) => (
@@ -119,6 +129,19 @@ export function LibraryClient({ uiLocale, initialPins, plants, angles }: Props) 
           {STATUSES.map((s) => (
             <option key={s} value={s} className="capitalize">
               {s}
+            </option>
+          ))}
+        </Select>
+
+        <Select
+          value={variety}
+          onChange={(e) => setVariety(e.target.value)}
+          disabled={varieties.length === 0}
+        >
+          <option value="">{t("library.allVarieties")}</option>
+          {varieties.map((v) => (
+            <option key={v} value={v}>
+              {v}
             </option>
           ))}
         </Select>
@@ -193,7 +216,8 @@ export function LibraryClient({ uiLocale, initialPins, plants, angles }: Props) 
                 </div>
 
                 <p className="text-[12px] text-[var(--color-ink-faint)]">
-                  {pin.plantName} · {pin.angleLabel}
+                  {pin.variety ? `${pin.plantName} '${pin.variety}'` : pin.plantName}{" "}
+                  · {pin.angleLabel}
                 </p>
 
                 <div className="flex items-center justify-between pt-1">

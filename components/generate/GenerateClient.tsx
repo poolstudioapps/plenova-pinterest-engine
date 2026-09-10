@@ -83,6 +83,13 @@ export function GenerateClient({
     };
   }, [plantSlug]);
 
+  // Map style slug -> localized label so the reuse picker reads like the rest
+  // of the form rather than exposing slugs.
+  const styleLabels = useMemo(
+    () => new Map(styles.map((st) => [st.slug, st.label])),
+    [styles],
+  );
+
   const grouped = useMemo(
     () =>
       categories.map((c) => ({
@@ -218,7 +225,11 @@ export function GenerateClient({
               <option value="">{t("generate.reuseNone")}</option>
               {reusable.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {[a.variety, a.visualStyle.replace(/-/g, " "), `${a.usedCount}x`]
+                  {[
+                    a.variety,
+                    styleLabels.get(a.visualStyle) ?? a.visualStyle,
+                    t("media.used", { n: a.usedCount }),
+                  ]
                     .filter(Boolean)
                     .join(" · ")}
                 </option>

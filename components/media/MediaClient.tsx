@@ -11,6 +11,7 @@ interface Props {
   uiLocale: Locale;
   initialAssets: MediaAsset[];
   plants: { slug: string; name: string }[];
+  styles: { slug: string; label: string }[];
 }
 
 /**
@@ -18,8 +19,12 @@ interface Props {
  * a reusable image: "what do I already have for a Monstera?" rather than
  * "what did I generate last Tuesday?".
  */
-export function MediaClient({ uiLocale, initialAssets, plants }: Props) {
+export function MediaClient({ uiLocale, initialAssets, plants, styles }: Props) {
   const t = translator(uiLocale);
+  const styleLabels = useMemo(
+    () => new Map(styles.map((s) => [s.slug, s.label])),
+    [styles],
+  );
   const [assets, setAssets] = useState(initialAssets);
   const [plantSlug, setPlantSlug] = useState("");
   const [search, setSearch] = useState("");
@@ -74,7 +79,10 @@ export function MediaClient({ uiLocale, initialAssets, plants }: Props) {
       </p>
 
       {groups.length === 0 ? (
-        <EmptyState title={t("media.noMatch")} description="" />
+        <EmptyState
+          title={t("media.noMatch")}
+          description={t("library.noMatchBody")}
+        />
       ) : (
         groups.map((group) => (
           <section key={group.plantSlug} className="space-y-3">
@@ -99,7 +107,7 @@ export function MediaClient({ uiLocale, initialAssets, plants }: Props) {
                       <Badge className="w-full justify-center">{asset.variety}</Badge>
                     ) : null}
                     <p className="truncate text-[11.5px] text-[var(--color-ink-faint)]">
-                      {asset.visualStyle.replace(/-/g, " ")}
+                      {styleLabels.get(asset.visualStyle) ?? asset.visualStyle}
                     </p>
                     <div className="flex items-center justify-between gap-1">
                       <span className="text-[11px] text-[var(--color-ink-faint)]">
