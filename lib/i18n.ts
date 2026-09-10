@@ -17,8 +17,22 @@
  * substantially and are what people actually search on Pinterest.
  */
 
+/**
+ * Two locale sets, deliberately separate.
+ *
+ * `Locale` is the dashboard language, and only exists where a full UI
+ * dictionary does. `ContentLocale` is what a Pin or a carousel can be WRITTEN
+ * in, which is a much cheaper thing to add: the model composes in the target
+ * language, no dictionary required.
+ *
+ * Conflating them would mean either a half-translated interface or refusing to
+ * publish in Spanish because nobody translated the word "Queue".
+ */
 export const LOCALES = ["en", "fr"] as const;
 export type Locale = (typeof LOCALES)[number];
+
+export const CONTENT_LOCALES = ["fr", "en", "es", "de", "it"] as const;
+export type ContentLocale = (typeof CONTENT_LOCALES)[number];
 
 export const DEFAULT_LOCALE: Locale = "en";
 
@@ -27,17 +41,49 @@ export const LOCALE_LABELS: Record<Locale, string> = {
   fr: "Français",
 };
 
+export const CONTENT_LOCALE_LABELS: Record<ContentLocale, string> = {
+  fr: "Français",
+  en: "English",
+  es: "Español",
+  de: "Deutsch",
+  it: "Italiano",
+};
+
+export function isContentLocale(value: unknown): value is ContentLocale {
+  return (
+    typeof value === "string" &&
+    (CONTENT_LOCALES as readonly string[]).includes(value)
+  );
+}
+
 /** Full language name handed to the model, plus market context. */
-export const LOCALE_WRITING: Record<Locale, { language: string; market: string }> = {
+export const LOCALE_WRITING: Record<
+  ContentLocale,
+  { language: string; market: string }
+> = {
   en: {
     language: "English",
     market:
-      "English-speaking Pinterest users (UK, US, Canada, Australia). Use natural British-neutral English.",
+      "English-speaking users (UK, US, Canada, Australia). Use natural British-neutral English.",
   },
   fr: {
     language: "French",
     market:
-      "French-speaking Pinterest users (France, Belgium, Switzerland, Quebec). Use natural, idiomatic French - never a literal translation from English.",
+      "French-speaking users (France, Belgium, Switzerland, Quebec). Use natural, idiomatic French - never a literal translation from English.",
+  },
+  es: {
+    language: "Spanish",
+    market:
+      "Spanish-speaking users (Spain and Latin America). Use neutral Spanish that reads naturally on both sides of the Atlantic.",
+  },
+  de: {
+    language: "German",
+    market:
+      "German-speaking users (Germany, Austria, Switzerland). Direct and precise, never stiff.",
+  },
+  it: {
+    language: "Italian",
+    market: "Italian-speaking users. Warm and conversational.",
   },
 };
 
@@ -73,6 +119,26 @@ const EN: Dict = {
   "nav.tiktok": "TikTok",
   "nav.carousels": "Carousels",
 
+  "tiktok.addAccount": "Add another account",
+  "tiktok.noAccounts": "No account connected",
+  "tiktok.noAccountsBody":
+    "Connect a TikTok account, then set the language it publishes in. Several accounts can be connected, each posting in its own language.",
+  "tiktok.noDirectPost": "no direct post",
+  "tiktok.language": "Publishing language",
+
+  "carousels.languages": "Languages to write",
+  "carousels.languagesHint":
+    "Each account posts in its assigned language. Writing a language nothing publishes in just costs a generation.",
+  "carousels.posts": "Posted to",
+
+  "publish.accounts": "Accounts",
+  "publish.selected": "{n} selected",
+  "publish.noEligible":
+    "No connected account publishes in a language this carousel was written in.",
+  "publish.skipped": "Not shown, no matching language: {names}",
+  "publish.multiResult": "{ok} published, {ko} failed.",
+  "publish.someFailed": "Some accounts failed",
+  "publish.confirmMulti": "Publish to {n}",
   "tiktok.title": "TikTok",
   "tiktok.subtitle":
     "Connect the Plenova TikTok account so the engine can publish photo carousels.",
@@ -364,6 +430,26 @@ const FR: Dict = {
   "nav.tiktok": "TikTok",
   "nav.carousels": "Carrousels",
 
+  "tiktok.addAccount": "Ajouter un compte",
+  "tiktok.noAccounts": "Aucun compte connecté",
+  "tiktok.noAccountsBody":
+    "Connecte un compte TikTok, puis choisis sa langue de publication. Plusieurs comptes peuvent être connectés, chacun publiant dans sa langue.",
+  "tiktok.noDirectPost": "pas de publication directe",
+  "tiktok.language": "Langue de publication",
+
+  "carousels.languages": "Langues à rédiger",
+  "carousels.languagesHint":
+    "Chaque compte publie dans la langue qui lui est assignée. Rédiger une langue que personne ne publie coûte une génération pour rien.",
+  "carousels.posts": "Publié sur",
+
+  "publish.accounts": "Comptes",
+  "publish.selected": "{n} sélectionné(s)",
+  "publish.noEligible":
+    "Aucun compte connecté ne publie dans une langue de ce carrousel.",
+  "publish.skipped": "Non proposés, langue absente : {names}",
+  "publish.multiResult": "{ok} publié(s), {ko} en échec.",
+  "publish.someFailed": "Certains comptes ont échoué",
+  "publish.confirmMulti": "Publier sur {n}",
   "tiktok.title": "TikTok",
   "tiktok.subtitle":
     "Connecte le compte TikTok de Plenova pour que le moteur publie des carrousels photo.",

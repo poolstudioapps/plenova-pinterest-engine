@@ -1,4 +1,3 @@
-import type { CarouselSlide } from "@/lib/types";
 
 /**
  * Slide composition.
@@ -76,8 +75,14 @@ function renderText(
   return `<span style="color:#fff;font-weight:${weight};font-size:${fontSize}px;text-shadow:0 2px 10px rgba(0,0,0,0.65);">${safe}</span>`;
 }
 
+/** The words to lay over one image. */
+export interface SlideCopy {
+  title: string;
+  subtitle: string;
+}
+
 export interface BuildSlideHtmlInput {
-  slide: Pick<CarouselSlide, "title" | "subtitle">;
+  slide: SlideCopy;
   /** The background photograph, as a data URL. */
   backgroundDataUrl: string;
   /** The font file, as a base64 string (no data: prefix). */

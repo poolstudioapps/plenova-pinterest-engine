@@ -10,14 +10,16 @@ import {
   type CopyPromptInput,
 } from "@/lib/prompts";
 import {
-  CAROUSEL_SCHEMA,
   REQUIRED_HASHTAGS,
   buildCarouselPrompt,
   buildCarouselSystemInstruction,
+  carouselSchema,
   type CarouselConceptDraft,
   type CarouselPromptInput,
   type CarouselSlideDraft,
+  type MultiText,
 } from "@/lib/prompts-carousel";
+import type { ContentLocale } from "@/lib/i18n";
 import { PINTEREST_LIMITS, truncate } from "@/lib/utils";
 import type { VisualStyle } from "@/lib/types";
 
@@ -232,15 +234,31 @@ export async function generateCarouselConcept(
   input: CarouselPromptInput,
 ): Promise<CarouselConceptDraft> {
   const ai = getClient();
+  const languages = input.languages;
+
+  /** Keeps only the requested languages, trimmed, dropping empties. */
+  const pickText = (raw: unknown): MultiText => {
+    const out: MultiText = {};
+    if (raw && typeof raw === "object") {
+      for (const lang of languages) {
+        const value = (raw as Record<string, unknown>)[lang];
+        if (typeof value === "string" && value.trim()) out[lang] = value.trim();
+      }
+    }
+    return out;
+  };
 
   try {
     const response = await ai.models.generateContent({
       model: config.gemini.textModel,
       contents: buildCarouselPrompt(input),
       config: {
-        systemInstruction: buildCarouselSystemInstruction(input.locale),
+        systemInstruction: buildCarouselSystemInstruction(languages),
         responseMimeType: "application/json",
-        responseSchema: CAROUSEL_SCHEMA as unknown as Record<string, unknown>,
+        responseSchema: carouselSchema(languages) as unknown as Record<
+          string,
+          unknown
+        >,
         temperature: 1.0,
       },
     });
@@ -255,50 +273,52 @@ export async function generateCarouselConcept(
       throw upstream("Gemini returned a carousel that was not valid JSON.");
     }
 
-    const slides = Array.isArray(parsed.slides)
-      ? (parsed.slides as CarouselSlideDraft[])
-          .filter(
-            (s) =>
-              s &&
-              typeof s.title === "string" &&
-              typeof s.imagePrompt === "string" &&
-              s.imagePrompt.trim().length > 0,
-          )
-          // TikTok caps a photo carousel at 35 slides.
-          .slice(0, 35)
-          .map((s) => ({
-            kind: (s.kind === "hook" || s.kind === "cta"
-              ? s.kind
-              : "content") as CarouselSlideDraft["kind"],
-            title: s.title.trim(),
-            subtitle: typeof s.subtitle === "string" ? s.subtitle.trim() : "",
-            imagePrompt: s.imagePrompt.trim(),
-            photoQuery:
-              typeof s.photoQuery === "string" ? s.photoQuery.trim() : "",
-          }))
-      : [];
+    const slides: CarouselSlideDraft[] = (
+      Array.isArray(parsed.slides) ? parsed.slides : []
+    )
+      .map((raw) => {
+        const s = raw as Record<string, unknown>;
+        return {
+          kind: (s.kind === "hook" || s.kind === "cta"
+            ? s.kind
+            : "content") as CarouselSlideDraft["kind"],
+          title: pickText(s.title),
+          subtitle: pickText(s.subtitle),
+          imagePrompt:
+            typeof s.imagePrompt === "string" ? s.imagePrompt.trim() : "",
+          photoQuery:
+            typeof s.photoQuery === "string" ? s.photoQuery.trim() : "",
+        };
+      })
+      // A slide with no image brief, or missing the primary language, cannot
+      // be rendered - dropping it beats publishing a blank frame.
+      .filter(
+        (s) => s.imagePrompt.length > 0 && Boolean(s.title[languages[0]!]),
+      )
+      // TikTok caps a photo carousel at 35 slides.
+      .slice(0, 35);
 
     if (slides.length < 2) {
       throw upstream("Gemini returned too few usable slides for a carousel.");
     }
 
-    const hashtags = Array.from(
-      new Set([
-        ...(Array.isArray(parsed.hashtags) ? parsed.hashtags : [])
-          .filter((h): h is string => typeof h === "string")
-          .map((h) => h.replace(/^#/, "").toLowerCase().trim())
-          .filter((h) => h.length > 1 && h.length < 40),
-        // Enforced rather than hoped for, as in the original engine.
-        ...REQUIRED_HASHTAGS,
-      ]),
-    ).slice(0, 12);
+    const hashtags: Partial<Record<ContentLocale, string[]>> = {};
+    const rawTags = (parsed.hashtags ?? {}) as Record<string, unknown>;
+    for (const lang of languages) {
+      const list = Array.isArray(rawTags[lang]) ? (rawTags[lang] as unknown[]) : [];
+      hashtags[lang] = Array.from(
+        new Set([
+          ...list
+            .filter((h): h is string => typeof h === "string")
+            .map((h) => h.replace(/^#/, "").toLowerCase().trim())
+            .filter((h) => h.length > 1 && h.length < 40),
+          // Enforced rather than hoped for, as in the original engine.
+          ...REQUIRED_HASHTAGS,
+        ]),
+      ).slice(0, 12);
+    }
 
-    return {
-      slides,
-      caption:
-        typeof parsed.caption === "string" ? parsed.caption.trim() : "",
-      hashtags,
-    };
+    return { slides, caption: pickText(parsed.caption), hashtags };
   } catch (err) {
     if (err && typeof err === "object" && "code" in err) throw err;
     wrapUpstream(err, "designing the carousel");

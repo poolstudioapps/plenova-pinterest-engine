@@ -1,10 +1,10 @@
 import { CarouselStudio } from "@/components/tiktok/CarouselStudio";
 import { Notice, SectionHeader } from "@/components/ui";
+import { isGeminiConfigured } from "@/lib/config";
 import { plantName } from "@/lib/data/localize";
 import { PLANTS } from "@/lib/data/plants";
 import { translator } from "@/lib/i18n";
 import { getUiLocale } from "@/lib/locale-server";
-import { isGeminiConfigured } from "@/lib/config";
 import { isPexelsConfigured } from "@/lib/pexels";
 import { getStore } from "@/lib/store";
 import { getStatus } from "@/lib/tiktok";
@@ -27,9 +27,9 @@ export default async function CarouselsPage() {
         description={t("carousels.subtitle")}
       />
 
-      {!status.connected ? (
+      {status.accounts.length === 0 ? (
         <div className="mb-6">
-          <Notice tone="info">{t("tiktok.connectBody")}</Notice>
+          <Notice tone="info">{t("tiktok.noAccountsBody")}</Notice>
         </div>
       ) : null}
 
@@ -37,9 +37,7 @@ export default async function CarouselsPage() {
         uiLocale={locale}
         initialCarousels={carousels}
         plants={PLANTS.map((p) => ({ slug: p.slug, name: plantName(p, locale) }))}
-        canDirectPost={status.canDirectPost}
-        canDraft={status.canDraft}
-        connected={status.connected}
+        accounts={status.accounts}
         canGenerate={isGeminiConfigured()}
         hasPexels={isPexelsConfigured()}
       />

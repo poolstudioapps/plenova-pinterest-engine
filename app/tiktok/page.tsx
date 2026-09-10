@@ -48,7 +48,7 @@ export default async function TikTokPage({
         * registered Test User - with a bare "client_key" error that points at
         * the wrong thing entirely.
         */}
-      {!status.connected && isTikTokConfigured() ? (
+      {status.accounts.length === 0 && isTikTokConfigured() ? (
         <div className="mb-6">
           <Notice tone="warn" title={t("tiktok.devMode")}>
             {t("tiktok.devModeBody")}
@@ -57,7 +57,11 @@ export default async function TikTokPage({
       ) : null}
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,340px)]">
-        <TikTokPanel uiLocale={locale} status={status} />
+        <TikTokPanel
+          uiLocale={locale}
+          configured={status.configured}
+          accounts={status.accounts}
+        />
 
         <Card className="h-fit p-5">
           <h2 className="mb-3 text-[15px] font-semibold">{t("tiktok.config")}</h2>

@@ -1,8 +1,6 @@
 import { handle, ok } from "@/lib/api";
-import { updateCarousel } from "@/lib/carousel";
 import { notFound } from "@/lib/errors";
 import { getStore } from "@/lib/store";
-import { parseJsonBody, updateCarouselSchema } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -14,14 +12,6 @@ export async function GET(_request: Request, { params }: Params) {
     const carousel = await getStore().getCarousel(id);
     if (!carousel) throw notFound(`No carousel with id ${id}.`);
     return ok({ carousel });
-  });
-}
-
-export async function PATCH(request: Request, { params }: Params) {
-  return handle(async () => {
-    const { id } = await params;
-    const patch = await parseJsonBody(request, updateCarouselSchema);
-    return ok({ carousel: await updateCarousel(id, patch) });
   });
 }
 

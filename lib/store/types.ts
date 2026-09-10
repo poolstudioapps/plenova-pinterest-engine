@@ -4,7 +4,7 @@ import type {
   PinRecord,
   PinStatus,
   PinterestConnection,
-  TikTokConnection,
+  TikTokAccount,
 } from "@/lib/types";
 import type { MediaFilter } from "@/lib/media";
 import type { Locale } from "@/lib/i18n";
@@ -57,8 +57,11 @@ export interface EngineStore {
   /** Bumps reuse accounting when an asset backs a new Pin or slide. */
   markMediaUsed(id: string): Promise<void>;
 
-  getTikTokConnection(): Promise<TikTokConnection | null>;
-  setTikTokConnection(connection: TikTokConnection | null): Promise<void>;
+  /** Every connected TikTok account, keyed by open id. */
+  listTikTokAccounts(): Promise<TikTokAccount[]>;
+  getTikTokAccount(openId: string): Promise<TikTokAccount | null>;
+  saveTikTokAccount(account: TikTokAccount): Promise<void>;
+  deleteTikTokAccount(openId: string): Promise<void>;
 
   listCarousels(): Promise<CarouselRecord[]>;
   getCarousel(id: string): Promise<CarouselRecord | null>;

@@ -1,6 +1,6 @@
 /** Shared domain types for the Pinterest engine. */
 
-import type { Locale } from "@/lib/i18n";
+import type { ContentLocale, Locale } from "@/lib/i18n";
 
 export type Difficulty = "easy" | "medium" | "hard";
 
@@ -171,8 +171,14 @@ export interface PinterestConnection {
   connectedAt: string;
 }
 
-/** A connected TikTok account. Tokens live encrypted, same as Pinterest. */
-export interface TikTokConnection {
+/**
+ * One connected TikTok account. Tokens live encrypted, same as Pinterest.
+ *
+ * Several accounts are connected at once and each posts in its own language,
+ * which is the whole point of generating a carousel in five languages: one
+ * production run feeds every account.
+ */
+export interface TikTokAccount {
   accessToken: string;
   refreshToken: string | null;
   expiresAt: number | null;
@@ -182,8 +188,13 @@ export interface TikTokConnection {
   username: string;
   displayName: string;
   avatarUrl: string | null;
+  /** The language this account publishes in. */
+  language: ContentLocale;
   connectedAt: string;
 }
+
+/** Every connected account, keyed by TikTok's open id. */
+export type TikTokAccounts = Record<string, TikTokAccount>;
 
 /**
  * Creator state, queried immediately before a direct post.
@@ -214,30 +225,39 @@ export type CarouselStatus =
  * Gemini writes all four text fields; the image is generated from imagePrompt
  * and lands in the media library like any other, so it can be reused later.
  */
-export interface CarouselSlide {
-  kind: "hook" | "content" | "cta";
+/** Overlay copy for one slide, in one language. */
+export interface SlideText {
   title: string;
   subtitle: string;
+}
+
+export interface CarouselSlide {
+  kind: "hook" | "content" | "cta";
+  /** Overlay copy per language. One image, several texts over it. */
+  text: Partial<Record<ContentLocale, SlideText>>;
   imagePrompt: string;
+  photoQuery: string;
   mediaId: string | null;
   /** The bare photograph, which stays reusable by other carousels. */
   imageUrl: string | null;
-  /** The photograph with its text burned in. This is what gets published. */
-  composedUrl: string | null;
+  /**
+   * The photograph with its text burned in, one per language. The image is
+   * shared; only the words differ, so each language needs its own composite.
+   */
+  composed: Partial<Record<ContentLocale, string>>;
 }
 
 /** A TikTok photo carousel: ordered slides plus one caption. */
 export interface CarouselRecord {
   id: string;
-  locale: Locale;
+  /** Languages this carousel was written in. */
+  languages: ContentLocale[];
   /** The theme the operator asked for, kept so it is not repeated later. */
   theme: string;
-  title: string;
-  description: string;
-  hashtags: string[];
+  /** Caption per language, hashtags included at the end. */
+  caption: Partial<Record<ContentLocale, string>>;
+  hashtags: Partial<Record<ContentLocale, string[]>>;
   slides: CarouselSlide[];
-  /** Public URLs in slide order, resolved for publishing. */
-  slideUrls: string[];
   /** 1-indexed, as TikTok expects. */
   coverIndex: number;
 
@@ -245,17 +265,26 @@ export interface CarouselRecord {
   plantName: string | null;
 
   status: CarouselStatus;
+
+  /** One entry per account the carousel has been posted to. */
+  posts: CarouselPost[];
+
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** The outcome of posting one carousel to one account. */
+export interface CarouselPost {
+  openId: string;
+  username: string;
+  language: ContentLocale;
   postMode: "DIRECT_POST" | "MEDIA_UPLOAD";
   privacyLevel: string | null;
   brandContentToggle: boolean;
   brandOrganicToggle: boolean;
-
   publishId: string | null;
   publishedAt: string | null;
   error: string | null;
-
-  createdAt: string;
-  updatedAt: string;
 }
 
 export interface EngineStats {

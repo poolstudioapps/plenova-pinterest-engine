@@ -1,59 +1,65 @@
 import "server-only";
-import { config } from "@/lib/config";
 import { getPlant } from "@/lib/data/plants";
 import { plantName as localizedPlantName } from "@/lib/data/localize";
+import { getVisualStyle } from "@/lib/data/visual-styles";
 import { badRequest, notFound } from "@/lib/errors";
 import {
   generateCarouselConcept,
   generatePinImage,
   reinterpretImage,
 } from "@/lib/gemini";
-import { findReference, isPexelsConfigured } from "@/lib/pexels";
+import { DEFAULT_LOCALE, type ContentLocale } from "@/lib/i18n";
 import { extensionFor, hostImageAt } from "@/lib/images";
 import { mediaPath, varietySlug } from "@/lib/media";
+import { findReference, isPexelsConfigured } from "@/lib/pexels";
 import { getStore } from "@/lib/store";
 import { publishCarousel } from "@/lib/tiktok";
-import type { CarouselRecord, CarouselSlide, MediaAsset } from "@/lib/types";
-import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n";
-import { getVisualStyle } from "@/lib/data/visual-styles";
+import type {
+  CarouselPost,
+  CarouselRecord,
+  CarouselSlide,
+  MediaAsset,
+} from "@/lib/types";
 
 /**
  * Carousel orchestration: theme in, publishable carousel out.
  *
- * The order matters and was wrong in the first version. A carousel starts from
- * a THEME. Gemini designs the slides - overlay copy and a photography brief
- * each - and only then are the images generated from those briefs. Assembling
- * a carousel out of whatever images already existed produced a slideshow with
- * no argument running through it.
+ * Two things shape the design.
  *
- * Every generated image still lands in the media library, so it stays reusable
- * by the Pinterest side and by later carousels.
+ * A carousel starts from a THEME. Gemini designs the slides - overlay copy and
+ * a photography brief each - and only then are the images produced. Building
+ * one out of whatever images already existed produced a slideshow with no
+ * argument running through it.
+ *
+ * And it is written in every language at once. The images are shared across
+ * languages; only the words over them differ. One production run therefore
+ * feeds every connected account, each posting in its own language.
  */
 
 function carouselId(): string {
   return `car_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
 }
 
-/** Slide images are square-ish 4:5, TikTok's carousel format. */
+/** TikTok's carousel format. */
 const SLIDE_ASPECT = "4:5";
 
 /**
  * Where slide images come from.
  *
  *  - `generate` : text-to-image only. Fastest, but the polish reads as AI.
- *  - `photo`    : a real photograph from Pexels is used as a reference and
- *                 reinterpreted into an original image. Slower, markedly more
- *                 believable, and nothing from Pexels is republished.
- *  - `library`  : reuse images already generated for this plant, and only
- *                 generate the slides that have nothing to reuse.
+ *  - `photo`    : a real photograph is used as a reference and reinterpreted
+ *                 into an original image. Slower, markedly more believable,
+ *                 and nothing from the reference is republished.
+ *  - `library`  : reuse images already generated for this plant, producing
+ *                 only the slides that have nothing to reuse.
  */
 export type ImageSource = "generate" | "photo" | "library";
 
 export interface GenerateCarouselInput {
   theme: string;
+  /** Languages to write. The first is the primary one. */
+  languages?: ContentLocale[];
   imageSource?: ImageSource;
-  locale?: Locale;
-  /** Optional: anchors the carousel to one species from the catalog. */
   plantSlug?: string;
   variety?: string;
 }
@@ -64,9 +70,12 @@ export async function generateCarousel(
   const theme = input.theme.trim();
   if (theme.length < 3) throw badRequest("Describe the carousel theme.");
 
-  const locale = input.locale ?? DEFAULT_LOCALE;
-  const store = getStore();
+  const languages =
+    input.languages && input.languages.length > 0
+      ? Array.from(new Set(input.languages))
+      : [DEFAULT_LOCALE as ContentLocale];
 
+  const store = getStore();
   const plant = input.plantSlug ? getPlant(input.plantSlug) : undefined;
   if (input.plantSlug && !plant) {
     throw badRequest(`Unknown plant: ${input.plantSlug}`);
@@ -76,38 +85,37 @@ export async function generateCarousel(
   const existing = await store.listCarousels();
   const concept = await generateCarouselConcept({
     theme,
-    locale,
-    plantName: plant ? localizedPlantName(plant, locale) : undefined,
+    languages,
+    plantName: plant ? localizedPlantName(plant, "en") : undefined,
     existingThemes: existing.map((c) => c.theme).filter(Boolean),
   });
 
   const id = carouselId();
   const vSlug = varietySlug(input.variety);
-
   const source: ImageSource = input.imageSource ?? "photo";
 
   // Reusable stock for the library source: images already paid for on this
-  // plant, freshest first, so a carousel costs nothing when they exist.
+  // plant, so a carousel can cost nothing when they exist.
   const reusable =
     source === "library" && plant
       ? await store.listMedia({ plantSlug: plant.slug, limit: 60 })
       : [];
   let reuseCursor = 0;
 
-  // Images are generated in order so a failure is reported against the slide it
-  // belongs to, rather than as one opaque batch error.
+  // Produced in order so a failure names the slide it belongs to, rather than
+  // surfacing as one opaque batch error.
   const slides: CarouselSlide[] = [];
   for (const [index, draft] of concept.slides.entries()) {
     const recycled = source === "library" ? reusable[reuseCursor++] : undefined;
     const asset =
       recycled ??
-      (await generateSlideImage({
+      (await produceSlideImage({
         id: `${id}_${index}`,
         imagePrompt: draft.imagePrompt,
         photoQuery: draft.photoQuery,
         source,
         plantSlug: plant?.slug ?? "carousel",
-        plantName: plant ? localizedPlantName(plant, locale) : theme,
+        plantName: plant ? localizedPlantName(plant, "en") : theme,
         variety: input.variety ?? null,
         varietySlug: vSlug,
         theme,
@@ -115,44 +123,48 @@ export async function generateCarousel(
 
     if (recycled) await store.markMediaUsed(recycled.id);
 
+    const text: CarouselSlide["text"] = {};
+    for (const lang of languages) {
+      const title = draft.title[lang];
+      if (!title) continue;
+      text[lang] = { title, subtitle: draft.subtitle[lang] ?? "" };
+    }
+
     slides.push({
       kind: draft.kind,
-      title: draft.title,
-      subtitle: draft.subtitle,
+      text,
       imagePrompt: draft.imagePrompt,
+      photoQuery: draft.photoQuery,
       mediaId: asset.id,
       imageUrl: asset.url,
-      composedUrl: null,
+      composed: {},
     });
   }
 
-  const now = new Date().toISOString();
-  const hashtagLine = concept.hashtags.map((h) => `#${h}`).join(" ");
+  // Hashtags ride at the end of the caption, which is how TikTok reads them.
+  const caption: CarouselRecord["caption"] = {};
+  for (const lang of languages) {
+    const tags = (concept.hashtags[lang] ?? []).map((h) => `#${h}`).join(" ");
+    caption[lang] = [concept.caption[lang] ?? "", tags]
+      .filter(Boolean)
+      .join("\n\n");
+  }
 
+  const now = new Date().toISOString();
   const record: CarouselRecord = {
     id,
-    locale,
+    languages,
     theme,
-    // TikTok shows the first line as the title, so the hook doubles as it.
-    title: (slides[0]?.title ?? theme).slice(0, 90),
-    description: [concept.caption, hashtagLine].filter(Boolean).join("\n\n"),
+    caption,
     hashtags: concept.hashtags,
     slides,
-    slideUrls: slides.map((s) => s.composedUrl ?? s.imageUrl!).filter(Boolean),
     coverIndex: 1,
 
     plantSlug: plant?.slug ?? null,
-    plantName: plant ? localizedPlantName(plant, locale) : null,
+    plantName: plant ? localizedPlantName(plant, "en") : null,
 
     status: "draft",
-    postMode: "DIRECT_POST",
-    privacyLevel: null,
-    brandContentToggle: false,
-    brandOrganicToggle: false,
-
-    publishId: null,
-    publishedAt: null,
-    error: null,
+    posts: [],
 
     createdAt: now,
     updatedAt: now,
@@ -163,7 +175,7 @@ export async function generateCarousel(
 }
 
 /** Produces one slide image and files it in the media library. */
-async function generateSlideImage(input: {
+async function produceSlideImage(input: {
   id: string;
   imagePrompt: string;
   photoQuery: string;
@@ -174,16 +186,15 @@ async function generateSlideImage(input: {
   varietySlug: string | null;
   theme: string;
 }): Promise<MediaAsset> {
-  // Slides carry their text as an overlay rather than baked in, so the image
-  // itself must stay clean - the editorial style forbids text outright.
+  // Slides carry their text as an overlay, so the image itself must stay clean.
   const style = getVisualStyle("editorial-photo")!;
 
   let image;
   let referencedFrom: string | null = null;
 
   if (input.source === "photo" && isPexelsConfigured()) {
-    // Broad query first, then the plant on its own: a literal scene rarely has
-    // a match, but the subject almost always does.
+    // Broad query first, then the plant alone: a literal scene rarely matches,
+    // but the subject almost always does.
     const reference = await findReference([
       input.photoQuery,
       `${input.plantName} plant indoor`,
@@ -199,18 +210,14 @@ async function generateSlideImage(input: {
     }
   }
 
-  // Falls through here when the source is `generate`, when Pexels is not
-  // configured, or when no reference matched - a missing photo must never stop
-  // a carousel, only make that slide a little glossier.
+  // Reached when the source is `generate`, when Pexels is unconfigured, or when
+  // nothing matched - a missing reference must never fail the carousel, only
+  // make that one slide glossier.
   image ??= await generatePinImage(input.imagePrompt, style);
 
   const mediaId = `med_${input.id}`;
   const path = mediaPath(
-    {
-      plantSlug: input.plantSlug,
-      varietySlug: input.varietySlug,
-      id: mediaId,
-    },
+    { plantSlug: input.plantSlug, varietySlug: input.varietySlug, id: mediaId },
     extensionFor(image.mimeType),
   );
   const hosted = await hostImageAt(path, image.data, image.mimeType);
@@ -245,144 +252,213 @@ async function generateSlideImage(input: {
   return asset;
 }
 
-export async function updateCarousel(
-  id: string,
-  patch: Partial<Pick<CarouselRecord, "title" | "description" | "coverIndex">>,
-): Promise<CarouselRecord> {
-  const store = getStore();
-  const carousel = await store.getCarousel(id);
-  if (!carousel) throw notFound(`No carousel with id ${id}.`);
-
-  const updated: CarouselRecord = {
-    ...carousel,
-    ...patch,
-    coverIndex: Math.min(
-      Math.max(1, patch.coverIndex ?? carousel.coverIndex),
-      Math.max(1, carousel.slideUrls.length),
-    ),
-    updatedAt: new Date().toISOString(),
-  };
-  await store.saveCarousel(updated);
-  return updated;
-}
-
-export interface PublishOutcome {
-  carousel: CarouselRecord;
-  published: boolean;
-  error?: string;
-}
-
 /**
- * Publishes to TikTok. As on the Pinterest side, a carousel only reaches
- * `published` when TikTok returns a publish id.
- */
-export async function publishCarouselRecord(
-  id: string,
-  options: {
-    postMode: "DIRECT_POST" | "MEDIA_UPLOAD";
-    privacyLevel?: string;
-    brandContentToggle?: boolean;
-    brandOrganicToggle?: boolean;
-  },
-): Promise<PublishOutcome> {
-  const store = getStore();
-  const carousel = await store.getCarousel(id);
-  if (!carousel) throw notFound(`No carousel with id ${id}.`);
-
-  if (carousel.status === "published" && carousel.publishId) {
-    // Idempotent: never create a second post for the same record.
-    return { carousel, published: true };
-  }
-
-  const publishing: CarouselRecord = {
-    ...carousel,
-    status: "publishing",
-    postMode: options.postMode,
-    privacyLevel: options.privacyLevel ?? null,
-    brandContentToggle: Boolean(options.brandContentToggle),
-    brandOrganicToggle: Boolean(options.brandOrganicToggle),
-    error: null,
-    updatedAt: new Date().toISOString(),
-  };
-  await store.saveCarousel(publishing);
-
-  try {
-    const { publishId } = await publishCarousel({
-      title: publishing.title,
-      description: publishing.description,
-      imageUrls: publishing.slideUrls,
-      coverIndex: publishing.coverIndex,
-      postMode: options.postMode,
-      privacyLevel: options.privacyLevel,
-      brandContentToggle: options.brandContentToggle,
-      brandOrganicToggle: options.brandOrganicToggle,
-    });
-
-    const published: CarouselRecord = {
-      ...publishing,
-      status: "published",
-      publishId,
-      publishedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    await store.saveCarousel(published);
-    return { carousel: published, published: true };
-  } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Publishing failed for an unknown reason.";
-    const failed: CarouselRecord = {
-      ...publishing,
-      status: "failed",
-      error: message,
-      updatedAt: new Date().toISOString(),
-    };
-    await store.saveCarousel(failed);
-    return { carousel: failed, published: false, error: message };
-  }
-}
-
-/** The destination every Plenova post points at. */
-export const CAROUSEL_LINK = config.app.oneLink;
-
-
-/**
- * Records a slide composed in the operator's browser.
+ * Records a slide composed in the operator's browser, for one language.
  *
- * The bare photograph is kept as-is in the media library; only the carousel
- * points at the composed version, so the same image can back another carousel
- * with different text later.
+ * The bare photograph stays untouched in the media library; only the carousel
+ * points at the composite, so the same image can back another carousel - or
+ * another language - with different words over it.
  */
 export async function saveComposedSlide(
-  carouselId: string,
+  id: string,
   index: number,
+  language: ContentLocale,
   data: Buffer,
   mimeType: string,
 ): Promise<CarouselRecord> {
   const store = getStore();
-  const carousel = await store.getCarousel(carouselId);
-  if (!carousel) throw notFound(`No carousel with id ${carouselId}.`);
+  const carousel = await store.getCarousel(id);
+  if (!carousel) throw notFound(`No carousel with id ${id}.`);
 
   const slide = carousel.slides[index];
   if (!slide) throw badRequest(`Slide ${index} does not exist on this carousel.`);
 
   const hosted = await hostImageAt(
-    `carousels/${carouselId}/slide-${index + 1}.${extensionFor(mimeType)}`,
+    `carousels/${id}/${language}/slide-${index + 1}.${extensionFor(mimeType)}`,
     data,
     mimeType,
   );
 
   const slides = carousel.slides.map((s, i) =>
-    i === index ? { ...s, composedUrl: hosted.url } : s,
+    i === index
+      ? { ...s, composed: { ...s.composed, [language]: hosted.url } }
+      : s,
   );
 
   const updated: CarouselRecord = {
     ...carousel,
     slides,
-    slideUrls: slides
-      .map((s) => s.composedUrl ?? s.imageUrl)
-      .filter((u): u is string => Boolean(u)),
     updatedAt: new Date().toISOString(),
   };
   await store.saveCarousel(updated);
   return updated;
+}
+
+/** The images to publish for one language, composites where they exist. */
+export function slideUrlsFor(
+  carousel: CarouselRecord,
+  language: ContentLocale,
+): string[] {
+  return carousel.slides
+    .map((s) => s.composed[language] ?? s.imageUrl)
+    .filter((u): u is string => Boolean(u));
+}
+
+export interface PublishOptions {
+  postMode: "DIRECT_POST" | "MEDIA_UPLOAD";
+  privacyLevel?: string;
+  brandContentToggle?: boolean;
+  brandOrganicToggle?: boolean;
+}
+
+export interface MultipostOutcome {
+  carousel: CarouselRecord;
+  posts: CarouselPost[];
+  publishedCount: number;
+  failedCount: number;
+}
+
+/**
+ * Posts one carousel to several accounts, each in its own language.
+ *
+ * Accounts are handled independently on purpose: one failing account records
+ * its error and the rest still go out. Failing the whole run because a single
+ * token expired would be the wrong trade when six other accounts are fine.
+ */
+export async function publishToAccounts(
+  id: string,
+  openIds: string[],
+  options: PublishOptions,
+): Promise<MultipostOutcome> {
+  const store = getStore();
+  const carousel = await store.getCarousel(id);
+  if (!carousel) throw notFound(`No carousel with id ${id}.`);
+  if (openIds.length === 0) throw badRequest("Select at least one account.");
+
+  await store.saveCarousel({
+    ...carousel,
+    status: "publishing",
+    updatedAt: new Date().toISOString(),
+  });
+
+  const posts: CarouselPost[] = [];
+
+  for (const openId of openIds) {
+    const account = await store.getTikTokAccount(openId);
+    if (!account) {
+      posts.push(
+        failedPost(openId, "", DEFAULT_LOCALE as ContentLocale, options, "Account is not connected."),
+      );
+      continue;
+    }
+
+    // Already posted to this account? Never create a second post for it.
+    const previous = carousel.posts.find(
+      (p) => p.openId === openId && p.publishId,
+    );
+    if (previous) {
+      posts.push(previous);
+      continue;
+    }
+
+    const language = account.language;
+    const caption = carousel.caption[language];
+    const urls = slideUrlsFor(carousel, language);
+
+    if (!caption || urls.length === 0) {
+      posts.push(
+        failedPost(
+          openId,
+          account.username,
+          language,
+          options,
+          `This carousel has nothing written in ${language}.`,
+        ),
+      );
+      continue;
+    }
+
+    try {
+      const { publishId } = await publishCarousel({
+        openId,
+        // TikTok takes the first line as the title.
+        title: (
+          carousel.slides[0]?.text[language]?.title ?? carousel.theme
+        ).slice(0, 90),
+        description: caption,
+        imageUrls: urls,
+        coverIndex: carousel.coverIndex,
+        postMode: options.postMode,
+        privacyLevel: options.privacyLevel,
+        brandContentToggle: options.brandContentToggle,
+        brandOrganicToggle: options.brandOrganicToggle,
+      });
+
+      posts.push({
+        openId,
+        username: account.username,
+        language,
+        postMode: options.postMode,
+        privacyLevel: options.privacyLevel ?? null,
+        brandContentToggle: Boolean(options.brandContentToggle),
+        brandOrganicToggle: Boolean(options.brandOrganicToggle),
+        publishId,
+        publishedAt: new Date().toISOString(),
+        error: null,
+      });
+    } catch (err) {
+      posts.push(
+        failedPost(
+          openId,
+          account.username,
+          language,
+          options,
+          err instanceof Error ? err.message : "Publishing failed.",
+        ),
+      );
+    }
+  }
+
+  // Keep results for accounts that were not part of this run.
+  const untouched = carousel.posts.filter(
+    (p) => !posts.some((n) => n.openId === p.openId),
+  );
+  const allPosts = [...untouched, ...posts];
+  const publishedCount = posts.filter((p) => p.publishId).length;
+
+  const updated: CarouselRecord = {
+    ...carousel,
+    posts: allPosts,
+    status: allPosts.some((p) => p.publishId) ? "published" : "failed",
+    updatedAt: new Date().toISOString(),
+  };
+  await store.saveCarousel(updated);
+
+  return {
+    carousel: updated,
+    posts,
+    publishedCount,
+    failedCount: posts.length - publishedCount,
+  };
+}
+
+function failedPost(
+  openId: string,
+  username: string,
+  language: ContentLocale,
+  options: PublishOptions,
+  error: string,
+): CarouselPost {
+  return {
+    openId,
+    username,
+    language,
+    postMode: options.postMode,
+    privacyLevel: options.privacyLevel ?? null,
+    brandContentToggle: Boolean(options.brandContentToggle),
+    brandOrganicToggle: Boolean(options.brandOrganicToggle),
+    publishId: null,
+    publishedAt: null,
+    error,
+  };
 }

@@ -1,4 +1,8 @@
-import { LOCALE_WRITING, type Locale } from "@/lib/i18n";
+import {
+  CONTENT_LOCALE_LABELS,
+  LOCALE_WRITING,
+  type ContentLocale,
+} from "@/lib/i18n";
 
 /**
  * Carousel ideation prompts.
@@ -11,15 +15,19 @@ import { LOCALE_WRITING, type Locale } from "@/lib/i18n";
  *  - the *type* of listicle decides what a slide even is - a plant, a tip, or a
  *    mistake - and each type gets its own rules for title, subtitle and visual.
  *
- * Simplified in one respect: carousels are generated one language at a time
- * rather than as a multi-language dictionary, which matches how the rest of
- * this engine models locale.
+ * Every text field comes back as a dictionary keyed by language, so one
+ * generation run feeds every connected account at once. Asking the model for
+ * all languages together also keeps them consistent: the same idea, adapted,
+ * rather than five independent takes that drift apart.
  */
+
+/** A text field in every requested language. */
+export type MultiText = Partial<Record<ContentLocale, string>>;
 
 export interface CarouselSlideDraft {
   kind: "hook" | "content" | "cta";
-  title: string;
-  subtitle: string;
+  title: MultiText;
+  subtitle: MultiText;
   imagePrompt: string;
   /** Short query used to find a real reference photograph. */
   photoQuery: string;
@@ -27,68 +35,91 @@ export interface CarouselSlideDraft {
 
 export interface CarouselConceptDraft {
   slides: CarouselSlideDraft[];
-  caption: string;
-  hashtags: string[];
+  caption: MultiText;
+  hashtags: Partial<Record<ContentLocale, string[]>>;
 }
 
 /** Hashtags every Plenova carousel carries, as in the original engine. */
 export const REQUIRED_HASHTAGS = ["planttok", "plantmom"];
 
-export const CAROUSEL_SCHEMA = {
-  type: "object",
-  properties: {
-    slides: {
-      type: "array",
-      description:
-        "Ordered slides. First is the hook, last is the call to action.",
-      items: {
-        type: "object",
-        properties: {
-          kind: { type: "string", enum: ["hook", "content", "cta"] },
-          title: {
-            type: "string",
-            description: "Large overlay text. Very short - 2 to 6 words.",
+/**
+ * Built per request rather than declared once, because the required language
+ * keys change with the selection. Marking each language `required` is what
+ * stops the model quietly dropping Italian from slide four.
+ */
+export function carouselSchema(languages: ContentLocale[]) {
+  const multiText = (description: string) => ({
+    type: "object",
+    description,
+    properties: Object.fromEntries(
+      languages.map((l) => [l, { type: "string" }]),
+    ),
+    required: [...languages],
+  });
+
+  return {
+    type: "object",
+    properties: {
+      slides: {
+        type: "array",
+        description:
+          "Ordered slides. First is the hook, last is the call to action.",
+        items: {
+          type: "object",
+          properties: {
+            kind: { type: "string", enum: ["hook", "content", "cta"] },
+            title: multiText("Large overlay text. Very short - 2 to 6 words."),
+            subtitle: multiText("Secondary overlay line, 6 to 15 words."),
+            imagePrompt: {
+              type: "string",
+              description:
+                "Self-contained English photography brief for this slide's image.",
+            },
+            photoQuery: {
+              type: "string",
+              description:
+                "Two to four English words to look this scene up in a stock photo library.",
+            },
           },
-          subtitle: {
-            type: "string",
-            description: "Secondary overlay line, 6 to 15 words.",
-          },
-          imagePrompt: {
-            type: "string",
-            description:
-              "Self-contained English photography brief for this slide's image.",
-          },
-          photoQuery: {
-            type: "string",
-            description:
-              "Two to four English words to look this scene up in a stock photo library, e.g. 'monstera living room'. Broad, not literal.",
-          },
+          required: ["kind", "title", "subtitle", "imagePrompt", "photoQuery"],
         },
-        required: ["kind", "title", "subtitle", "imagePrompt", "photoQuery"],
+      },
+      caption: multiText("TikTok caption, without hashtags."),
+      hashtags: {
+        type: "object",
+        description: "6 to 12 hashtags per language, lowercase, no # prefix.",
+        properties: Object.fromEntries(
+          languages.map((l) => [
+            l,
+            { type: "array", items: { type: "string" } },
+          ]),
+        ),
+        required: [...languages],
       },
     },
-    caption: {
-      type: "string",
-      description: "TikTok caption, without hashtags.",
-    },
-    hashtags: {
-      type: "array",
-      description: "6 to 12 hashtags, lowercase, no # prefix.",
-      items: { type: "string" },
-    },
-  },
-  required: ["slides", "caption", "hashtags"],
-} as const;
+    required: ["slides", "caption", "hashtags"],
+  };
+}
 
-export function buildCarouselSystemInstruction(locale: Locale): string {
-  const writing = LOCALE_WRITING[locale];
+export function buildCarouselSystemInstruction(
+  languages: ContentLocale[],
+): string {
+  const list = languages
+    .map((l) => `${l} (${LOCALE_WRITING[l].language})`)
+    .join(", ");
+
   return [
     "You are an organic TikTok content creator specialised in houseplants, working for Plenova, a plant identification and care app.",
     "You design photo carousels that people save and share, not adverts.",
     "",
-    `OUTPUT LANGUAGE: write every reader-facing field - title, subtitle, caption, hashtags - in ${writing.language}.`,
-    `Audience: ${writing.market}`,
-    "The imagePrompt field is the single exception: always write it in English, because it is fed to an image model.",
+    `LANGUAGES: every reader-facing field - title, subtitle, caption, hashtags - must be returned as a dictionary containing ALL of: ${list}.`,
+    "No language may be missing from any field. A missing key breaks the account that publishes in it.",
+    "",
+    "Adapt rather than translate. Each version must read as though written by a native speaker for their own market:",
+    ...languages.map((l) => `- ${LOCALE_WRITING[l].language}: ${LOCALE_WRITING[l].market}`),
+    "Hashtags especially are not translations - they are the tags people actually use in that language.",
+    "",
+    "The imagePrompt and photoQuery fields are the exceptions: always English, because they feed an image model and a stock photo search.",
     "",
     "Non-negotiable rules:",
     "- Every horticultural claim must be accurate. If a plant is toxic to pets, say so plainly.",
@@ -100,7 +131,7 @@ export function buildCarouselSystemInstruction(locale: Locale): string {
 
 export interface CarouselPromptInput {
   theme: string;
-  locale: Locale;
+  languages: ContentLocale[];
   plantName?: string;
   /** Themes already used, so a new carousel does not repeat one. */
   existingThemes?: string[];
@@ -163,7 +194,7 @@ export function buildCarouselPrompt(input: CarouselPromptInput): string {
     "",
     "## Caption and hashtags",
     "Caption: 1 to 3 sentences, no hashtags inside it, ending on a light invitation to save the post.",
-    `Hashtags: 6 to 12, lowercase, no # prefix. Always include ${REQUIRED_HASHTAGS.join(" and ")}.`,
+    `Hashtags: 6 to 12 per language, lowercase, no # prefix. Always include ${REQUIRED_HASHTAGS.join(" and ")} in every language.`,
   ];
 
   if (existingThemes && existingThemes.length > 0) {

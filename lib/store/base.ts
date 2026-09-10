@@ -5,7 +5,8 @@ import type {
   MediaAsset,
   PinRecord,
   PinterestConnection,
-  TikTokConnection,
+  TikTokAccount,
+  TikTokAccounts,
 } from "@/lib/types";
 import { filterMedia, type MediaFilter } from "@/lib/media";
 import type { Locale } from "@/lib/i18n";
@@ -153,13 +154,43 @@ export abstract class DocumentStore implements EngineStore {
     }
   }
 
-  async getTikTokConnection(): Promise<TikTokConnection | null> {
-    return this.readConnection<TikTokConnection>((doc) => doc.tiktok ?? null, "TikTok");
+  /**
+   * All accounts live in one encrypted envelope rather than one each: they are
+   * read together on every publish, and a single blob keeps that to one
+   * decrypt instead of N.
+   */
+  private async readAccounts(): Promise<TikTokAccounts> {
+    return (
+      (await this.readConnection<TikTokAccounts>(
+        (doc) => doc.tiktok ?? null,
+        "TikTok",
+      )) ?? {}
+    );
   }
 
-  async setTikTokConnection(connection: TikTokConnection | null): Promise<void> {
+  async listTikTokAccounts(): Promise<TikTokAccount[]> {
+    return Object.values(await this.readAccounts()).sort((a, b) =>
+      a.username.localeCompare(b.username),
+    );
+  }
+
+  async getTikTokAccount(openId: string): Promise<TikTokAccount | null> {
+    return (await this.readAccounts())[openId] ?? null;
+  }
+
+  async saveTikTokAccount(account: TikTokAccount): Promise<void> {
+    const accounts = await this.readAccounts();
+    accounts[account.openId] = account;
     await this.mutate((doc) => {
-      doc.tiktok = connection ? encryptJson(connection) : null;
+      doc.tiktok = encryptJson(accounts);
+    });
+  }
+
+  async deleteTikTokAccount(openId: string): Promise<void> {
+    const accounts = await this.readAccounts();
+    delete accounts[openId];
+    await this.mutate((doc) => {
+      doc.tiktok = Object.keys(accounts).length > 0 ? encryptJson(accounts) : null;
     });
   }
 

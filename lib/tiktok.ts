@@ -7,7 +7,8 @@ import {
 } from "@/lib/config";
 import { badRequest, notConfigured, notConnected, rateLimited, upstream } from "@/lib/errors";
 import { getStore } from "@/lib/store";
-import type { TikTokConnection, TikTokCreatorInfo } from "@/lib/types";
+import type { TikTokAccount, TikTokCreatorInfo } from "@/lib/types";
+import { DEFAULT_LOCALE, type ContentLocale } from "@/lib/i18n";
 
 /**
  * TikTok Content Posting API.
@@ -92,10 +93,10 @@ async function requestToken(body: URLSearchParams): Promise<TokenResponse> {
   return parsed;
 }
 
-function toConnection(
+function toAccount(
   token: TokenResponse,
-  previous?: TikTokConnection | null,
-): TikTokConnection {
+  previous?: TikTokAccount | null,
+): TikTokAccount {
   const now = Date.now();
   return {
     accessToken: token.access_token!,
@@ -111,14 +112,17 @@ function toConnection(
     username: previous?.username ?? "",
     displayName: previous?.displayName ?? "",
     avatarUrl: previous?.avatarUrl ?? null,
+    // Defaults to the primary language; the operator assigns the real one.
+    language: previous?.language ?? (DEFAULT_LOCALE as ContentLocale),
     connectedAt: previous?.connectedAt ?? new Date().toISOString(),
   };
 }
 
+/** Exchanges the code and files the account alongside the others. */
 export async function exchangeCodeForToken(
   code: string,
   verifier: string,
-): Promise<TikTokConnection> {
+): Promise<TikTokAccount> {
   if (!isTikTokConfigured()) throw notConfigured("TikTok is not configured.");
 
   const token = await requestToken(
@@ -132,20 +136,22 @@ export async function exchangeCodeForToken(
     }),
   );
 
-  let connection = toConnection(token);
+  let connection = toAccount(token);
   try {
     connection = { ...connection, ...(await fetchProfile(connection)) };
   } catch {
     // A missing profile must not break an otherwise valid connection.
   }
 
-  await getStore().setTikTokConnection(connection);
+  if (!connection.openId) {
+    throw upstream("TikTok returned no open id, so the account cannot be stored.");
+  }
+  await getStore().saveTikTokAccount(connection);
   return connection;
 }
 
-async function refreshConnection(
-  connection: TikTokConnection,
-): Promise<TikTokConnection> {
+async function refreshAccount(account: TikTokAccount): Promise<TikTokAccount> {
+  const connection = account;
   if (!connection.refreshToken) {
     throw notConnected(
       "The TikTok token expired and no refresh token is stored. Reconnect the account.",
@@ -159,26 +165,43 @@ async function refreshConnection(
       refresh_token: connection.refreshToken,
     }),
   );
-  const refreshed = toConnection(token, connection);
-  await getStore().setTikTokConnection(refreshed);
+  const refreshed = toAccount(token, connection);
+  await getStore().saveTikTokAccount(refreshed);
   return refreshed;
 }
 
-async function activeConnection(): Promise<TikTokConnection> {
-  const connection = await getStore().getTikTokConnection();
-  if (!connection) throw notConnected("No TikTok account is connected.");
+/**
+ * Returns one account with a live token, refreshing when it nears expiry.
+ * Every caller names the account: with several connected there is no
+ * "current" one.
+ */
+async function activeAccount(openId: string): Promise<TikTokAccount> {
+  const account = await getStore().getTikTokAccount(openId);
+  if (!account) throw notConnected(`TikTok account ${openId} is not connected.`);
 
   if (
-    connection.expiresAt !== null &&
-    connection.expiresAt - TOKEN_REFRESH_MARGIN_MS <= Date.now()
+    account.expiresAt !== null &&
+    account.expiresAt - TOKEN_REFRESH_MARGIN_MS <= Date.now()
   ) {
-    return refreshConnection(connection);
+    return refreshAccount(account);
   }
-  return connection;
+  return account;
 }
 
-export async function disconnect(): Promise<void> {
-  await getStore().setTikTokConnection(null);
+export async function disconnect(openId: string): Promise<void> {
+  await getStore().deleteTikTokAccount(openId);
+}
+
+/** Assigns the language an account publishes in. */
+export async function setAccountLanguage(
+  openId: string,
+  language: ContentLocale,
+): Promise<TikTokAccount> {
+  const account = await getStore().getTikTokAccount(openId);
+  if (!account) throw notConnected(`TikTok account ${openId} is not connected.`);
+  const updated = { ...account, language };
+  await getStore().saveTikTokAccount(updated);
+  return updated;
 }
 
 // ------------------------------------------------------------ API calls ---
@@ -227,8 +250,8 @@ interface RawProfile {
 }
 
 async function fetchProfile(
-  connection: TikTokConnection,
-): Promise<Partial<TikTokConnection>> {
+  connection: TikTokAccount,
+): Promise<Partial<TikTokAccount>> {
   const fields = "open_id,display_name,avatar_url,username";
   const raw = await apiCall<RawProfile>(
     `/v2/user/info/?fields=${fields}`,
@@ -263,8 +286,8 @@ interface RawCreatorInfo {
  * this live response, and their choice must be honoured. Hard-coding the list
  * is grounds for rejection.
  */
-export async function getCreatorInfo(): Promise<TikTokCreatorInfo> {
-  const connection = await activeConnection();
+export async function getCreatorInfo(openId: string): Promise<TikTokCreatorInfo> {
+  const connection = await activeAccount(openId);
   const raw = await apiCall<RawCreatorInfo>(
     "/v2/post/publish/creator_info/query/",
     connection.accessToken,
@@ -284,6 +307,8 @@ export async function getCreatorInfo(): Promise<TikTokCreatorInfo> {
 }
 
 export interface PublishCarouselInput {
+  /** Which connected account publishes this. */
+  openId: string;
   title: string;
   description: string;
   imageUrls: string[];
@@ -320,7 +345,7 @@ export async function publishCarousel(
     );
   }
 
-  const connection = await activeConnection();
+  const connection = await activeAccount(input.openId);
 
   const needed = input.postMode === "DIRECT_POST" ? "video.publish" : "video.upload";
   if (connection.scopes.length > 0 && !connection.scopes.includes(needed)) {
@@ -367,9 +392,10 @@ export async function publishCarousel(
 }
 
 export async function getPublishStatus(
+  openId: string,
   publishId: string,
 ): Promise<{ status: string; failReason: string | null }> {
-  const connection = await activeConnection();
+  const connection = await activeAccount(openId);
   const raw = await apiCall<{
     data?: { status?: string; fail_reason?: string };
   }>("/v2/post/publish/status/fetch/", connection.accessToken, {
@@ -382,36 +408,42 @@ export async function getPublishStatus(
   };
 }
 
-export interface TikTokStatus {
-  configured: boolean;
-  connected: boolean;
-  username: string | null;
-  displayName: string | null;
+/** One account as the dashboard sees it. Never carries a token. */
+export interface TikTokAccountView {
+  openId: string;
+  username: string;
+  displayName: string;
   avatarUrl: string | null;
+  language: ContentLocale;
   scopes: string[];
   canDirectPost: boolean;
   canDraft: boolean;
-  connectedAt: string | null;
+  connectedAt: string;
   expiresAt: string | null;
+}
+
+export interface TikTokStatus {
+  configured: boolean;
+  accounts: TikTokAccountView[];
 }
 
 /** Never returns tokens - this feeds a client component. */
 export async function getStatus(): Promise<TikTokStatus> {
-  const configured = isTikTokConfigured();
-  const connection = await getStore().getTikTokConnection();
+  const accounts = await getStore().listTikTokAccounts();
 
   return {
-    configured,
-    connected: Boolean(connection),
-    username: connection?.username || null,
-    displayName: connection?.displayName || null,
-    avatarUrl: connection?.avatarUrl ?? null,
-    scopes: connection?.scopes ?? [],
-    canDirectPost: Boolean(connection?.scopes.includes("video.publish")),
-    canDraft: Boolean(connection?.scopes.includes("video.upload")),
-    connectedAt: connection?.connectedAt ?? null,
-    expiresAt: connection?.expiresAt
-      ? new Date(connection.expiresAt).toISOString()
-      : null,
+    configured: isTikTokConfigured(),
+    accounts: accounts.map((a) => ({
+      openId: a.openId,
+      username: a.username,
+      displayName: a.displayName,
+      avatarUrl: a.avatarUrl,
+      language: a.language,
+      scopes: a.scopes,
+      canDirectPost: a.scopes.includes("video.publish"),
+      canDraft: a.scopes.includes("video.upload"),
+      connectedAt: a.connectedAt,
+      expiresAt: a.expiresAt ? new Date(a.expiresAt).toISOString() : null,
+    })),
   };
 }

@@ -12,19 +12,24 @@ import {
   Select,
 } from "@/components/ui";
 import { PublishDialog } from "@/components/tiktok/PublishDialog";
+import type { AccountView } from "@/components/tiktok/TikTokPanel";
 import { captureSlides } from "@/lib/capture";
 import type { OverlayStyle } from "@/lib/overlay";
-import { translator, type Locale } from "@/lib/i18n";
+import {
+  CONTENT_LOCALES,
+  CONTENT_LOCALE_LABELS,
+  translator,
+  type ContentLocale,
+  type Locale,
+} from "@/lib/i18n";
 import type { CarouselRecord } from "@/lib/types";
-import { relativeTime } from "@/lib/utils";
+import { cn, relativeTime } from "@/lib/utils";
 
 interface Props {
   uiLocale: Locale;
   initialCarousels: CarouselRecord[];
   plants: { slug: string; name: string }[];
-  canDirectPost: boolean;
-  canDraft: boolean;
-  connected: boolean;
+  accounts: AccountView[];
   canGenerate: boolean;
   hasPexels: boolean;
 }
@@ -41,9 +46,7 @@ export function CarouselStudio({
   uiLocale,
   initialCarousels,
   plants,
-  canDirectPost,
-  canDraft,
-  connected,
+  accounts,
   canGenerate,
   hasPexels,
 }: Props) {
@@ -52,17 +55,34 @@ export function CarouselStudio({
   const [carousels, setCarousels] = useState(initialCarousels);
   const [theme, setTheme] = useState("");
   const [plantSlug, setPlantSlug] = useState("");
-  const [postLocale, setPostLocale] = useState<Locale>(uiLocale);
+  // Default to the languages the connected accounts actually publish in - the
+  // point of writing several is feeding those accounts, not filling a matrix.
+  const [languages, setLanguages] = useState<ContentLocale[]>(() => {
+    const used = Array.from(new Set(accounts.map((a) => a.language)));
+    return used.length > 0 ? used : [uiLocale as ContentLocale];
+  });
+  const [imageSource, setImageSource] = useState<"generate" | "photo" | "library">(
+    hasPexels ? "photo" : "generate",
+  );
+  const [overlayStyle, setOverlayStyle] = useState<OverlayStyle>("stroke");
+
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [publishing, setPublishing] = useState<CarouselRecord | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [previewLang, setPreviewLang] = useState<ContentLocale>(
+    uiLocale as ContentLocale,
+  );
   const [composing, setComposing] = useState<string | null>(null);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
-  const [overlayStyle, setOverlayStyle] = useState<OverlayStyle>("stroke");
-  const [imageSource, setImageSource] = useState<"generate" | "photo" | "library">(
-    hasPexels ? "photo" : "generate",
-  );
+
+  function toggleLanguage(lang: ContentLocale) {
+    setLanguages((current) =>
+      current.includes(lang)
+        ? current.filter((l) => l !== lang)
+        : [...current, lang],
+    );
+  }
 
   async function generate() {
     setBusy(true);
@@ -73,7 +93,7 @@ export function CarouselStudio({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           theme: theme.trim(),
-          locale: postLocale,
+          languages,
           plantSlug: plantSlug || undefined,
           imageSource,
         }),
@@ -88,6 +108,7 @@ export function CarouselStudio({
       }
       setCarousels((current) => [data.carousel!, ...current]);
       setExpanded(data.carousel.id);
+      setPreviewLang(data.carousel.languages[0] ?? previewLang);
       setTheme("");
     } catch {
       setError(t("preview.unreachable"));
@@ -103,41 +124,59 @@ export function CarouselStudio({
   }
 
   /**
-   * Burns each slide's text into its image, here in the browser.
+   * Burns each slide's text into its image, here in the browser, once per
+   * language. The photograph is shared; only the words over it change.
    *
-   * Done client-side because the design relies on CSS no server-side renderer
+   * Client-side because the design relies on CSS no server-side renderer
    * implements - text stroke with paint-order, per-line pill backgrounds - and
    * this browser is the same engine the preview uses.
    */
   async function compose(carousel: CarouselRecord) {
     setComposing(carousel.id);
     setError(null);
-    setProgress({ done: 0, total: carousel.slides.length });
-    try {
-      const captured = await captureSlides(
-        carousel.slides,
-        { style: overlayStyle },
-        (done, total) => setProgress({ done, total }),
-      );
+    const total = carousel.slides.length * carousel.languages.length;
+    setProgress({ done: 0, total });
 
+    try {
       let latest = carousel;
-      // One request per slide: a whole carousel of base64 JPEGs in one body
-      // would exceed the platform request limit.
-      for (const shot of captured) {
-        const res = await fetch(`/api/carousels/${carousel.id}/render`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ index: shot.index, dataUrl: shot.dataUrl }),
-        });
-        const data = (await res.json()) as {
-          carousel?: CarouselRecord;
-          error?: { message?: string };
-        };
-        if (!res.ok || !data.carousel) {
-          setError(data.error?.message ?? t("preview.requestFailed"));
-          return;
+      let done = 0;
+
+      for (const language of carousel.languages) {
+        const slides = carousel.slides.map((s) => ({
+          ...s,
+          title: s.text[language]?.title ?? "",
+          subtitle: s.text[language]?.subtitle ?? "",
+        }));
+
+        const captured = await captureSlides(
+          slides,
+          { style: overlayStyle },
+          () => setProgress({ done: ++done, total }),
+        );
+
+        // One request per slide: a whole carousel of base64 JPEGs in one body
+        // would exceed the platform request limit, and several languages
+        // multiply that.
+        for (const shot of captured) {
+          const res = await fetch(`/api/carousels/${carousel.id}/render`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              index: shot.index,
+              language,
+              dataUrl: shot.dataUrl,
+            }),
+          });
+          const data = (await res.json()) as {
+            carousel?: CarouselRecord;
+            error?: { message?: string };
+          };
+          if (!res.ok || !data.carousel) {
+            setError(data.error?.message ?? t("preview.requestFailed"));
+            return;
+          }
+          latest = data.carousel;
         }
-        latest = data.carousel;
       }
 
       setCarousels((current) =>
@@ -165,7 +204,7 @@ export function CarouselStudio({
           {t("carousels.buildHint")}
         </p>
 
-        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,200px)_minmax(0,160px)]">
+        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,220px)]">
           <Field label={t("carousels.theme")} htmlFor="theme">
             <Input
               id="theme"
@@ -190,17 +229,36 @@ export function CarouselStudio({
               ))}
             </Select>
           </Field>
+        </div>
 
-          <Field label={t("generate.pinLanguage")} htmlFor="loc">
-            <Select
-              id="loc"
-              value={postLocale}
-              onChange={(e) => setPostLocale(e.target.value as Locale)}
-            >
-              <option value="fr">Français</option>
-              <option value="en">English</option>
-            </Select>
-          </Field>
+        <div className="mt-4">
+          <p className="mb-1.5 text-[13px] font-medium">
+            {t("carousels.languages")}
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {CONTENT_LOCALES.map((lang) => {
+              const on = languages.includes(lang);
+              return (
+                <button
+                  key={lang}
+                  type="button"
+                  onClick={() => toggleLanguage(lang)}
+                  aria-pressed={on}
+                  className={cn(
+                    "rounded-full border px-3 py-1 text-[12.5px] font-medium transition-colors",
+                    on
+                      ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent-ink)]"
+                      : "border-[var(--color-line)] text-[var(--color-ink-soft)] hover:border-[var(--color-line-strong)]",
+                  )}
+                >
+                  {CONTENT_LOCALE_LABELS[lang]}
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-1.5 text-[12.5px] text-[var(--color-ink-faint)]">
+            {t("carousels.languagesHint")}
+          </p>
         </div>
 
         <div className="mt-4 grid gap-4 border-t border-[var(--color-line)] pt-4 md:grid-cols-2">
@@ -223,10 +281,12 @@ export function CarouselStudio({
               <option value="library">{t("carousels.sourceLibrary")}</option>
             </Select>
           </Field>
-        </div>
 
-        <div className="mt-4 flex flex-wrap items-end gap-3">
-          <Field label={t("carousels.overlayStyle")} htmlFor="ov">
+          <Field
+            label={t("carousels.overlayStyle")}
+            htmlFor="ov"
+            hint={t("carousels.overlayHint")}
+          >
             <Select
               id="ov"
               value={overlayStyle}
@@ -237,9 +297,6 @@ export function CarouselStudio({
               <option value="none">{t("carousels.styleNone")}</option>
             </Select>
           </Field>
-          <p className="pb-2 text-[12.5px] text-[var(--color-ink-faint)]">
-            {t("carousels.overlayHint")}
-          </p>
         </div>
 
         <div className="mt-3 flex flex-wrap gap-1.5">
@@ -260,7 +317,9 @@ export function CarouselStudio({
             variant="primary"
             onClick={generate}
             loading={busy}
-            disabled={!canGenerate || theme.trim().length < 3}
+            disabled={
+              !canGenerate || theme.trim().length < 3 || languages.length === 0
+            }
           >
             {busy ? t("carousels.generating") : t("carousels.generate")}
           </Button>
@@ -295,6 +354,13 @@ export function CarouselStudio({
         <div className="space-y-4">
           {carousels.map((carousel) => {
             const open = expanded === carousel.id;
+            const lang = carousel.languages.includes(previewLang)
+              ? previewLang
+              : (carousel.languages[0] ?? ("en" as ContentLocale));
+            const missingComposites = carousel.slides.some((s) =>
+              carousel.languages.some((l) => !s.composed[l]),
+            );
+
             return (
               <Card key={carousel.id} className="overflow-hidden">
                 <div className="flex flex-wrap items-center gap-4 p-4">
@@ -304,40 +370,51 @@ export function CarouselStudio({
                     className="flex shrink-0 -space-x-3"
                     aria-expanded={open}
                   >
-                    {carousel.slideUrls.slice(0, 4).map((url, i) => (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        key={`${carousel.id}-${i}`}
-                        src={url}
-                        alt=""
-                        className="size-14 rounded-[9px] border-2 border-[var(--color-surface)] object-cover"
-                      />
-                    ))}
+                    {carousel.slides.slice(0, 4).map((slide, i) => {
+                      const url = slide.composed[lang] ?? slide.imageUrl;
+                      return url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          key={`${carousel.id}-${i}`}
+                          src={url}
+                          alt=""
+                          className="size-14 rounded-[9px] border-2 border-[var(--color-surface)] object-cover"
+                        />
+                      ) : null;
+                    })}
                   </button>
 
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[14px] font-medium">
-                      {carousel.title}
+                      {carousel.slides[0]?.text[lang]?.title ?? carousel.theme}
                     </p>
                     <p className="mt-0.5 truncate text-[12.5px] text-[var(--color-ink-faint)]">
                       {carousel.theme} ·{" "}
                       {t("carousels.slides", { n: carousel.slides.length })} ·{" "}
                       {relativeTime(carousel.createdAt)}
                     </p>
-                    {carousel.error ? (
-                      <p className="mt-1 line-clamp-2 text-[12px] text-[var(--color-danger)]">
-                        {carousel.error}
-                      </p>
-                    ) : carousel.slides.some((slide) => !slide.composedUrl) ? (
+                    {missingComposites ? (
                       <p className="mt-1 text-[12px] text-[var(--color-warn)]">
                         {t("carousels.notComposed")}
                       </p>
                     ) : null}
+                    {carousel.posts.some((p) => p.error) ? (
+                      <p className="mt-1 line-clamp-2 text-[12px] text-[var(--color-danger)]">
+                        {carousel.posts.find((p) => p.error)?.error}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                    {carousel.languages.map((l) => (
+                      <Badge key={l} className="uppercase">
+                        {l}
+                      </Badge>
+                    ))}
+                    <Badge className="capitalize">{carousel.status}</Badge>
                   </div>
 
                   <div className="flex shrink-0 items-center gap-2">
-                    <Badge className="uppercase">{carousel.locale}</Badge>
-                    <Badge className="capitalize">{carousel.status}</Badge>
                     <Button
                       onClick={() => void compose(carousel)}
                       loading={composing === carousel.id}
@@ -345,13 +422,13 @@ export function CarouselStudio({
                     >
                       {composing === carousel.id
                         ? `${progress.done}/${progress.total}`
-                        : carousel.slides.every((s) => s.composedUrl)
-                          ? t("carousels.recompose")
-                          : t("carousels.compose")}
+                        : missingComposites
+                          ? t("carousels.compose")
+                          : t("carousels.recompose")}
                     </Button>
                     <Button
                       onClick={() => setPublishing(carousel)}
-                      disabled={!connected || carousel.status === "published"}
+                      disabled={accounts.length === 0}
                     >
                       {t("carousels.publish")}
                     </Button>
@@ -367,27 +444,50 @@ export function CarouselStudio({
 
                 {open ? (
                   <div className="border-t border-[var(--color-line)] bg-[var(--color-surface-muted)] p-4">
-                    <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
-                      {carousel.slides.map((slide, i) => (
-                        <div key={`${carousel.id}-s${i}`} className="space-y-1.5">
-                          {slide.composedUrl ?? slide.imageUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={slide.composedUrl ?? slide.imageUrl!}
-                              alt={slide.title}
-                              className="aspect-[4/5] w-full rounded-[9px] object-cover"
-                            />
-                          ) : (
-                            <div className="aspect-[4/5] w-full rounded-[9px] bg-[var(--color-line)]" />
+                    <div className="mb-3 flex flex-wrap gap-1.5">
+                      {carousel.languages.map((l) => (
+                        <button
+                          key={l}
+                          type="button"
+                          onClick={() => setPreviewLang(l)}
+                          aria-pressed={l === lang}
+                          className={cn(
+                            "rounded-full px-2.5 py-1 text-[12px] font-medium transition-colors",
+                            l === lang
+                              ? "bg-[var(--color-accent)] text-white"
+                              : "bg-[var(--color-surface)] text-[var(--color-ink-soft)]",
                           )}
-                          <p className="text-[12px] font-medium leading-snug">
-                            {i + 1}. {slide.title}
-                          </p>
-                          <p className="text-[11.5px] leading-snug text-[var(--color-ink-faint)]">
-                            {slide.subtitle}
-                          </p>
-                        </div>
+                        >
+                          {CONTENT_LOCALE_LABELS[l]}
+                        </button>
                       ))}
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                      {carousel.slides.map((slide, i) => {
+                        const url = slide.composed[lang] ?? slide.imageUrl;
+                        const text = slide.text[lang];
+                        return (
+                          <div key={`${carousel.id}-s${i}`} className="space-y-1.5">
+                            {url ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={url}
+                                alt={text?.title ?? ""}
+                                className="aspect-[4/5] w-full rounded-[9px] object-cover"
+                              />
+                            ) : (
+                              <div className="aspect-[4/5] w-full rounded-[9px] bg-[var(--color-line)]" />
+                            )}
+                            <p className="text-[12px] font-medium leading-snug">
+                              {i + 1}. {text?.title ?? "—"}
+                            </p>
+                            <p className="text-[11.5px] leading-snug text-[var(--color-ink-faint)]">
+                              {text?.subtitle ?? ""}
+                            </p>
+                          </div>
+                        );
+                      })}
                     </div>
 
                     <div className="mt-4 border-t border-[var(--color-line)] pt-3">
@@ -395,9 +495,36 @@ export function CarouselStudio({
                         {t("carousels.caption")}
                       </p>
                       <p className="whitespace-pre-line text-[12.5px] leading-relaxed text-[var(--color-ink-soft)]">
-                        {carousel.description}
+                        {carousel.caption[lang] ?? ""}
                       </p>
                     </div>
+
+                    {carousel.posts.length > 0 ? (
+                      <div className="mt-4 border-t border-[var(--color-line)] pt-3">
+                        <p className="mb-1.5 text-[12.5px] font-medium">
+                          {t("carousels.posts")}
+                        </p>
+                        <ul className="space-y-1 text-[12px]">
+                          {carousel.posts.map((post) => (
+                            <li key={post.openId}>
+                              <span className="font-medium">@{post.username}</span>{" "}
+                              <span className="text-[var(--color-ink-faint)] uppercase">
+                                {post.language}
+                              </span>{" "}
+                              {post.publishId ? (
+                                <span className="text-[var(--color-accent)]">
+                                  {post.publishId}
+                                </span>
+                              ) : (
+                                <span className="text-[var(--color-danger)]">
+                                  {post.error}
+                                </span>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
               </Card>
@@ -410,8 +537,7 @@ export function CarouselStudio({
         <PublishDialog
           uiLocale={uiLocale}
           carousel={publishing}
-          canDirectPost={canDirectPost}
-          canDraft={canDraft}
+          accounts={accounts}
           onClose={() => setPublishing(null)}
           onPublished={applyPublished}
         />

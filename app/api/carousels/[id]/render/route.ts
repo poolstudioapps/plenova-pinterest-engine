@@ -1,6 +1,7 @@
 import { handle, ok } from "@/lib/api";
 import { saveComposedSlide } from "@/lib/carousel";
 import { badRequest } from "@/lib/errors";
+import { isContentLocale } from "@/lib/i18n";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -11,16 +12,17 @@ type Params = { params: Promise<{ id: string }> };
 const MAX_BYTES = 8 * 1024 * 1024;
 
 /**
- * Receives one slide composed in the browser and stores it.
+ * Receives one slide, in one language, composed in the browser.
  *
  * One slide per request on purpose: a whole carousel of base64 JPEGs in a
- * single body would run past the platform's request size limit.
+ * single body would run past the platform's request size limit - and with five
+ * languages there are five times as many.
  */
 export async function POST(request: Request, { params }: Params) {
   return handle(async () => {
     const { id } = await params;
 
-    let body: { index?: unknown; dataUrl?: unknown };
+    let body: { index?: unknown; language?: unknown; dataUrl?: unknown };
     try {
       body = (await request.json()) as typeof body;
     } catch {
@@ -31,6 +33,9 @@ export async function POST(request: Request, { params }: Params) {
     if (!Number.isInteger(index) || index < 0 || index > 34) {
       throw badRequest("index must be a slide position.");
     }
+    if (!isContentLocale(body.language)) {
+      throw badRequest("language must be one of the supported content locales.");
+    }
 
     const dataUrl = typeof body.dataUrl === "string" ? body.dataUrl : "";
     const match = dataUrl.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
@@ -40,7 +45,13 @@ export async function POST(request: Request, { params }: Params) {
     if (data.length === 0) throw badRequest("The composed slide is empty.");
     if (data.length > MAX_BYTES) throw badRequest("The composed slide is too large.");
 
-    const carousel = await saveComposedSlide(id, index, data, match[1]!);
+    const carousel = await saveComposedSlide(
+      id,
+      index,
+      body.language,
+      data,
+      match[1]!,
+    );
     return ok({ carousel });
   });
 }

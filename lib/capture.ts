@@ -5,8 +5,8 @@ import {
   SLIDE_WIDTH,
   buildSlideHtml,
   type OverlayOptions,
+  type SlideCopy,
 } from "@/lib/overlay";
-import type { CarouselSlide } from "@/lib/types";
 
 /**
  * Browser-side slide capture.
@@ -58,8 +58,11 @@ async function loadBackground(mediaId: string): Promise<string> {
 }
 
 /** Renders one slide and returns it as a JPEG data URL. */
+/** One slide to compose: an image, and the words for one language. */
+export type CapturableSlide = SlideCopy & { mediaId: string | null };
+
 export async function captureSlide(
-  slide: CarouselSlide,
+  slide: CapturableSlide,
   options: Partial<OverlayOptions> = {},
 ): Promise<string> {
   if (!slide.mediaId) throw new Error("This slide has no image to compose on.");
@@ -107,7 +110,7 @@ export interface CapturedSlide {
 
 /** Renders every slide of a carousel, reporting progress as it goes. */
 export async function captureSlides(
-  slides: CarouselSlide[],
+  slides: CapturableSlide[],
   options: Partial<OverlayOptions> = {},
   onProgress?: (done: number, total: number) => void,
 ): Promise<CapturedSlide[]> {

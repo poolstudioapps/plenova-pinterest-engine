@@ -10,7 +10,7 @@ export async function GET() {
     return ok({
       ...status,
       // TikTok pulls slides by URL, so public hosting is as necessary as scope.
-      canPublish: status.connected && canHostPublicly(),
+      canPublish: status.accounts.length > 0 && canHostPublicly(),
     });
   });
 }
