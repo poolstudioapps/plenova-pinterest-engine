@@ -5,6 +5,7 @@ import { PLANTS } from "@/lib/data/plants";
 import { translator } from "@/lib/i18n";
 import { getUiLocale } from "@/lib/locale-server";
 import { isGeminiConfigured } from "@/lib/config";
+import { isPexelsConfigured } from "@/lib/pexels";
 import { getStore } from "@/lib/store";
 import { getStatus } from "@/lib/tiktok";
 
@@ -40,6 +41,7 @@ export default async function CarouselsPage() {
         canDraft={status.canDraft}
         connected={status.connected}
         canGenerate={isGeminiConfigured()}
+        hasPexels={isPexelsConfigured()}
       />
     </>
   );

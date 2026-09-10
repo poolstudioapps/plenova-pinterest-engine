@@ -133,6 +133,12 @@ export interface MediaAsset {
   /** Where it came from, so an uploaded asset is distinguishable. */
   source: "pin" | "carousel" | "upload";
   sourceId: string | null;
+  /**
+   * Credit for the photograph used as a visual reference, when one was.
+   * Nothing from the reference is republished, but recording it keeps the
+   * provenance of every image traceable.
+   */
+  referencePhotographer?: string | null;
 
   tags: string[];
   /** Reuse accounting, so the picker can avoid always serving the same shot. */

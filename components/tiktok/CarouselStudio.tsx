@@ -26,6 +26,7 @@ interface Props {
   canDraft: boolean;
   connected: boolean;
   canGenerate: boolean;
+  hasPexels: boolean;
 }
 
 /** Starting points, so the field is never an intimidating blank box. */
@@ -44,6 +45,7 @@ export function CarouselStudio({
   canDraft,
   connected,
   canGenerate,
+  hasPexels,
 }: Props) {
   const t = translator(uiLocale);
 
@@ -58,6 +60,9 @@ export function CarouselStudio({
   const [composing, setComposing] = useState<string | null>(null);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [overlayStyle, setOverlayStyle] = useState<OverlayStyle>("stroke");
+  const [imageSource, setImageSource] = useState<"generate" | "photo" | "library">(
+    hasPexels ? "photo" : "generate",
+  );
 
   async function generate() {
     setBusy(true);
@@ -70,6 +75,7 @@ export function CarouselStudio({
           theme: theme.trim(),
           locale: postLocale,
           plantSlug: plantSlug || undefined,
+          imageSource,
         }),
       });
       const data = (await res.json()) as {
@@ -197,7 +203,29 @@ export function CarouselStudio({
           </Field>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-end gap-3 border-t border-[var(--color-line)] pt-4">
+        <div className="mt-4 grid gap-4 border-t border-[var(--color-line)] pt-4 md:grid-cols-2">
+          <Field
+            label={t("carousels.imageSource")}
+            htmlFor="src"
+            hint={hasPexels ? t("carousels.sourceHint") : t("carousels.noPexels")}
+          >
+            <Select
+              id="src"
+              value={imageSource}
+              onChange={(e) =>
+                setImageSource(e.target.value as "generate" | "photo" | "library")
+              }
+            >
+              {hasPexels ? (
+                <option value="photo">{t("carousels.sourcePhoto")}</option>
+              ) : null}
+              <option value="generate">{t("carousels.sourceGenerate")}</option>
+              <option value="library">{t("carousels.sourceLibrary")}</option>
+            </Select>
+          </Field>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-end gap-3">
           <Field label={t("carousels.overlayStyle")} htmlFor="ov">
             <Select
               id="ov"

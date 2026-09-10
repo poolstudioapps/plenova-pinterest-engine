@@ -273,6 +273,8 @@ export async function generateCarouselConcept(
             title: s.title.trim(),
             subtitle: typeof s.subtitle === "string" ? s.subtitle.trim() : "",
             imagePrompt: s.imagePrompt.trim(),
+            photoQuery:
+              typeof s.photoQuery === "string" ? s.photoQuery.trim() : "",
           }))
       : [];
 
@@ -300,5 +302,77 @@ export async function generateCarouselConcept(
   } catch (err) {
     if (err && typeof err === "object" && "code" in err) throw err;
     wrapUpstream(err, "designing the carousel");
+  }
+}
+
+
+/**
+ * Produces an original image using a real photograph as reference.
+ *
+ * Text-to-image alone yields pristine, evenly-lit frames, and that polish is
+ * exactly what reads as AI. Anchoring on a real photograph carries over the
+ * things a prompt never asks for - a cable on the floor, a chipped pot, a leaf
+ * with a brown edge - while the output stays an original image rather than a
+ * copy, so nothing from the reference is republished.
+ */
+export async function reinterpretImage(
+  reference: { data: Buffer; mimeType: string },
+  brief: string,
+  aspectRatio: string,
+): Promise<GeneratedImage> {
+  const ai = getClient();
+
+  const instruction = [
+    "Use the supplied photograph as a visual reference for lighting, texture and realism.",
+    "",
+    "Produce a NEW, original photograph of this scene:",
+    brief,
+    "",
+    "It must read as a real photograph taken by a person, not a render:",
+    "- keep believable domestic imperfection - worn surfaces, a stray cable, an imperfect leaf",
+    "- natural uneven lighting rather than an evenly lit studio",
+    "- authentic depth of field and minor sensor grain",
+    "Change the room details, the pot and the framing distance so the result is",
+    "its own photograph rather than a copy of the reference.",
+    "No text, no watermark, no logo, no brand mark.",
+  ].join("\n");
+
+  try {
+    const response = await ai.models.generateContent({
+      model: config.gemini.imageModel,
+      contents: [
+        {
+          role: "user",
+          parts: [
+            {
+              inlineData: {
+                mimeType: reference.mimeType,
+                data: reference.data.toString("base64"),
+              },
+            },
+            { text: instruction },
+          ],
+        },
+      ],
+      config: {
+        responseModalities: ["IMAGE"],
+        imageConfig: { aspectRatio, imageSize: "2K" },
+      },
+    });
+
+    const parts = response.candidates?.[0]?.content?.parts ?? [];
+    for (const part of parts) {
+      const inline = part.inlineData;
+      if (inline?.data) {
+        return {
+          data: Buffer.from(inline.data, "base64"),
+          mimeType: inline.mimeType ?? "image/jpeg",
+        };
+      }
+    }
+    throw upstream("Gemini returned no image when reinterpreting the reference.");
+  } catch (err) {
+    if (err && typeof err === "object" && "code" in err) throw err;
+    wrapUpstream(err, "reinterpreting the reference photograph");
   }
 }

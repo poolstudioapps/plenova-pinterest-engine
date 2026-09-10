@@ -3,7 +3,12 @@ import { config } from "@/lib/config";
 import { getPlant } from "@/lib/data/plants";
 import { plantName as localizedPlantName } from "@/lib/data/localize";
 import { badRequest, notFound } from "@/lib/errors";
-import { generateCarouselConcept, generatePinImage } from "@/lib/gemini";
+import {
+  generateCarouselConcept,
+  generatePinImage,
+  reinterpretImage,
+} from "@/lib/gemini";
+import { findReference, isPexelsConfigured } from "@/lib/pexels";
 import { extensionFor, hostImageAt } from "@/lib/images";
 import { mediaPath, varietySlug } from "@/lib/media";
 import { getStore } from "@/lib/store";
@@ -32,8 +37,21 @@ function carouselId(): string {
 /** Slide images are square-ish 4:5, TikTok's carousel format. */
 const SLIDE_ASPECT = "4:5";
 
+/**
+ * Where slide images come from.
+ *
+ *  - `generate` : text-to-image only. Fastest, but the polish reads as AI.
+ *  - `photo`    : a real photograph from Pexels is used as a reference and
+ *                 reinterpreted into an original image. Slower, markedly more
+ *                 believable, and nothing from Pexels is republished.
+ *  - `library`  : reuse images already generated for this plant, and only
+ *                 generate the slides that have nothing to reuse.
+ */
+export type ImageSource = "generate" | "photo" | "library";
+
 export interface GenerateCarouselInput {
   theme: string;
+  imageSource?: ImageSource;
   locale?: Locale;
   /** Optional: anchors the carousel to one species from the catalog. */
   plantSlug?: string;
@@ -66,19 +84,36 @@ export async function generateCarousel(
   const id = carouselId();
   const vSlug = varietySlug(input.variety);
 
+  const source: ImageSource = input.imageSource ?? "photo";
+
+  // Reusable stock for the library source: images already paid for on this
+  // plant, freshest first, so a carousel costs nothing when they exist.
+  const reusable =
+    source === "library" && plant
+      ? await store.listMedia({ plantSlug: plant.slug, limit: 60 })
+      : [];
+  let reuseCursor = 0;
+
   // Images are generated in order so a failure is reported against the slide it
   // belongs to, rather than as one opaque batch error.
   const slides: CarouselSlide[] = [];
   for (const [index, draft] of concept.slides.entries()) {
-    const asset = await generateSlideImage({
-      id: `${id}_${index}`,
-      imagePrompt: draft.imagePrompt,
-      plantSlug: plant?.slug ?? "carousel",
-      plantName: plant ? localizedPlantName(plant, locale) : theme,
-      variety: input.variety ?? null,
-      varietySlug: vSlug,
-      theme,
-    });
+    const recycled = source === "library" ? reusable[reuseCursor++] : undefined;
+    const asset =
+      recycled ??
+      (await generateSlideImage({
+        id: `${id}_${index}`,
+        imagePrompt: draft.imagePrompt,
+        photoQuery: draft.photoQuery,
+        source,
+        plantSlug: plant?.slug ?? "carousel",
+        plantName: plant ? localizedPlantName(plant, locale) : theme,
+        variety: input.variety ?? null,
+        varietySlug: vSlug,
+        theme,
+      }));
+
+    if (recycled) await store.markMediaUsed(recycled.id);
 
     slides.push({
       kind: draft.kind,
@@ -127,10 +162,12 @@ export async function generateCarousel(
   return record;
 }
 
-/** Generates one slide image and files it in the media library. */
+/** Produces one slide image and files it in the media library. */
 async function generateSlideImage(input: {
   id: string;
   imagePrompt: string;
+  photoQuery: string;
+  source: ImageSource;
   plantSlug: string;
   plantName: string;
   variety: string | null;
@@ -140,7 +177,32 @@ async function generateSlideImage(input: {
   // Slides carry their text as an overlay rather than baked in, so the image
   // itself must stay clean - the editorial style forbids text outright.
   const style = getVisualStyle("editorial-photo")!;
-  const image = await generatePinImage(input.imagePrompt, style);
+
+  let image;
+  let referencedFrom: string | null = null;
+
+  if (input.source === "photo" && isPexelsConfigured()) {
+    // Broad query first, then the plant on its own: a literal scene rarely has
+    // a match, but the subject almost always does.
+    const reference = await findReference([
+      input.photoQuery,
+      `${input.plantName} plant indoor`,
+      "houseplant interior",
+    ]);
+    if (reference) {
+      image = await reinterpretImage(
+        { data: reference.data, mimeType: "image/jpeg" },
+        input.imagePrompt,
+        SLIDE_ASPECT,
+      );
+      referencedFrom = reference.photo.photographer;
+    }
+  }
+
+  // Falls through here when the source is `generate`, when Pexels is not
+  // configured, or when no reference matched - a missing photo must never stop
+  // a carousel, only make that slide a little glossier.
+  image ??= await generatePinImage(input.imagePrompt, style);
 
   const mediaId = `med_${input.id}`;
   const path = mediaPath(
@@ -168,6 +230,7 @@ async function generateSlideImage(input: {
     angleSlug: null,
     source: "carousel",
     sourceId: input.id,
+    referencePhotographer: referencedFrom,
     tags: input.theme
       .toLowerCase()
       .split(/\s+/)

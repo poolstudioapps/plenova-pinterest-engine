@@ -92,6 +92,14 @@ export const config = {
     /** user.info.basic for the profile, the other two to publish. */
     scopes: ["user.info.basic", "video.publish", "video.upload"],
   },
+  pexels: {
+    /**
+     * Reference photographs only - nothing from Pexels is ever republished.
+     * A real photo is handed to the image model, which produces an original
+     * frame from it, because purely generated images read as too clean.
+     */
+    apiKey: env("PEXELS_API_KEY"),
+  },
   app: {
     url: resolveAppUrl(),
     oneLink: env("APPSFLYER_ONELINK") ?? DEFAULT_ONELINK,

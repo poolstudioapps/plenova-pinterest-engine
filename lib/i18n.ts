@@ -119,6 +119,14 @@ const EN: Dict = {
   "carousels.caption": "Caption",
   "carousels.compose": "Add text",
   "carousels.recompose": "Redo text",
+  "carousels.imageSource": "Images",
+  "carousels.sourcePhoto": "From real photos (most believable)",
+  "carousels.sourceGenerate": "Generated from scratch (fastest)",
+  "carousels.sourceLibrary": "Reuse the library (free)",
+  "carousels.sourceHint":
+    "Real photos are used only as a reference: the model paints an original frame from one, which keeps the result from looking generated.",
+  "carousels.noPexels":
+    "PEXELS_API_KEY is not set, so slides fall back to being generated from scratch.",
   "carousels.overlayStyle": "Text style",
   "carousels.styleStroke": "White with green outline",
   "carousels.stylePill": "White pills (TikTok)",
@@ -403,6 +411,14 @@ const FR: Dict = {
   "carousels.caption": "Légende",
   "carousels.compose": "Incruster le texte",
   "carousels.recompose": "Refaire le texte",
+  "carousels.imageSource": "Images",
+  "carousels.sourcePhoto": "À partir de vraies photos (plus crédible)",
+  "carousels.sourceGenerate": "Générées de zéro (plus rapide)",
+  "carousels.sourceLibrary": "Réutiliser la bibliothèque (gratuit)",
+  "carousels.sourceHint":
+    "Les vraies photos servent seulement de référence : le modèle en peint une image originale, ce qui évite le rendu « généré ».",
+  "carousels.noPexels":
+    "PEXELS_API_KEY n'est pas renseignée, les slides seront donc générées de zéro.",
   "carousels.overlayStyle": "Style du texte",
   "carousels.styleStroke": "Blanc cerné de vert",
   "carousels.stylePill": "Pastilles blanches (TikTok)",

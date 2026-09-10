@@ -21,6 +21,8 @@ export interface CarouselSlideDraft {
   title: string;
   subtitle: string;
   imagePrompt: string;
+  /** Short query used to find a real reference photograph. */
+  photoQuery: string;
 }
 
 export interface CarouselConceptDraft {
@@ -56,8 +58,13 @@ export const CAROUSEL_SCHEMA = {
             description:
               "Self-contained English photography brief for this slide's image.",
           },
+          photoQuery: {
+            type: "string",
+            description:
+              "Two to four English words to look this scene up in a stock photo library, e.g. 'monstera living room'. Broad, not literal.",
+          },
         },
-        required: ["kind", "title", "subtitle", "imagePrompt"],
+        required: ["kind", "title", "subtitle", "imagePrompt", "photoQuery"],
       },
     },
     caption: {
@@ -149,6 +156,10 @@ export function buildCarouselPrompt(input: CarouselPromptInput): string {
     "The aesthetic is premium editorial interior photography: real rooms, natural light, believable.",
     "Every slide must be visually distinct from the others - vary framing, room, angle and distance.",
     "Forbid: watermarks, logos, brand marks, app UI, text of any kind, plastic-looking foliage, oversaturated HDR.",
+    "",
+    "## Photo queries",
+    "For each slide also give photoQuery: two to four plain English words that would find a similar scene in a stock photo library.",
+    "Keep it broad - 'monstera living room' finds something, 'hands testing soil moisture of a variegated monstera' finds nothing.",
     "",
     "## Caption and hashtags",
     "Caption: 1 to 3 sentences, no hashtags inside it, ending on a light invitation to save the post.",
