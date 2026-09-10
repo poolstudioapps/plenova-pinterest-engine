@@ -25,7 +25,7 @@ Generate plant-care photo carousels for the Plenova houseplant app, review them,
 
 ---
 
-## 2. Les trois URLs
+## 2. Les quatre URLs
 
 Toutes servies par le tool, sur un domaine que nous contrôlons et qui est
 vérifié chez TikTok.
