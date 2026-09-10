@@ -208,25 +208,51 @@ Sans cette interface, la revue est refusée.
 
 ---
 
-## 7 bis. Development Mode — le piège de la première connexion
+## 7 bis. Sandbox — obligatoire avant approbation
 
-Tant que TikTok n'a pas approuvé l'app, elle est en **Development Mode**. Dans
-cet état, seuls les comptes explicitement enregistrés comme **Test Users**
-peuvent compléter l'OAuth. Tout autre compte est refusé avec :
+Une app jamais approuvée ne peut pas faire d'OAuth avec ses identifiants de
+production. La tentative échoue avec :
 
 > Something went wrong — correct the following and try again: **client_key**
 
-Le message pointe vers la clé, alors que la clé n'a rien à voir. C'est le compte
-qui est refusé.
+Le message pointe vers la clé, alors que la clé est correcte. C'est
+l'environnement qui est refusé.
 
-**Correctif** : portail développeur → **App permissions → Test users → Add test
-user**, et ajoute le compte TikTok de Plenova (username ou e-mail). Jusqu'à 10
-comptes par app. Une fois l'app approuvée et passée en Live Mode, n'importe quel
-compte peut se connecter.
+### Créer le sandbox
 
-L'onglet TikTok du tool affiche ce rappel tant qu'aucun compte n'est connecté,
-ainsi qu'une clé masquée et l'état du secret, pour distinguer d'un coup d'œil un
-problème de configuration d'un problème de compte.
+Étapes officielles, portail développeur :
+
+1. **Manage apps**, sélectionner l'app
+2. **Basculer le toggle situé à côté du nom de l'app sur « Sandbox »**
+   (c'est un interrupteur, pas une entrée de menu — d'où la difficulté à le
+   trouver)
+3. **Create Sandbox**, lui donner un nom
+4. Cloner la configuration depuis la production, pour récupérer redirect URI,
+   produits et scopes sans tout ressaisir
+5. Vérifier **App details** et les produits, puis **Apply changes**
+
+Jusqu'à 5 sandboxes par app.
+
+### Autoriser ton compte
+
+Dans le sandbox, section **Target users** : ajouter le compte TikTok de Plenova.
+Jusqu'à 10 comptes. Seuls ces comptes peuvent se connecter en sandbox.
+
+### Identifiants
+
+Le sandbox expose ses **propres Client Key et Client Secret**, distincts de la
+production. Il faut donc poser **les clés du sandbox** dans les variables Vercel
+le temps des tests et de la vidéo de démo, puis repasser sur les clés de
+production une fois l'app approuvée.
+
+> À vérifier au premier passage : si le sandbox n'affiche pas de clés propres,
+> conserver celles de production. La documentation publique n'est pas explicite
+> sur ce point.
+
+### Passage en production
+
+Une fois satisfait, importer la configuration du sandbox vers un **Draft** de
+l'app en mode Production, et soumettre depuis là.
 
 ---
 
@@ -304,6 +330,6 @@ pas basculé vers Vercel**. C'est la seule action qui casserait l'ancien outil.
 | Intégration TikTok dans le tool | ✅ OAuth PKCE, creator_info, publication directe + brouillon |
 | Onglets TikTok et Carrousels | ✅ |
 | Variables d'environnement TikTok | ✅ posées et déployées |
-| Compte TikTok ajouté en Test User | ⬜ **requis pour se connecter** |
+| Sandbox créé + target user ajouté | ⬜ **requis pour se connecter** |
 | Vidéo de démo | ⬜ nécessite le code |
 | Soumission | ⬜ **ne pas soumettre avant la vidéo** |

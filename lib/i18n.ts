@@ -94,9 +94,9 @@ const EN: Dict = {
   "tiktok.clientKey": "Client key",
   "tiktok.clientKeyMissing": "not set",
   "tiktok.secret": "Secret",
-  "tiktok.devMode": "App in Development Mode",
+  "tiktok.devMode": "A sandbox is required before approval",
   "tiktok.devModeBody":
-    "Until TikTok approves the app it stays in Development Mode, where only accounts added as Test Users can sign in. Add your TikTok account under App permissions, Test users in the developer portal, then try again.",
+    "TikTok refuses OAuth for an app it has not approved, and reports it as a client_key error even though the key is fine. In the developer portal, flip the toggle beside the app name to Sandbox, create one cloned from production, add your account under Target users, and use the sandbox client key and secret here until the app is approved.",
   "tiktok.scopes": "Requested scopes",
 
   "carousels.title": "Carousels",
@@ -365,9 +365,9 @@ const FR: Dict = {
   "tiktok.clientKey": "Client key",
   "tiktok.clientKeyMissing": "non renseigné",
   "tiktok.secret": "Secret",
-  "tiktok.devMode": "App en Development Mode",
+  "tiktok.devMode": "Un sandbox est requis avant approbation",
   "tiktok.devModeBody":
-    "Tant que TikTok n'a pas approuvé l'app, elle reste en Development Mode : seuls les comptes ajoutés comme Test Users peuvent se connecter. Ajoute ton compte TikTok dans App permissions, Test users du portail développeur, puis réessaie.",
+    "TikTok refuse l'OAuth d'une app non approuvée, et le signale comme une erreur client_key alors que la clé est bonne. Dans le portail développeur, bascule le toggle à côté du nom de l'app sur Sandbox, crée-le en clonant la production, ajoute ton compte dans Target users, et utilise les clés du sandbox ici jusqu'à l'approbation.",
   "tiktok.scopes": "Scopes demandés",
 
   "carousels.title": "Carrousels",
