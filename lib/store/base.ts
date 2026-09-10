@@ -30,6 +30,10 @@ import {
  * silently drop a Pin. Instances it cannot serialise are caught after the
  * fact - see `mutate`.
  */
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export abstract class DocumentStore implements EngineStore {
   abstract readonly name: string;
   abstract readonly persistent: boolean;
@@ -64,7 +68,7 @@ export abstract class DocumentStore implements EngineStore {
    * document, so re-applying one is safe.
    */
   protected mutate<T>(fn: (doc: StateDocument) => T | Promise<T>): Promise<T> {
-    const run = this.queue.then(() => this.applyMutation(fn, 3));
+    const run = this.queue.then(() => this.applyMutation(fn, 6));
     // Keep the chain alive even if this link rejects.
     this.queue = run.catch(() => undefined);
     return run;
@@ -76,17 +80,22 @@ export abstract class DocumentStore implements EngineStore {
   ): Promise<T> {
     const { doc, version } = await this.load();
     const result = await fn(doc);
-    // The last attempt drops the condition. Under real contention the earlier
-    // attempts are what protect the other writer; refusing the user's save
-    // outright would be a worse answer than the last-writer-wins this had
-    // before conditional writes existed.
+
     try {
-      await this.store(doc, attemptsLeft > 1 ? version : null);
+      await this.store(doc, version);
     } catch (err) {
-      if (err instanceof ConcurrentWrite && attemptsLeft > 1) {
-        return this.applyMutation(fn, attemptsLeft - 1);
+      if (!(err instanceof ConcurrentWrite)) throw err;
+      if (attemptsLeft <= 1) {
+        // Never write anyway. A refused write loses one save and says so; an
+        // unconditional one silently overwrites whatever won the race, which
+        // is how composing a carousel ended up keeping one slide out of seven.
+        throw err;
       }
-      throw err;
+      // A refusal can also mean the document we read was a moment stale, so
+      // back off before reading it again rather than hammering the same
+      // version straight back.
+      await delay(120 * 2 ** (6 - attemptsLeft));
+      return this.applyMutation(fn, attemptsLeft - 1);
     }
     return result;
   }
@@ -140,6 +149,14 @@ export abstract class DocumentStore implements EngineStore {
     await this.mutate((doc) => {
       doc.media ??= {};
       doc.media[asset.id] = asset;
+    });
+  }
+
+  async saveManyMedia(assets: MediaAsset[]): Promise<void> {
+    if (assets.length === 0) return;
+    await this.mutate((doc) => {
+      doc.media ??= {};
+      for (const asset of assets) doc.media[asset.id] = asset;
     });
   }
 

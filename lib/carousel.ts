@@ -405,57 +405,92 @@ async function produceSlideImage(input: {
  * points at the composite, so the same image can back another carousel - or
  * another language - with different words over it.
  */
-export async function saveComposedSlide(
+/**
+ * Stores one composed slide's bytes, and nothing else.
+ *
+ * Deliberately writes no record. The state lives in a single JSON document, so
+ * every record write is a read-modify-write of the whole thing; doing one per
+ * slide per language meant fourteen of them for a seven-slide carousel, and a
+ * read that lagged even briefly behind the previous write silently dropped a
+ * slide. The bytes go to their own object here, and one call records them all
+ * afterwards.
+ */
+export async function uploadComposedSlide(
   id: string,
   index: number,
   language: ContentLocale,
   data: Buffer,
   mimeType: string,
-): Promise<CarouselRecord> {
-  const store = getStore();
-  const carousel = await store.getCarousel(id);
+): Promise<{ url: string }> {
+  const carousel = await getStore().getCarousel(id);
   if (!carousel) throw notFound(`No carousel with id ${id}.`);
-
-  const slide = carousel.slides[index];
-  if (!slide) throw badRequest(`Slide ${index} does not exist on this carousel.`);
+  if (!carousel.slides[index]) {
+    throw badRequest(`Slide ${index} does not exist on this carousel.`);
+  }
 
   const hosted = await hostImageAt(
     `carousels/${id}/${language}/slide-${index + 1}.${extensionFor(mimeType)}`,
     data,
     mimeType,
   );
+  return { url: hosted.url };
+}
 
-  const slides = carousel.slides.map((s, i) =>
-    i === index
-      ? { ...s, composed: { ...s.composed, [language]: hosted.url } }
-      : s,
-  );
+/**
+ * Records every composed slide for one language, in two writes.
+ *
+ * One for the carousel, one for the media library, instead of two per slide.
+ */
+export async function recordComposedSlides(
+  id: string,
+  language: ContentLocale,
+  entries: { index: number; url: string }[],
+  mimeType = "image/jpeg",
+): Promise<CarouselRecord> {
+  const store = getStore();
+  const carousel = await store.getCarousel(id);
+  if (!carousel) throw notFound(`No carousel with id ${id}.`);
 
-  // File the composite alongside the bare photograph. It is what actually gets
-  // published, so it belongs in the library where it can be reviewed and
-  // reused - filed under the same species as the photograph it came from.
-  const bare = slide.mediaId ? await store.getMedia(slide.mediaId) : null;
-  const now = new Date().toISOString();
-  await store.saveMedia({
-    id: `${slide.mediaId ?? `med_${id}_${index}`}_${language}`,
-    plantSlug: bare?.plantSlug ?? carousel.plantSlug ?? "unfiled",
-    plantName: bare?.plantName ?? carousel.plantName ?? carousel.theme,
-    variety: bare?.variety ?? null,
-    varietySlug: bare?.varietySlug ?? null,
-    url: hosted.url,
-    mimeType,
-    aspectRatio: bare?.aspectRatio ?? "4:5",
-    prompt: slide.imagePrompt,
-    visualStyle: "carousel-slide",
-    angleSlug: null,
-    source: "carousel",
-    sourceId: `${id}_${index}`,
-    referencePhotographer: bare?.referencePhotographer ?? null,
-    tags: [language, "slide"],
-    usedCount: 1,
-    lastUsedAt: now,
-    createdAt: now,
+  const byIndex = new Map(entries.map((e) => [e.index, e.url]));
+  const slides = carousel.slides.map((slide, i) => {
+    const url = byIndex.get(i);
+    return url
+      ? { ...slide, composed: { ...slide.composed, [language]: url } }
+      : slide;
   });
+
+  const now = new Date().toISOString();
+  const assets: MediaAsset[] = [];
+  for (const [index, url] of byIndex) {
+    const slide = carousel.slides[index];
+    if (!slide) continue;
+    // File the composite alongside the bare photograph. It is what actually
+    // gets published, so it belongs in the library where it can be reviewed
+    // and reused - under the same species as the photograph it came from.
+    const bare = slide.mediaId ? await store.getMedia(slide.mediaId) : null;
+    assets.push({
+      id: `${slide.mediaId ?? `med_${id}_${index}`}_${language}`,
+      plantSlug: bare?.plantSlug ?? carousel.plantSlug ?? "unfiled",
+      plantName: bare?.plantName ?? carousel.plantName ?? carousel.theme,
+      variety: bare?.variety ?? null,
+      varietySlug: bare?.varietySlug ?? null,
+      url,
+      mimeType,
+      aspectRatio: bare?.aspectRatio ?? "4:5",
+      prompt: slide.imagePrompt,
+      visualStyle: "carousel-slide",
+      angleSlug: null,
+      source: "carousel",
+      sourceId: `${id}_${index}`,
+      referencePhotographer: bare?.referencePhotographer ?? null,
+      tags: [language, "slide"],
+      usedCount: 1,
+      lastUsedAt: now,
+      createdAt: now,
+    });
+  }
+
+  await store.saveManyMedia(assets);
 
   const updated: CarouselRecord = {
     ...carousel,

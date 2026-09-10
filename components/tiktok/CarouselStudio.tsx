@@ -218,9 +218,12 @@ export function CarouselStudio({
           setProgress({ done: ++done, total }),
         );
 
-        // One request per slide: a whole carousel of base64 JPEGs in one body
-        // would exceed the platform request limit, and several languages
-        // multiply that.
+        // One request per slide to store the bytes: a whole carousel of base64
+        // JPEGs in one body would exceed the platform request limit, and
+        // several languages multiply that. These write no record.
+        const stored: { index: number; url: string }[] = [];
+        let firstFailure: string | null = null;
+
         for (const shot of captured) {
           const res = await fetch(`/api/carousels/${carousel.id}/render`, {
             method: "POST",
@@ -232,6 +235,26 @@ export function CarouselStudio({
             }),
           });
           const data = (await res.json()) as {
+            url?: string;
+            error?: { message?: string };
+          };
+          if (!res.ok || !data.url) {
+            // Keep going. One slide failing is no reason to abandon the six
+            // that would have worked, and what did land is recorded below.
+            firstFailure ??= data.error?.message ?? t("preview.requestFailed");
+            continue;
+          }
+          stored.push({ index: shot.index, url: data.url });
+        }
+
+        // Then one write for the whole language.
+        if (stored.length > 0) {
+          const res = await fetch(`/api/carousels/${carousel.id}/composed`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ language, slides: stored }),
+          });
+          const data = (await res.json()) as {
             carousel?: CarouselRecord;
             error?: { message?: string };
           };
@@ -241,6 +264,8 @@ export function CarouselStudio({
           }
           latest = data.carousel;
         }
+
+        if (firstFailure) setError(firstFailure);
       }
 
       setCarousels((current) =>

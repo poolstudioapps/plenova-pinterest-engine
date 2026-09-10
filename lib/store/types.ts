@@ -54,6 +54,12 @@ export interface EngineStore {
   listMedia(filter?: MediaFilter): Promise<MediaAsset[]>;
   getMedia(id: string): Promise<MediaAsset | null>;
   saveMedia(asset: MediaAsset): Promise<void>;
+  /**
+   * Files several assets in ONE document write. Composing a carousel produces
+   * one composite per slide per language, and doing that as a write each was
+   * how a seven-slide carousel ended up storing one.
+   */
+  saveManyMedia(assets: MediaAsset[]): Promise<void>;
   deleteMedia(id: string): Promise<void>;
   /** Bumps reuse accounting when an asset backs a new Pin or slide. */
   markMediaUsed(id: string): Promise<void>;

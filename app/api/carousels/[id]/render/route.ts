@@ -1,5 +1,5 @@
 import { handle, ok } from "@/lib/api";
-import { saveComposedSlide } from "@/lib/carousel";
+import { uploadComposedSlide } from "@/lib/carousel";
 import { badRequest } from "@/lib/errors";
 import { isContentLocale } from "@/lib/i18n";
 
@@ -45,13 +45,15 @@ export async function POST(request: Request, { params }: Params) {
     if (data.length === 0) throw badRequest("The composed slide is empty.");
     if (data.length > MAX_BYTES) throw badRequest("The composed slide is too large.");
 
-    const carousel = await saveComposedSlide(
+    // Returns the stored URL and writes no record; the whole language is
+    // recorded in one call once every slide is up.
+    const { url } = await uploadComposedSlide(
       id,
       index,
       body.language,
       data,
       match[1]!,
     );
-    return ok({ carousel });
+    return ok({ url });
   });
 }
