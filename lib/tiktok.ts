@@ -333,6 +333,7 @@ export interface PublishCarouselInput {
   privacyLevel?: string;
   brandContentToggle?: boolean;
   brandOrganicToggle?: boolean;
+  allowComment?: boolean;
 }
 
 export interface PublishResult {
@@ -375,6 +376,9 @@ export async function publishCarousel(
     postInfo.privacy_level = input.privacyLevel;
     postInfo.brand_content_toggle = Boolean(input.brandContentToggle);
     postInfo.brand_organic_toggle = Boolean(input.brandOrganicToggle);
+    // TikTok's guidelines require comments to be off unless the operator asks
+    // for them, so the flag is sent inverted and defaults to disabled.
+    postInfo.disable_comment = !input.allowComment;
   }
 
   const body = {

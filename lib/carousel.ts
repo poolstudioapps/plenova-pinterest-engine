@@ -624,6 +624,8 @@ export interface PublishOptions {
   privacyLevel?: string;
   brandContentToggle?: boolean;
   brandOrganicToggle?: boolean;
+  /** Off unless the operator turns it on, which is what TikTok requires. */
+  allowComment?: boolean;
 }
 
 export interface MultipostOutcome {
@@ -746,6 +748,7 @@ export async function publishToAccounts(
         privacyLevel: options.privacyLevel,
         brandContentToggle: options.brandContentToggle,
         brandOrganicToggle: options.brandOrganicToggle,
+        allowComment: options.allowComment,
       });
 
       // A publish id only means TikTok accepted the request. It then fetches

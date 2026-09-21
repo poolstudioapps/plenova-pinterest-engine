@@ -69,6 +69,8 @@ export function PublishDialog({
   const [privacy, setPrivacy] = useState("");
   const [brandContent, setBrandContent] = useState(false);
   const [brandOrganic, setBrandOrganic] = useState(false);
+  // Off by default, as TikTok's guidelines require.
+  const [allowComment, setAllowComment] = useState(false);
   const [busy, setBusy] = useState(false);
   const [results, setResults] = useState<CarouselPost[] | null>(null);
   const [message, setMessage] = useState<{
@@ -134,6 +136,7 @@ export function PublishDialog({
           privacyLevel: postMode === "DIRECT_POST" ? privacy : undefined,
           brandContentToggle: brandContent,
           brandOrganicToggle: brandOrganic,
+          allowComment,
         }),
       });
       const data = (await res.json()) as {
@@ -270,7 +273,35 @@ export function PublishDialog({
                 </Select>
               </Field>
 
+              {privacy && privacy !== "SELF_ONLY" ? (
+                <Notice tone="warn">{t("publish.unaudited")}</Notice>
+              ) : null}
+
               <div className="space-y-2.5">
+                <label
+                  className={cn(
+                    "flex items-start gap-2.5 text-[13px]",
+                    creator.commentDisabled
+                      ? "text-[var(--color-ink-faint)]"
+                      : "text-[var(--color-ink-soft)]",
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    checked={allowComment && !creator.commentDisabled}
+                    disabled={creator.commentDisabled}
+                    onChange={(e) => setAllowComment(e.target.checked)}
+                    className="mt-0.5 size-4 accent-[var(--color-accent)]"
+                  />
+                  <span>
+                    {t("publish.allowComment")}
+                    {creator.commentDisabled ? (
+                      <span className="block text-[11.5px]">
+                        {t("publish.commentDisabled")}
+                      </span>
+                    ) : null}
+                  </span>
+                </label>
                 <label className="flex items-start gap-2.5 text-[13px] text-[var(--color-ink-soft)]">
                   <input
                     type="checkbox"
@@ -315,6 +346,10 @@ export function PublishDialog({
 
           <p className="text-[11.5px] leading-snug text-[var(--color-ink-faint)]">
             {t("publish.actionHint")}
+          </p>
+          {/* Required wording, and it has to sit directly above the buttons. */}
+          <p className="text-[11.5px] leading-snug text-[var(--color-ink-faint)]">
+            {t("publish.consent")}
           </p>
 
           <div className="flex flex-wrap justify-end gap-2 pt-1">
