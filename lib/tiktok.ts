@@ -139,8 +139,22 @@ export async function exchangeCodeForToken(
   let connection = toAccount(token);
   try {
     connection = { ...connection, ...(await fetchProfile(connection)) };
-  } catch {
-    // A missing profile must not break an otherwise valid connection.
+  } catch (err) {
+    // A missing profile must not break an otherwise valid connection - the
+    // tokens are what matter - but it must not pass unnoticed either. An
+    // account with no name shows as a bare "@" and cannot be told apart from
+    // the next one, which is the opposite of useful when several are
+    // connected and each posts in its own language.
+    console.warn(
+      "[tiktok] connected but the profile could not be read:",
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+
+  // Something legible, always. The open id is ugly but it is unique, and it is
+  // better than a row of identical blanks.
+  if (!connection.username && !connection.displayName) {
+    connection.displayName = `TikTok ${connection.openId.slice(-6) || "account"}`;
   }
 
   if (!connection.openId) {
