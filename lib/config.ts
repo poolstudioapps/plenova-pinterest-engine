@@ -88,7 +88,11 @@ export const config = {
     clientSecret: env("TIKTOK_CLIENT_SECRET"),
     redirectUri: env("TIKTOK_REDIRECT_URI"),
     authorizeUrl: "https://www.tiktok.com/v2/auth/authorize/",
-    apiBase: "https://open.tiktokapis.com",
+    /**
+     * Overridable so the publish path can be exercised end to end against a
+     * stand-in, without posting to a real account. Unset in production.
+     */
+    apiBase: env("TIKTOK_API_BASE") ?? "https://open.tiktokapis.com",
     /** user.info.basic for the profile, the other two to publish. */
     scopes: ["user.info.basic", "video.publish", "video.upload"],
   },

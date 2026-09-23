@@ -510,7 +510,12 @@ export async function getStatus(): Promise<TikTokStatus> {
       nameless.map(async (account) => {
         try {
           const profile = await fetchProfile(account);
-          const updated = { ...account, ...profile };
+          // The operator may have disconnected this account while TikTok was
+          // answering. Writing it back now would reconnect it behind their
+          // back, which is what made disconnecting need several attempts.
+          const current = await store.getTikTokAccount(account.openId);
+          if (!current) return null;
+          const updated = { ...current, ...profile };
           await store.saveTikTokAccount(updated);
           return updated;
         } catch {

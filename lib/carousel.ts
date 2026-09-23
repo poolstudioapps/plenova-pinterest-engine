@@ -316,6 +316,12 @@ async function generateCarousel(
     updatedAt: new Date().toISOString(),
   };
 
+  // Generating takes minutes, and this last write rebuilds the whole record.
+  // If the operator deleted the carousel meanwhile, writing it now would put
+  // it straight back - which is what made a deletion need several attempts.
+  const stillWanted = await store.getCarousel(id);
+  if (!stillWanted) return record;
+
   await store.saveCarousel(record);
   return record;
 }
