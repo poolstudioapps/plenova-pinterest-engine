@@ -46,6 +46,22 @@ export function TikTokPanel({
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  /**
+   * What the server has confirmed, held over what it last rendered.
+   *
+   * The list comes from a server render, and refreshing it means reading the
+   * stored document again - which can answer a moment out of date and put back
+   * the account that was just removed. That reads as the button doing nothing.
+   * The API's own answer is the authority here, so a confirmed removal or
+   * language change is applied immediately and kept.
+   */
+  const [removed, setRemoved] = useState<string[]>([]);
+  const [languages, setLanguages] = useState<Record<string, ContentLocale>>({});
+
+  const visible = accounts
+    .filter((a) => !removed.includes(a.openId))
+    .map((a) => ({ ...a, language: languages[a.openId] ?? a.language }));
+
   async function setLanguage(openId: string, language: ContentLocale) {
     setBusy(openId);
     setError(null);
@@ -60,6 +76,7 @@ export function TikTokPanel({
         setError(data.error?.message ?? t("preview.requestFailed"));
         return;
       }
+      setLanguages((current) => ({ ...current, [openId]: language }));
       router.refresh();
     } catch {
       setError(t("preview.unreachable"));
@@ -86,6 +103,7 @@ export function TikTokPanel({
         setError(data.error?.message ?? t("preview.requestFailed"));
         return;
       }
+      setRemoved((current) => [...current, openId]);
       router.refresh();
     } catch {
       setError(t("preview.unreachable"));
@@ -108,7 +126,7 @@ export function TikTokPanel({
             variant="primary"
             onClick={() => (location.href = "/api/tiktok/connect")}
           >
-            {accounts.length > 0 ? t("tiktok.addAccount") : t("tiktok.connect")}
+            {visible.length > 0 ? t("tiktok.addAccount") : t("tiktok.connect")}
           </Button>
         ) : null}
       </div>
@@ -126,14 +144,14 @@ export function TikTokPanel({
       ) : null}
 
       <div className="mt-5 border-t border-[var(--color-line)] pt-5">
-        {accounts.length === 0 ? (
+        {visible.length === 0 ? (
           <EmptyState
             title={t("tiktok.noAccounts")}
             description={t("tiktok.noAccountsBody")}
           />
         ) : (
           <ul className="divide-y divide-[var(--color-line)]">
-            {accounts.map((account) => (
+            {visible.map((account) => (
               <li
                 key={account.openId}
                 className="flex flex-wrap items-center gap-4 py-3.5"
