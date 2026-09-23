@@ -741,6 +741,8 @@ export async function publishToAccounts(
   // untouched, so a partial record never loses the earlier ones.
   const untouched = carousel.posts.filter((p) => !openIds.includes(p.openId));
   const posts: CarouselPost[] = [];
+  /** Accounts skipped because they already carry a post from a previous run. */
+  const alreadyDone = new Set<string>();
 
   /**
    * Written after every account, not once at the end.
@@ -774,7 +776,11 @@ export async function publishToAccounts(
       (p) => p.openId === openId && p.publishId && p.settled !== "failed",
     );
     if (previous) {
+      // Carried through so the screen still shows its state, but recorded as
+      // already done: counting it again reported a success this run did not
+      // achieve.
       posts.push(previous);
+      alreadyDone.add(openId);
       continue;
     }
 
@@ -876,7 +882,9 @@ export async function publishToAccounts(
   const allPosts = [...untouched, ...posts];
   // Pending is not published. A run that only got acknowledgements reports
   // nothing published, which is the honest answer.
-  const publishedCount = posts.filter((p) => p.settled === "published").length;
+  const publishedCount = posts.filter(
+    (p) => p.settled === "published" && !alreadyDone.has(p.openId),
+  ).length;
 
   const updated: CarouselRecord = {
     ...carousel,
@@ -897,7 +905,9 @@ export async function publishToAccounts(
     carousel: updated,
     posts,
     publishedCount,
-    failedCount: posts.length - publishedCount,
+    failedCount: posts.filter(
+      (p) => p.settled === "failed" && !alreadyDone.has(p.openId),
+    ).length,
   };
 }
 

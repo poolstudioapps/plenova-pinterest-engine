@@ -26,6 +26,13 @@
   --color-danger: oklch(56% 0.19 25);
   --color-danger-soft: oklch(96% 0.03 25);
   --color-warn: oklch(64% 0.14 75);
+  /*
+   * Text colour for a notice, not the accent colour. The accent on its own
+   * soft background measured 3.07:1, which is below the 4.5:1 body text needs
+   * - and the notice that explains why connecting fails was the least
+   * readable text on the screen.
+   */
+  --color-warn-ink: oklch(42% 0.11 75);
   --color-warn-soft: oklch(96.5% 0.04 75);
 
   --radius-card: 16px;
@@ -80,6 +87,7 @@
       --color-danger: oklch(70% 0.16 25);
       --color-danger-soft: oklch(28% 0.06 25);
       --color-warn: oklch(78% 0.12 75);
+      --color-warn-ink: oklch(89% 0.09 75);
       --color-warn-soft: oklch(29% 0.05 75);
     }
   }

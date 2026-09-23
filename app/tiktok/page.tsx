@@ -26,7 +26,12 @@ export default async function TikTokPage({
     <>
       <SectionHeader title={t("tiktok.title")} description={t("tiktok.subtitle")} />
 
-      {callbackStatus === "connected" ? (
+      {/*
+        The banner comes from a query parameter that survives in the URL, so
+        after disconnecting it went on announcing a connection that no longer
+        existed. It only shows while an account is actually there.
+      */}
+      {callbackStatus === "connected" && status.accounts.length > 0 ? (
         <div className="mb-6">
           <Notice tone="info" title={t("tiktok.connectedTitle")}>
             {t("tiktok.connectedBody")}

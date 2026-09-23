@@ -211,6 +211,10 @@ export function SlideEditor({
   ) {
     event.preventDefault();
     event.stopPropagation();
+    // The element keeps the pointer for the whole gesture. Without it a touch
+    // drag scrolls the dialog instead of moving the block, and a mouse
+    // released outside the window leaves the block stuck to the cursor.
+    event.currentTarget.setPointerCapture?.(event.pointerId);
     setSelected(key);
     drag.current = {
       key,
@@ -256,7 +260,12 @@ export function SlideEditor({
   const src = `/api/carousels/${carousel.id}/slides/${index}/raw`;
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label={t("editor.title", { n: index + 1 })}
+    >
       <Card className="max-h-[94vh] w-full max-w-5xl overflow-y-auto p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-[16px] font-semibold">
@@ -334,6 +343,8 @@ export function SlideEditor({
                       style={{
                         ...(blockLayout(block) as React.CSSProperties),
                         cursor: "move",
+                        // Stops the browser claiming the gesture as a scroll.
+                        touchAction: "none",
                         outline: isSelected
                           ? `${Math.round(3 / scale)}px dashed rgba(255,255,255,0.9)`
                           : `${Math.round(2 / scale)}px dashed rgba(255,255,255,0.35)`,
@@ -362,6 +373,7 @@ export function SlideEditor({
                                   corner === "nw" || corner === "se"
                                     ? "nwse-resize"
                                     : "nesw-resize",
+                                touchAction: "none",
                                 top: corner.startsWith("n")
                                   ? -Math.round(7 / scale)
                                   : undefined,
@@ -526,6 +538,9 @@ function BlockControls({
       <textarea
         value={text}
         aria-label={label}
+        // The server clamps these lengths, so the editor stops at the same
+        // point rather than letting a long line be trimmed without a word.
+        maxLength={400}
         onChange={(e) => onText(e.target.value)}
         rows={2}
         className="w-full rounded-[8px] border border-[var(--color-line)] bg-[var(--color-surface)] px-2.5 py-1.5 text-[13px] outline-none focus:border-[var(--color-accent)]"

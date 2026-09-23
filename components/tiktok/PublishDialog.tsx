@@ -281,7 +281,12 @@ export function PublishDialog({
     discloses && brandContent ? t("publish.consentBranded") : t("publish.consent");
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4">
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label={t("publish.title")}
+    >
       <Card className="max-h-[90vh] w-full max-w-lg overflow-y-auto p-5">
         <h2 className="text-[16px] font-semibold">{t("publish.title")}</h2>
 

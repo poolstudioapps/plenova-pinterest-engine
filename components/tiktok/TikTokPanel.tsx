@@ -151,12 +151,6 @@ export function TikTokPanel({
         ) : null}
       </div>
 
-      {!configured ? (
-        <div className="mt-4">
-          <Notice tone="warn">{t("tiktok.notConfiguredBody")}</Notice>
-        </div>
-      ) : null}
-
       {error ? (
         <div className="mt-4">
           <Notice tone="danger">{error}</Notice>
@@ -200,7 +194,14 @@ export function TikTokPanel({
                 </div>
 
                 <div className="w-44 shrink-0">
+                  <label
+                    htmlFor={`lang-${account.openId}`}
+                    className="mb-1 block text-[11.5px] font-medium text-[var(--color-ink-faint)]"
+                  >
+                    {t("tiktok.language")}
+                  </label>
                   <Select
+                    id={`lang-${account.openId}`}
                     aria-label={t("tiktok.language")}
                     value={account.language}
                     disabled={saving === account.openId}

@@ -217,7 +217,7 @@ export function Notice({
 }) {
   const tones = {
     info: "border-[var(--color-line)] bg-[var(--color-surface-muted)] text-[var(--color-ink-soft)]",
-    warn: "border-transparent bg-[var(--color-warn-soft)] text-[var(--color-warn)]",
+    warn: "border-transparent bg-[var(--color-warn-soft)] text-[var(--color-warn-ink)]",
     danger:
       "border-transparent bg-[var(--color-danger-soft)] text-[var(--color-danger)]",
   } as const;
