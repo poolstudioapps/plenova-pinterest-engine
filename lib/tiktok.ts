@@ -447,7 +447,40 @@ export interface TikTokStatus {
 
 /** Never returns tokens - this feeds a client component. */
 export async function getStatus(): Promise<TikTokStatus> {
-  const accounts = await getStore().listTikTokAccounts();
+  const store = getStore();
+  let accounts = await store.listTikTokAccounts();
+
+  /**
+   * Repair a name that was never read, once.
+   *
+   * An account whose profile call failed while connecting has no username,
+   * and a placeholder is only a label - the real handle is what tells two
+   * accounts apart when each posts in its own language. This asks again, and
+   * only while a name is genuinely missing, so it costs nothing thereafter.
+   */
+  const nameless = accounts.filter((a) => !a.username);
+  if (nameless.length > 0) {
+    const repaired = await Promise.all(
+      nameless.map(async (account) => {
+        try {
+          const profile = await fetchProfile(account);
+          if (!profile.username) return null;
+          const updated = { ...account, ...profile };
+          await store.saveTikTokAccount(updated);
+          return updated;
+        } catch {
+          // Still unreachable. The stored label stands.
+          return null;
+        }
+      }),
+    );
+    const byId = new Map(
+      repaired.filter((a): a is TikTokAccount => a !== null).map((a) => [a.openId, a]),
+    );
+    if (byId.size > 0) {
+      accounts = accounts.map((a) => byId.get(a.openId) ?? a);
+    }
+  }
 
   return {
     configured: isTikTokConfigured(),

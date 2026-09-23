@@ -222,7 +222,9 @@ export function PublishDialog({
                         <div className="size-7 rounded-full bg-[var(--color-line)]" />
                       )}
                       <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium">
-                        @{account.username || account.displayName}
+                        {account.username
+                          ? `@${account.username}`
+                          : account.displayName}
                       </span>
                       <Badge>{CONTENT_LOCALE_LABELS[account.language]}</Badge>
                       {done ? (
@@ -245,7 +247,9 @@ export function PublishDialog({
             {ineligible.length > 0 ? (
               <p className="mt-2 text-[12px] text-[var(--color-ink-faint)]">
                 {t("publish.skipped", {
-                  names: ineligible.map((a) => `@${a.username}`).join(", "),
+                  names: ineligible
+                    .map((a) => (a.username ? `@${a.username}` : a.displayName))
+                    .join(", "),
                 })}
               </p>
             ) : null}
