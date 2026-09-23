@@ -12,6 +12,7 @@ import {
   Select,
 } from "@/components/ui";
 import { PublishDialog } from "@/components/tiktok/PublishDialog";
+import { RepostPanel } from "@/components/tiktok/RepostPanel";
 import { SlideEditor } from "@/components/tiktok/SlideEditor";
 import { SlidePreview } from "@/components/tiktok/SlidePreview";
 import type { AccountView } from "@/components/tiktok/TikTokPanel";
@@ -547,6 +548,17 @@ export function CarouselStudio({
           </div>
         ) : null}
       </Card>
+
+      <RepostPanel
+        uiLocale={uiLocale}
+        languages={languages}
+        overlayStyle={overlayStyle}
+        canGenerate={canGenerate}
+        onStarted={(carousel) => {
+          setCarousels((current) => [carousel, ...current]);
+          setPreviewLang(carousel.languages[0] ?? previewLang);
+        }}
+      />
 
       {visible.length === 0 ? (
         <EmptyState
