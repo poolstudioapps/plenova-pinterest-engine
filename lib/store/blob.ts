@@ -77,7 +77,7 @@ export class BlobStore extends DocumentStore {
     : "Vercel Blob (static token)";
   readonly persistent = true;
 
-  protected async load(): Promise<VersionedDocument> {
+  protected async loadRaw(): Promise<VersionedDocument> {
     const modes: Access[] = accessMode ? [accessMode] : ["private", "public"];
     let sawMissing = false;
     let hardError: Error | null = null;

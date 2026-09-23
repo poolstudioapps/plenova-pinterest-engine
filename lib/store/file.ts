@@ -23,7 +23,7 @@ export class FileStore extends DocumentStore {
   readonly name = "Local file (.data/state.json)";
   readonly persistent = true;
 
-  protected async load(): Promise<VersionedDocument> {
+  protected async loadRaw(): Promise<VersionedDocument> {
     let raw: string;
     try {
       raw = await readFile(FILE, "utf8");

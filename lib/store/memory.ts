@@ -29,7 +29,7 @@ export class MemoryStore extends DocumentStore {
   readonly name = "In-memory (development only)";
   readonly persistent = false;
 
-  protected async load(): Promise<VersionedDocument> {
+  protected async loadRaw(): Promise<VersionedDocument> {
     return { doc: state(), version: null };
   }
 

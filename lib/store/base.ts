@@ -34,12 +34,17 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** A copy, so what is remembered cannot be mutated by a later caller. */
+function clone(doc: StateDocument): StateDocument {
+  return JSON.parse(JSON.stringify(doc)) as StateDocument;
+}
+
 export abstract class DocumentStore implements EngineStore {
   abstract readonly name: string;
   abstract readonly persistent: boolean;
 
   /** Loads the document with the token that identifies this exact version. */
-  protected abstract load(): Promise<VersionedDocument>;
+  protected abstract loadRaw(): Promise<VersionedDocument>;
   /**
    * Persists the document. Must throw ConcurrentWrite - and write nothing - if
    * `version` no longer describes what is stored.
@@ -48,6 +53,31 @@ export abstract class DocumentStore implements EngineStore {
     doc: StateDocument,
     version: string | null,
   ): Promise<void>;
+
+  /**
+   * Loads the document, refusing to go backwards.
+   *
+   * Blob storage does not guarantee that a read immediately after a write sees
+   * that write. When it does not, the effect is brutal and looks like
+   * everything is broken at once: a connected account is not listed, a
+   * language change appears not to take, a carousel that was just created is
+   * not found. Nothing failed - the answer was simply a moment out of date.
+   *
+   * So each write is kept in memory with its revision, and a read that comes
+   * back older than what this instance last wrote is answered from memory
+   * instead. It closes the window for the operator clicking through the UI,
+   * which is where it actually hurts.
+   */
+  protected async load(): Promise<VersionedDocument> {
+    const fetched = await this.loadRaw();
+    const mine = this.lastWrite;
+    if (mine && (fetched.doc.revision ?? 0) < mine.revision) {
+      return { doc: clone(mine.doc), version: fetched.version };
+    }
+    return fetched;
+  }
+
+  private lastWrite: { revision: number; doc: StateDocument } | null = null;
 
   /** The document alone, for the many callers that only read. */
   protected async read(): Promise<StateDocument> {
@@ -80,9 +110,11 @@ export abstract class DocumentStore implements EngineStore {
   ): Promise<T> {
     const { doc, version } = await this.load();
     const result = await fn(doc);
+    doc.revision = (doc.revision ?? 0) + 1;
 
     try {
       await this.store(doc, version);
+      this.lastWrite = { revision: doc.revision, doc: clone(doc) };
     } catch (err) {
       if (!(err instanceof ConcurrentWrite)) throw err;
       if (attemptsLeft <= 1) {

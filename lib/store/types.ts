@@ -86,6 +86,12 @@ export interface StateDocument {
   connection: string | null;
   /** Same envelope, for the TikTok account. */
   tiktok: string | null;
+  /**
+   * Incremented on every write. Not a lock - a freshness marker, so a read
+   * that answers with an older document than this process just wrote can be
+   * recognised as stale instead of believed.
+   */
+  revision?: number;
 }
 
 /**
