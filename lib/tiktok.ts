@@ -151,12 +151,6 @@ export async function exchangeCodeForToken(
     );
   }
 
-  // Something legible, always. The open id is ugly but it is unique, and it is
-  // better than a row of identical blanks.
-  if (!connection.username && !connection.displayName) {
-    connection.displayName = `TikTok ${connection.openId.slice(-6) || "account"}`;
-  }
-
   if (!connection.openId) {
     throw upstream("TikTok returned no open id, so the account cannot be stored.");
   }
@@ -253,6 +247,7 @@ async function apiCall<T>(
   // TikTok signals success with error.code === "ok".
   if (!res.ok || (parsed.error?.code && parsed.error.code !== "ok")) {
     throw upstream("TikTok API error.", {
+      code: parsed.error?.code ?? null,
       hint: parsed.error?.message ?? parsed.error?.code ?? `HTTP ${res.status}`,
     });
   }
@@ -294,9 +289,12 @@ async function fetchProfile(
   const user = raw.data?.user ?? {};
   return {
     openId: user.open_id ?? connection.openId,
-    username: user.username ?? "",
+    // A handle already read under wider scopes is not erased by a later read
+    // made under narrower ones.
+    username: user.username ?? connection.username ?? "",
     displayName: user.display_name ?? "",
     avatarUrl: user.avatar_url ?? null,
+    profileSyncedAt: new Date().toISOString(),
   };
 }
 
@@ -345,7 +343,10 @@ export interface PublishCarouselInput {
   title: string;
   description: string;
   imageUrls: string[];
-  /** 1-indexed, as TikTok expects. */
+  /**
+   * Which slide is the cover, counted from 1 the way the rest of the app
+   * counts slides. TikTok counts from 0, and the conversion happens here.
+   */
   coverIndex: number;
   postMode: "DIRECT_POST" | "MEDIA_UPLOAD";
   /** Required for DIRECT_POST; must be one of the creator's live options. */
@@ -353,6 +354,8 @@ export interface PublishCarouselInput {
   brandContentToggle?: boolean;
   brandOrganicToggle?: boolean;
   allowComment?: boolean;
+  /** Every slide here is painted by an image model, so this is normally true. */
+  isAigc?: boolean;
 }
 
 export interface PublishResult {
@@ -392,6 +395,13 @@ export async function publishCarousel(
     description: input.description.slice(0, 4000),
   };
   if (input.postMode === "DIRECT_POST") {
+    // TikTok forbids the pair, and the UI disables it - but the server must
+    // not be able to emit it either.
+    if (input.brandContentToggle && input.privacyLevel === "SELF_ONLY") {
+      throw badRequest(
+        "Branded content cannot be posted with the Only me privacy level.",
+      );
+    }
     postInfo.privacy_level = input.privacyLevel;
     postInfo.brand_content_toggle = Boolean(input.brandContentToggle);
     postInfo.brand_organic_toggle = Boolean(input.brandOrganicToggle);
@@ -403,13 +413,18 @@ export async function publishCarousel(
   const body = {
     media_type: "PHOTO",
     post_mode: input.postMode,
+    // A sibling of post_info, not a field inside it. Every slide is painted by
+    // an image model, so declaring it is simply accurate.
+    is_aigc: input.isAigc ?? true,
     post_info: postInfo,
     source_info: {
       source: "PULL_FROM_URL",
-      // 1-indexed on TikTok's side, and clamped so a bad value cannot 400.
+      // "Indicates the index (starting from 0) of the photo to be used as the
+      // cover" - so slide 1 is index 0. Sending the slide number directly made
+      // the second slide the cover every time, and made the hook unreachable.
       photo_cover_index: Math.min(
-        Math.max(1, input.coverIndex),
-        input.imageUrls.length,
+        Math.max(0, input.coverIndex - 1),
+        Math.max(0, input.imageUrls.length - 1),
       ),
       photo_images: input.imageUrls,
     },
@@ -477,13 +492,17 @@ export async function getStatus(): Promise<TikTokStatus> {
    * accounts apart when each posts in its own language. This asks again, and
    * only while a name is genuinely missing, so it costs nothing thereafter.
    */
-  const nameless = accounts.filter((a) => !a.displayName && !a.username);
+  // Never read, or read before the handle scope was granted.
+  const nameless = accounts.filter(
+    (a) =>
+      !a.profileSyncedAt ||
+      (!a.username && a.scopes.includes("user.info.profile")),
+  );
   if (nameless.length > 0) {
     const repaired = await Promise.all(
       nameless.map(async (account) => {
         try {
           const profile = await fetchProfile(account);
-          if (!profile.displayName && !profile.username) return null;
           const updated = { ...account, ...profile };
           await store.saveTikTokAccount(updated);
           return updated;

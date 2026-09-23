@@ -21,6 +21,8 @@ export async function POST(request: Request) {
       privacyLevel: input.privacyLevel,
       brandContentToggle: input.brandContentToggle,
       brandOrganicToggle: input.brandOrganicToggle,
+      allowComment: input.allowComment,
+      isAigc: input.isAigc,
     });
     return ok(outcome, outcome.publishedCount > 0 ? 200 : 502);
   });

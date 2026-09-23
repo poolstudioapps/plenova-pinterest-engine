@@ -626,6 +626,8 @@ export interface PublishOptions {
   brandOrganicToggle?: boolean;
   /** Off unless the operator turns it on, which is what TikTok requires. */
   allowComment?: boolean;
+  /** Declares the slides as model-generated. True unless told otherwise. */
+  isAigc?: boolean;
 }
 
 export interface MultipostOutcome {
@@ -692,7 +694,7 @@ export async function publishToAccounts(
 
     // Already posted to this account? Never create a second post for it.
     const previous = carousel.posts.find(
-      (p) => p.openId === openId && p.publishId,
+      (p) => p.openId === openId && p.publishId && p.settled !== "failed",
     );
     if (previous) {
       posts.push(previous);
@@ -749,12 +751,13 @@ export async function publishToAccounts(
         brandContentToggle: options.brandContentToggle,
         brandOrganicToggle: options.brandOrganicToggle,
         allowComment: options.allowComment,
+        isAigc: options.isAigc,
       });
 
       // A publish id only means TikTok accepted the request. It then fetches
       // every slide and can still fail - a rejected image, a blocked domain.
       // Reporting success on the id alone would be reporting a lie.
-      const outcome = await confirmPublish(openId, publishId);
+      const outcome = await confirmPublish(openId, publishId, options.postMode);
 
       posts.push({
         openId,
@@ -764,11 +767,17 @@ export async function publishToAccounts(
         privacyLevel: options.privacyLevel ?? null,
         brandContentToggle: Boolean(options.brandContentToggle),
         brandOrganicToggle: Boolean(options.brandOrganicToggle),
-        publishId: outcome.failed ? null : publishId,
-        publishedAt: outcome.failed ? null : new Date().toISOString(),
-        error: outcome.failed
-          ? `TikTok rejected the post: ${outcome.reason ?? "unknown reason"}`
-          : null,
+        // The id is kept whatever happened: it is how a post is recognised as
+        // already made, and how its state can be asked for again later.
+        publishId,
+        // Only a post TikTok says is done carries a published time.
+        publishedAt:
+          outcome.settled === "published" ? new Date().toISOString() : null,
+        settled: outcome.settled,
+        error:
+          outcome.settled === "failed"
+            ? `TikTok rejected the post: ${outcome.reason ?? "unknown reason"}`
+            : null,
       });
     } catch (err) {
       posts.push(
@@ -786,12 +795,16 @@ export async function publishToAccounts(
   }
 
   const allPosts = [...untouched, ...posts];
-  const publishedCount = posts.filter((p) => p.publishId).length;
+  // Pending is not published. A run that only got acknowledgements reports
+  // nothing published, which is the honest answer.
+  const publishedCount = posts.filter((p) => p.settled === "published").length;
 
   const updated: CarouselRecord = {
     ...carousel,
     posts: allPosts,
-    status: allPosts.some((p) => p.publishId) ? "published" : "failed",
+    status: allPosts.some((p) => p.settled !== "failed" && p.publishId)
+      ? "published"
+      : "failed",
     updatedAt: new Date().toISOString(),
   };
   await store.saveCarousel(updated);
@@ -837,6 +850,7 @@ function failedPost(
     brandOrganicToggle: Boolean(options.brandOrganicToggle),
     publishId: null,
     publishedAt: null,
+    settled: "failed",
     error,
   };
 }
@@ -846,27 +860,46 @@ function failedPost(
  * Waits briefly for TikTok to confirm a post.
  *
  * Publishing is asynchronous: the init call returns an id, then TikTok pulls
- * every slide and can still reject the whole thing. A short bounded check
- * catches the immediate failures - a blocked image, an unreachable domain -
- * without holding the request open for a job that may take minutes.
- *
- * Anything still processing counts as accepted: it usually completes, and the
- * publish id is recorded either way so it can be checked later.
+ * every slide and can still reject the whole thing minutes later. So the
+ * answer has three states, not two. Only a terminal success is "published";
+ * still-processing is "pending", and stays pending rather than being recorded
+ * as a success nothing will ever re-check.
  */
+type PublishOutcome = {
+  settled: "published" | "failed" | "pending";
+  reason: string | null;
+};
+
 async function confirmPublish(
   openId: string,
   publishId: string,
-): Promise<{ failed: boolean; reason: string | null }> {
+  postMode: PublishOptions["postMode"],
+): Promise<PublishOutcome> {
+  // A draft's terminal success is landing in the inbox, not being published.
+  const done = postMode === "MEDIA_UPLOAD" ? "SEND_TO_USER_INBOX" : "PUBLISH_COMPLETE";
+
   for (let attempt = 0; attempt < 3; attempt++) {
-    await new Promise((resolve) => setTimeout(resolve, 1500));
     try {
       const { status, failReason } = await getPublishStatus(openId, publishId);
-      if (status === "FAILED") return { failed: true, reason: failReason };
-      if (status === "PUBLISH_COMPLETE") return { failed: false, reason: null };
-    } catch {
-      // The status endpoint being unavailable is not evidence of failure.
-      return { failed: false, reason: null };
+      if (status === "FAILED") return { settled: "failed", reason: failReason };
+      if (status === done || status === "PUBLISH_COMPLETE") {
+        return { settled: "published", reason: null };
+      }
+    } catch (err) {
+      const code =
+        err instanceof AppError && err.details && typeof err.details === "object"
+          ? (err.details as { code?: unknown }).code
+          : undefined;
+      // TikTok having no record of this publish id IS evidence of failure.
+      if (
+        code === "invalid_publish_id" ||
+        code === "token_not_authorized_for_specified_publish_id"
+      ) {
+        return { settled: "failed", reason: String(code) };
+      }
+      // Anything else is inconclusive: keep trying rather than deciding.
     }
+    await new Promise((resolve) => setTimeout(resolve, 1500));
   }
-  return { failed: false, reason: null };
+  return { settled: "pending", reason: null };
 }

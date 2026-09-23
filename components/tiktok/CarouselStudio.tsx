@@ -658,7 +658,11 @@ export function CarouselStudio({
                         <ul className="space-y-1 text-[12px]">
                           {carousel.posts.map((post) => (
                             <li key={post.openId}>
-                              <span className="font-medium">@{post.username}</span>{" "}
+                              <span className="font-medium">
+                                {post.username
+                                  ? `@${post.username}`
+                                  : post.openId.slice(-6)}
+                              </span>{" "}
                               <span className="text-[var(--color-ink-faint)] uppercase">
                                 {post.language}
                               </span>{" "}

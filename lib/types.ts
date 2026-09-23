@@ -191,6 +191,14 @@ export interface TikTokAccount {
   avatarUrl: string | null;
   /** The language this account publishes in. */
   language: ContentLocale;
+  /**
+   * When the profile was last read from TikTok, or null if it never was.
+   *
+   * Gating the repair pass on a fact rather than on a missing name matters:
+   * an account labelled with a placeholder looks named, so keying on the
+   * label made the pass skip exactly the accounts that needed it.
+   */
+  profileSyncedAt?: string | null;
   connectedAt: string;
 }
 
@@ -304,6 +312,11 @@ export interface CarouselPost {
   brandOrganicToggle: boolean;
   publishId: string | null;
   publishedAt: string | null;
+  /**
+   * Accepted is not published. TikTok pulls the slides after answering, and
+   * can still reject them, so a post waits on "pending" until it says so.
+   */
+  settled?: "published" | "failed" | "pending";
   error: string | null;
 }
 
