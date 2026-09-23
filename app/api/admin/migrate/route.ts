@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { AUTH_COOKIE, verifySession } from "@/lib/auth";
+import { safeEqual } from "@/lib/crypto";
 import { config, isBlobConfigured } from "@/lib/config";
 import { BlobStore } from "@/lib/store/blob";
 import { SupabaseStore } from "@/lib/store/supabase";
@@ -19,9 +20,26 @@ export const dynamic = "force-dynamic";
  *
  * Behind the password, and it only ever writes to the new store.
  */
-export async function POST() {
+export async function POST(request: Request) {
+  /**
+   * A session, or a one-off token set for the move and removed after it.
+   *
+   * The token exists because the migration has to be run by whoever is doing
+   * the move, and that is not always someone who can sign in to the dashboard.
+   * It is compared in constant time and it is not meant to outlive the
+   * migration.
+   */
+  const migrationToken = process.env.MIGRATION_TOKEN;
+  const offered = (request.headers.get("authorization") ?? "").replace(
+    /^Bearer\s+/i,
+    "",
+  );
+  const byToken = Boolean(
+    migrationToken && offered && safeEqual(migrationToken, offered),
+  );
+
   const secret = process.env.ADMIN_PASSWORD;
-  if (secret) {
+  if (!byToken && secret) {
     const session = (await cookies()).get(AUTH_COOKIE)?.value;
     if (!(await verifySession(secret, session))) {
       return NextResponse.json({ error: "Sign in first." }, { status: 401 });
