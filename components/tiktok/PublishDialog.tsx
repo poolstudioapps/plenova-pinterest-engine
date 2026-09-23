@@ -99,6 +99,21 @@ export function PublishDialog({
     where?: string;
   } | null>(null);
 
+  // Which action is in flight, so only that button spins and Cancel knows
+  // whether anything is still going out.
+  const [sending, setSending] = useState<"DIRECT_POST" | "MEDIA_UPLOAD" | null>(
+    null,
+  );
+
+  // Escape closes, but not while posts are going out.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !busy) onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [busy, onClose]);
+
   const key = selected.join(",");
   /**
    * Accounts already asked about, so re-rendering or adding one more account
@@ -201,6 +216,7 @@ export function PublishDialog({
       return;
     }
     setBusy(true);
+    setSending(postMode);
     setMessage(null);
     try {
       const res = await fetch("/api/tiktok/publish", {
@@ -257,6 +273,7 @@ export function PublishDialog({
       setMessage({ tone: "danger", text: t("preview.unreachable") });
     } finally {
       setBusy(false);
+      setSending(null);
     }
   }
 
@@ -555,22 +572,26 @@ export function PublishDialog({
           </p>
 
           <div className="flex flex-wrap justify-end gap-2 pt-1">
-            <Button variant="ghost" onClick={onClose}>
+            {/* Cancel closed the screen while posts kept going out. */}
+            <Button variant="ghost" onClick={onClose} disabled={busy}>
               {t("publish.cancel")}
             </Button>
             <Button
               onClick={() => publish("MEDIA_UPLOAD")}
-              loading={busy}
-              disabled={selected.length === 0 || disclosureIncomplete}
+              loading={sending === "MEDIA_UPLOAD"}
+              disabled={busy || selected.length === 0 || disclosureIncomplete}
             >
               {t("publish.sendDraft", { n: selected.length })}
             </Button>
             <Button
               variant="primary"
               onClick={() => publish("DIRECT_POST")}
-              loading={busy}
+              loading={sending === "DIRECT_POST"}
               disabled={
-                selected.length === 0 || disclosureIncomplete || !privacy
+                busy ||
+                selected.length === 0 ||
+                disclosureIncomplete ||
+                !privacy
               }
             >
               {t("publish.postNow", { n: selected.length })}

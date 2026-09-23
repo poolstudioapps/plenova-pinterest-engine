@@ -43,7 +43,10 @@ export function TikTokPanel({
 }) {
   const t = translator(uiLocale);
   const router = useRouter();
-  const [busy, setBusy] = useState<string | null>(null);
+  // Separate, so changing a language does not make Disconnect spin as though
+  // the account were being removed.
+  const [saving, setSaving] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   /**
@@ -64,7 +67,7 @@ export function TikTokPanel({
 
   async function setLanguage(openId: string, language: ContentLocale) {
     const before = languages[openId];
-    setBusy(openId);
+    setSaving(openId);
     setError(null);
     // Shown straight away. The selector used to display the server's value, so
     // it snapped back to the old language for as long as the save took - and
@@ -98,12 +101,12 @@ export function TikTokPanel({
       setError(t("preview.unreachable"));
       revert();
     } finally {
-      setBusy(null);
+      setSaving(null);
     }
   }
 
   async function disconnect(openId: string) {
-    setBusy(openId);
+    setRemoving(openId);
     setError(null);
     try {
       const res = await fetch("/api/tiktok/disconnect", {
@@ -125,7 +128,7 @@ export function TikTokPanel({
     } catch {
       setError(t("preview.unreachable"));
     } finally {
-      setBusy(null);
+      setRemoving(null);
     }
   }
 
@@ -200,7 +203,7 @@ export function TikTokPanel({
                   <Select
                     aria-label={t("tiktok.language")}
                     value={account.language}
-                    disabled={busy === account.openId}
+                    disabled={saving === account.openId}
                     onChange={(e) =>
                       void setLanguage(
                         account.openId,
@@ -222,7 +225,7 @@ export function TikTokPanel({
                   variant="ghost"
                   className="text-[var(--color-danger)]"
                   onClick={() => void disconnect(account.openId)}
-                  loading={busy === account.openId}
+                  loading={removing === account.openId}
                 >
                   {t("tiktok.disconnect")}
                 </Button>

@@ -94,6 +94,8 @@ export function CarouselStudio({
   );
   const [composing, setComposing] = useState<string | null>(null);
   const [checking, setChecking] = useState<string | null>(null);
+  // Deleting destroys published posts too, so it asks once.
+  const [confirming, setConfirming] = useState<string | null>(null);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   // Carousels this session has already tried to compose, so a failure is not
   // retried in a loop.
@@ -241,6 +243,12 @@ export function CarouselStudio({
    * this browser is the same engine the preview uses.
    */
   async function compose(carousel: CarouselRecord) {
+    // Only one at a time - the drawing is done by this browser - but the other
+    // buttons stay alive and say so, instead of all going dead at once.
+    if (composing) {
+      setError(t("carousels.composeBusy"));
+      return;
+    }
     setComposing(carousel.id);
     setError(null);
     const total = carousel.slides.length * carousel.languages.length;
@@ -264,7 +272,7 @@ export function CarouselStudio({
         }));
 
         const { shots, failures } = await captureSlides(slides, () =>
-          setProgress({ done: ++done, total }),
+          setProgress({ done: ++done, total: total * 2 }),
         );
 
         // One request per slide to store the bytes: a whole carousel of base64
@@ -302,6 +310,9 @@ export function CarouselStudio({
             continue;
           }
           stored.push({ index: shot.index, url: data.url });
+          // Drawing is half the work and storing is the other half, so the
+          // counter keeps moving instead of freezing on the slowest part.
+          setProgress({ done: ++done, total: total * 2 });
         }
 
         // Then one write for the whole language.
@@ -518,8 +529,20 @@ export function CarouselStudio({
 
         {error ? (
           <div className="mt-4">
-            <Notice tone="danger" title={t("generate.failed")}>
+            {/*
+              Composing, deleting and publishing all report here, so the
+              heading cannot claim the generation failed - and it has to be
+              dismissible, or one stale message sits above the form for good.
+            */}
+            <Notice tone="danger">
               {error}
+              <button
+                type="button"
+                onClick={() => setError(null)}
+                className="mt-2 block rounded-[8px] border border-[var(--color-line)] px-2.5 py-1 text-[12px] font-medium transition-colors hover:border-[var(--color-danger)]"
+              >
+                {t("common.dismiss")}
+              </button>
             </Notice>
           </div>
         ) : null}
@@ -550,6 +573,7 @@ export function CarouselStudio({
                     onClick={() => setExpanded(open ? null : carousel.id)}
                     className="flex shrink-0 -space-x-3"
                     aria-expanded={open}
+                    aria-label={t("carousels.openLabel")}
                   >
                     {carousel.slides.slice(0, 4).map((slide, i) => {
                       const url = slide.composed[lang] ?? slide.imageUrl;
@@ -610,7 +634,7 @@ export function CarouselStudio({
                     <Button
                       onClick={() => void compose(carousel)}
                       loading={composing === carousel.id}
-                      disabled={composing !== null || inFlight}
+                      disabled={composing === carousel.id || inFlight}
                     >
                       {composing === carousel.id
                         ? `${progress.done}/${progress.total}`
@@ -620,16 +644,29 @@ export function CarouselStudio({
                     </Button>
                     <Button
                       onClick={() => setPublishing(carousel)}
-                      disabled={accounts.length === 0 || inFlight}
+                      disabled={
+                        accounts.length === 0 || inFlight || missingComposites
+                      }
+                      title={
+                        missingComposites ? t("carousels.needsText") : undefined
+                      }
                     >
                       {t("carousels.publish")}
                     </Button>
                     <Button
                       variant="ghost"
                       className="text-[var(--color-danger)]"
-                      onClick={() => void remove(carousel.id)}
+                      onClick={() => {
+                        if (confirming === carousel.id) void remove(carousel.id);
+                        else setConfirming(carousel.id);
+                      }}
+                      onBlur={() =>
+                        setConfirming((c) => (c === carousel.id ? null : c))
+                      }
                     >
-                      {t("carousels.delete")}
+                      {confirming === carousel.id
+                        ? t("carousels.confirmDelete")
+                        : t("carousels.delete")}
                     </Button>
                   </div>
                 </div>

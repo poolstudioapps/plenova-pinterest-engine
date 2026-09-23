@@ -31,7 +31,7 @@ const GROUPS: {
       { href: "/generate", key: "nav.generate" },
       { href: "/library", key: "nav.library" },
       { href: "/queue", key: "nav.queue" },
-      { href: "/pinterest", key: "nav.account" },
+      { href: "/pinterest", key: "nav.accountPinterest" },
     ],
   },
   {
@@ -39,7 +39,7 @@ const GROUPS: {
     labelKey: "nav.groupTikTok",
     items: [
       { href: "/carousels", key: "nav.carousels" },
-      { href: "/tiktok", key: "nav.account" },
+      { href: "/tiktok", key: "nav.accountTikTok" },
     ],
   },
   {

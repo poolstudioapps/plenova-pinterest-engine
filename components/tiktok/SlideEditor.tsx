@@ -97,6 +97,7 @@ export function SlideEditor({
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0.33);
+  const [imageBroken, setImageBroken] = useState(false);
 
   // The preview is the real 1080x1350 slide scaled to whatever room it has.
   useEffect(() => {
@@ -181,6 +182,16 @@ export function SlideEditor({
   const onPointerUp = useCallback(() => {
     drag.current = null;
   }, []);
+
+  // Escape closes. A modal that can only be dismissed by finding its button
+  // is a trap, and this one covers the screen.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   useEffect(() => {
     window.addEventListener("pointermove", onPointerMove);
@@ -302,6 +313,7 @@ export function SlideEditor({
                   src={src}
                   alt=""
                   draggable={false}
+                  onError={() => setImageBroken(true)}
                   style={{
                     position: "absolute",
                     inset: 0,
@@ -346,7 +358,10 @@ export function SlideEditor({
                                 background: "#fff",
                                 border: `${Math.round(2 / scale)}px solid #111`,
                                 borderRadius: Math.round(4 / scale),
-                                cursor: "nwse-resize",
+                                cursor:
+                                  corner === "nw" || corner === "se"
+                                    ? "nwse-resize"
+                                    : "nesw-resize",
                                 top: corner.startsWith("n")
                                   ? -Math.round(7 / scale)
                                   : undefined,
@@ -369,6 +384,11 @@ export function SlideEditor({
               </div>
             </div>
 
+            {imageBroken ? (
+              <div className="mt-2">
+                <Notice tone="danger">{t("editor.imageBroken")}</Notice>
+              </div>
+            ) : null}
             <p className="mt-2 text-[11.5px] leading-snug text-[var(--color-ink-faint)]">
               {t("editor.drag")}
             </p>
@@ -414,6 +434,7 @@ export function SlideEditor({
                 onFocus={() => setSelected(key)}
                 onText={(value) => setText(key, value)}
                 onChange={(patch) => setBlock(key, patch)}
+                slideStyle={overlay.style}
                 emptyHint={
                   key === "cta"
                     ? t("editor.ctaHint")
@@ -469,6 +490,7 @@ interface ControlsProps {
   onFocus: () => void;
   onText: (value: string) => void;
   onChange: (patch: Partial<OverlayBlock>) => void;
+  slideStyle: OverlayStyle;
 }
 
 function BlockControls({
@@ -482,9 +504,12 @@ function BlockControls({
   onFocus,
   onText,
   onChange,
+  slideStyle,
 }: ControlsProps) {
-  const effective = block.style ?? null;
-  const showsStroke = effective === "stroke" || effective === null;
+  // The style that will actually be used: the block's own, or the slide's when
+  // it inherits. Showing outline controls for a pill was offering settings
+  // that changed nothing.
+  const showsStroke = (block.style ?? slideStyle) === "stroke";
 
   return (
     <div
@@ -500,6 +525,7 @@ function BlockControls({
 
       <textarea
         value={text}
+        aria-label={label}
         onChange={(e) => onText(e.target.value)}
         rows={2}
         className="w-full rounded-[8px] border border-[var(--color-line)] bg-[var(--color-surface)] px-2.5 py-1.5 text-[13px] outline-none focus:border-[var(--color-accent)]"
@@ -550,6 +576,7 @@ function BlockControls({
                 type="button"
                 onClick={() => onChange({ align })}
                 aria-pressed={block.align === align}
+                aria-label={`${label} — ${align}`}
                 className={cn(
                   "flex-1 rounded-[8px] border py-1.5 text-[12px] transition-colors",
                   block.align === align
@@ -574,6 +601,7 @@ function BlockControls({
             type="range"
             min={16}
             max={240}
+            aria-label={`${label} — ${t("editor.size")}`}
             value={block.fontSize}
             onChange={(e) => onChange({ fontSize: Number(e.target.value) })}
             className="w-full accent-[var(--color-accent)]"
@@ -608,6 +636,7 @@ function BlockControls({
             min={0.9}
             max={2.5}
             step={0.05}
+            aria-label={`${label} — ${t("editor.lineHeight")}`}
             value={block.lineHeight}
             onChange={(e) => onChange({ lineHeight: Number(e.target.value) })}
             className="w-full accent-[var(--color-accent)]"
@@ -622,6 +651,7 @@ function BlockControls({
               </label>
               <input
                 type="color"
+                aria-label={`${label} — ${t("editor.strokeColor")}`}
                 value={block.strokeColor}
                 onChange={(e) => onChange({ strokeColor: e.target.value })}
                 className="h-8 w-full cursor-pointer rounded-[8px] border border-[var(--color-line)] bg-transparent"
@@ -638,6 +668,7 @@ function BlockControls({
                 type="range"
                 min={0}
                 max={40}
+                aria-label={`${label} — ${t("editor.strokeWidth")}`}
                 value={block.strokeWidth}
                 onChange={(e) => onChange({ strokeWidth: Number(e.target.value) })}
                 className="w-full accent-[var(--color-accent)]"
