@@ -99,6 +99,64 @@ export function SlideEditor({
   const [scale, setScale] = useState(0.33);
   const [imageBroken, setImageBroken] = useState(false);
 
+  /**
+   * Undo and redo over the layout.
+   *
+   * Consecutive touches of the same control inside a second collapse into one
+   * step, so dragging a slider leaves one entry rather than forty and undo
+   * moves by something the eye can see.
+   */
+  const [past, setPast] = useState<SlideOverlay[]>([]);
+  const [future, setFuture] = useState<SlideOverlay[]>([]);
+  const lastCommit = useRef<{ key: string; at: number } | null>(null);
+
+  const commit = useCallback(
+    (key: string) => {
+      const now = Date.now();
+      const last = lastCommit.current;
+      lastCommit.current = { key, at: now };
+      if (last && last.key === key && now - last.at < 900) return;
+      setOverlay((current) => {
+        setPast((p) => [...p.slice(-49), current]);
+        setFuture([]);
+        return current;
+      });
+    },
+    [],
+  );
+
+  const undo = useCallback(() => {
+    setPast((p) => {
+      if (p.length === 0) return p;
+      const previous = p[p.length - 1]!;
+      setOverlay((current) => {
+        setFuture((f) => [current, ...f.slice(0, 49)]);
+        return previous;
+      });
+      lastCommit.current = null;
+      return p.slice(0, -1);
+    });
+  }, []);
+
+  const redo = useCallback(() => {
+    setFuture((f) => {
+      if (f.length === 0) return f;
+      const next = f[0]!;
+      setOverlay((current) => {
+        setPast((p) => [...p, current]);
+        return next;
+      });
+      lastCommit.current = null;
+      return f.slice(1);
+    });
+  }, []);
+
+  /** Guides shown while a block is being dragged onto an alignment. */
+  const [guides, setGuides] = useState<{ x: number[]; y: number[] }>({
+    x: [],
+    y: [],
+  });
+
   // The preview is the real 1080x1350 slide scaled to whatever room it has.
   useEffect(() => {
     const el = canvasRef.current;
@@ -113,6 +171,8 @@ export function SlideEditor({
   const current = texts[displayLang] ?? { title: "", subtitle: "", cta: "" };
 
   function setBlock(key: BlockKey, patch: Partial<OverlayBlock>) {
+    // Keyed by the field so dragging one slider collapses into a single step.
+    commit(`${key}:${Object.keys(patch).join(",")}`);
     setOverlay((o) => ({ ...o, [key]: { ...o[key], ...patch } }));
   }
 
@@ -134,6 +194,8 @@ export function SlideEditor({
     startX: number;
     startY: number;
     block: OverlayBlock;
+    /** The other blocks' anchors, for alignment. */
+    others: { x: number; y: number }[];
   } | null>(null);
 
   const onPointerMove = useCallback((event: PointerEvent) => {
@@ -149,11 +211,15 @@ export function SlideEditor({
     const b = state.block;
 
     if (!state.corner) {
-      drag.current &&
-        setBlockDirect(state.key, {
-          x: clamp(Math.round(b.x + dx), 40, SLIDE_WIDTH - 40),
-          y: clamp(Math.round(b.y + dy), 40, SLIDE_HEIGHT - 40),
-        });
+      const wanted = {
+        x: clamp(Math.round(b.x + dx), 40, SLIDE_WIDTH - 40),
+        y: clamp(Math.round(b.y + dy), 40, SLIDE_HEIGHT - 40),
+      };
+      // Snap to the canvas centre and to whatever the other blocks are
+      // aligned on, and show the line that was caught.
+      const snapped = snapTo(wanted, state.key, state.others);
+      setGuides(snapped.guides);
+      setBlockDirect(state.key, { x: snapped.x, y: snapped.y });
       return;
     }
 
@@ -181,17 +247,59 @@ export function SlideEditor({
 
   const onPointerUp = useCallback(() => {
     drag.current = null;
+    setGuides({ x: [], y: [] });
   }, []);
 
-  // Escape closes. A modal that can only be dismissed by finding its button
-  // is a trap, and this one covers the screen.
+  /**
+   * Keyboard: escape closes, the arrows move the selected block, and undo and
+   * redo work as they do everywhere else.
+   *
+   * The arrows matter beyond convenience - before this there was no way at all
+   * to position a block without a pointer.
+   */
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      const target = event.target as HTMLElement | null;
+      const typing =
+        target?.tagName === "INPUT" ||
+        target?.tagName === "TEXTAREA" ||
+        target?.tagName === "SELECT";
+
+      if (event.key === "Escape") {
+        onClose();
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+        event.preventDefault();
+        if (event.shiftKey) redo();
+        else undo();
+        return;
+      }
+      if (typing) return;
+
+      const step = event.shiftKey ? 10 : 1;
+      const moves: Record<string, [number, number]> = {
+        ArrowLeft: [-step, 0],
+        ArrowRight: [step, 0],
+        ArrowUp: [0, -step],
+        ArrowDown: [0, step],
+      };
+      const move = moves[event.key];
+      if (!move) return;
+      event.preventDefault();
+      commit(`nudge:${selected}`);
+      setOverlay((o) => ({
+        ...o,
+        [selected]: {
+          ...o[selected],
+          x: clamp(o[selected].x + move[0], 40, SLIDE_WIDTH - 40),
+          y: clamp(o[selected].y + move[1], 40, SLIDE_HEIGHT - 40),
+        },
+      }));
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, undo, redo, commit, selected]);
 
   useEffect(() => {
     window.addEventListener("pointermove", onPointerMove);
@@ -216,12 +324,17 @@ export function SlideEditor({
     // released outside the window leaves the block stuck to the cursor.
     event.currentTarget.setPointerCapture?.(event.pointerId);
     setSelected(key);
+    commit(`drag:${key}`);
     drag.current = {
       key,
       corner,
       startX: event.clientX,
       startY: event.clientY,
       block: overlay[key],
+      others: BLOCKS.filter((k) => k !== key).map((k) => ({
+        x: overlay[k].x,
+        y: overlay[k].y,
+      })),
     };
   }
 
@@ -332,6 +445,37 @@ export function SlideEditor({
                   }}
                 />
 
+                {guides.x.map((x) => (
+                  <div
+                    key={`gx-${x}`}
+                    style={{
+                      position: "absolute",
+                      left: x,
+                      top: 0,
+                      width: Math.max(2, Math.round(2 / scale)),
+                      height: SLIDE_HEIGHT,
+                      background: "#ff2d9b",
+                      transform: "translateX(-50%)",
+                      pointerEvents: "none",
+                    }}
+                  />
+                ))}
+                {guides.y.map((y) => (
+                  <div
+                    key={`gy-${y}`}
+                    style={{
+                      position: "absolute",
+                      top: y,
+                      left: 0,
+                      height: Math.max(2, Math.round(2 / scale)),
+                      width: SLIDE_WIDTH,
+                      background: "#ff2d9b",
+                      transform: "translateY(-50%)",
+                      pointerEvents: "none",
+                    }}
+                  />
+                ))}
+
                 {BLOCKS.map((key) => {
                   const block = overlay[key];
                   const text = current[key];
@@ -402,7 +546,7 @@ export function SlideEditor({
               </div>
             ) : null}
             <p className="mt-2 text-[11.5px] leading-snug text-[var(--color-ink-faint)]">
-              {t("editor.drag")}
+              {t("editor.drag")} {t("editor.keys")}
             </p>
           </div>
 
@@ -414,12 +558,13 @@ export function SlideEditor({
               </label>
               <Select
                 value={overlay.style}
-                onChange={(e) =>
+                onChange={(e) => {
+                  commit("slide:style");
                   setOverlay((o) => ({
                     ...o,
                     style: e.target.value as OverlayStyle,
-                  }))
-                }
+                  }));
+                }}
               >
                 {OVERLAY_STYLES.map((style) => (
                   <option key={style} value={style}>
@@ -469,7 +614,26 @@ export function SlideEditor({
             <div className="flex flex-wrap justify-end gap-2 pt-1">
               <Button
                 variant="ghost"
-                onClick={() => setOverlay(defaultOverlay(overlay.style))}
+                onClick={undo}
+                disabled={past.length === 0}
+                title="Ctrl+Z"
+              >
+                {t("editor.undo")}
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={redo}
+                disabled={future.length === 0}
+                title="Ctrl+Shift+Z"
+              >
+                {t("editor.redo")}
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  commit("reset");
+                  setOverlay(defaultOverlay(overlay.style));
+                }}
               >
                 {t("editor.reset")}
               </Button>
@@ -489,6 +653,43 @@ export function SlideEditor({
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+/** How close a block has to come, in source pixels, before it clicks on. */
+const SNAP = 14;
+
+/**
+ * Pulls a dragged block onto the canvas centre or onto another block's anchor.
+ *
+ * Returns the lines that were caught so they can be drawn, which is the half
+ * that makes snapping feel deliberate rather than like the block sticking.
+ */
+function snapTo(
+  wanted: { x: number; y: number },
+  _key: BlockKey,
+  others: { x: number; y: number }[],
+): { x: number; y: number; guides: { x: number[]; y: number[] } } {
+  const candidatesX = [SLIDE_WIDTH / 2, ...others.map((o) => o.x)];
+  const candidatesY = [SLIDE_HEIGHT / 2, ...others.map((o) => o.y)];
+
+  const pick = (value: number, candidates: number[]) => {
+    let best: number | null = null;
+    for (const candidate of candidates) {
+      if (Math.abs(candidate - value) > SNAP) continue;
+      if (best === null || Math.abs(candidate - value) < Math.abs(best - value)) {
+        best = candidate;
+      }
+    }
+    return best;
+  };
+
+  const x = pick(wanted.x, candidatesX);
+  const y = pick(wanted.y, candidatesY);
+  return {
+    x: x ?? wanted.x,
+    y: y ?? wanted.y,
+    guides: { x: x === null ? [] : [x], y: y === null ? [] : [y] },
+  };
 }
 
 interface ControlsProps {
