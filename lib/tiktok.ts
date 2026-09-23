@@ -480,6 +480,9 @@ export interface TikTokStatus {
 }
 
 /** Never returns tokens - this feeds a client component. */
+/** Accounts whose profile this process has already tried to read. */
+const profileAttempted = new Set<string>();
+
 export async function getStatus(): Promise<TikTokStatus> {
   const store = getStore();
   let accounts = await store.listTikTokAccounts();
@@ -492,12 +495,16 @@ export async function getStatus(): Promise<TikTokStatus> {
    * accounts apart when each posts in its own language. This asks again, and
    * only while a name is genuinely missing, so it costs nothing thereafter.
    */
-  // Never read, or read before the handle scope was granted.
+  // Never read, or read before the handle scope was granted. Attempted at
+  // most once per account per process, so a profile call that keeps failing
+  // cannot add a round trip to every single page load.
   const nameless = accounts.filter(
     (a) =>
-      !a.profileSyncedAt ||
-      (!a.username && a.scopes.includes("user.info.profile")),
+      !profileAttempted.has(a.openId) &&
+      (!a.profileSyncedAt ||
+        (!a.username && a.scopes.includes("user.info.profile"))),
   );
+  for (const account of nameless) profileAttempted.add(account.openId);
   if (nameless.length > 0) {
     const repaired = await Promise.all(
       nameless.map(async (account) => {

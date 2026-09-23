@@ -24,7 +24,13 @@ export async function GET() {
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax" as const,
       path: "/",
-      maxAge: 600,
+      /**
+       * Half an hour, not ten minutes. Authorising means signing in to TikTok,
+       * possibly with two-factor, and picking the right account among several -
+       * and if the verifier expires mid-way the callback can only say the PKCE
+       * verifier expired, which reads as the tool being broken.
+       */
+      maxAge: 1800,
     };
     jar.set(TIKTOK_STATE_COOKIE, state, options);
     jar.set(TIKTOK_VERIFIER_COOKIE, verifier, options);

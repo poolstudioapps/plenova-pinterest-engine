@@ -225,10 +225,22 @@ export abstract class DocumentStore implements EngineStore {
     return this.accountsIn(await this.read());
   }
 
+  /**
+   * The accounts held in a document, or a refusal.
+   *
+   * An envelope that exists but will not open means the key is wrong, not that
+   * there are no accounts. Reading that as an empty map would let connecting
+   * one account quietly erase every other, so it throws instead.
+   */
   private accountsIn(doc: StateDocument): TikTokAccounts {
-    return normaliseAccounts(
-      this.openEnvelope<unknown>(doc.tiktok ?? null, "TikTok"),
-    );
+    const envelope = doc.tiktok ?? null;
+    const opened = this.openEnvelope<unknown>(envelope, "TikTok");
+    if (envelope && opened === null) {
+      throw new Error(
+        "The stored TikTok accounts could not be decrypted. Refusing to overwrite them.",
+      );
+    }
+    return normaliseAccounts(opened);
   }
 
   async listTikTokAccounts(): Promise<TikTokAccount[]> {

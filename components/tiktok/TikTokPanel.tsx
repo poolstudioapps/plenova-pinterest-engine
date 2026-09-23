@@ -70,13 +70,25 @@ export function TikTokPanel({
 
   async function disconnect(openId: string) {
     setBusy(openId);
+    setError(null);
     try {
-      await fetch("/api/tiktok/disconnect", {
+      const res = await fetch("/api/tiktok/disconnect", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ openId }),
       });
+      // It used to refresh either way, so a refused disconnect looked like a
+      // disconnect that did nothing.
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as {
+          error?: { message?: string };
+        };
+        setError(data.error?.message ?? t("preview.requestFailed"));
+        return;
+      }
       router.refresh();
+    } catch {
+      setError(t("preview.unreachable"));
     } finally {
       setBusy(null);
     }
