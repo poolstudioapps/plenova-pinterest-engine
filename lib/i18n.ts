@@ -34,7 +34,8 @@ export type Locale = (typeof LOCALES)[number];
 export const CONTENT_LOCALES = ["fr", "en", "es", "de", "it"] as const;
 export type ContentLocale = (typeof CONTENT_LOCALES)[number];
 
-export const DEFAULT_LOCALE: Locale = "en";
+/** French: this is a French-speaking operator publishing mainly in French. */
+export const DEFAULT_LOCALE: Locale = "fr";
 
 export const LOCALE_LABELS: Record<Locale, string> = {
   en: "English",

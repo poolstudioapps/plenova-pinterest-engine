@@ -63,8 +63,22 @@ export function TikTokPanel({
     .map((a) => ({ ...a, language: languages[a.openId] ?? a.language }));
 
   async function setLanguage(openId: string, language: ContentLocale) {
+    const before = languages[openId];
     setBusy(openId);
     setError(null);
+    // Shown straight away. The selector used to display the server's value, so
+    // it snapped back to the old language for as long as the save took - and
+    // stayed there if the save failed, with nothing saying why.
+    setLanguages((current) => ({ ...current, [openId]: language }));
+
+    const revert = () =>
+      setLanguages((current) => {
+        const next = { ...current };
+        if (before) next[openId] = before;
+        else delete next[openId];
+        return next;
+      });
+
     try {
       const res = await fetch("/api/tiktok/accounts", {
         method: "PATCH",
@@ -72,14 +86,17 @@ export function TikTokPanel({
         body: JSON.stringify({ openId, language }),
       });
       if (!res.ok) {
-        const data = (await res.json()) as { error?: { message?: string } };
+        const data = (await res.json().catch(() => ({}))) as {
+          error?: { message?: string };
+        };
         setError(data.error?.message ?? t("preview.requestFailed"));
+        revert();
         return;
       }
-      setLanguages((current) => ({ ...current, [openId]: language }));
       router.refresh();
     } catch {
       setError(t("preview.unreachable"));
+      revert();
     } finally {
       setBusy(null);
     }
