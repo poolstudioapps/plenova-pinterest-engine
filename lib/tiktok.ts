@@ -263,10 +263,29 @@ interface RawProfile {
   data?: { user?: { open_id?: string; union_id?: string; display_name?: string; avatar_url?: string; username?: string } };
 }
 
+/**
+ * Fields are chosen from the scopes the account actually granted.
+ *
+ * TikTok's user-object table assigns every field a scope: open_id, avatar_url
+ * and display_name come with user.info.basic, while username needs
+ * user.info.profile. Asking for a field the token does not cover fails the
+ * WHOLE call, which is why a connection ended up with no name and no avatar
+ * rather than merely no handle.
+ *
+ * Adding user.info.profile to the requested scopes would bring the real
+ * handle, but it has to be enabled on the TikTok app first, and asking for a
+ * scope the app does not have breaks authorisation outright. So it is used
+ * when present and not demanded.
+ */
 async function fetchProfile(
   connection: TikTokAccount,
 ): Promise<Partial<TikTokAccount>> {
-  const fields = "open_id,display_name,avatar_url,username";
+  const fields = [
+    "open_id",
+    "display_name",
+    "avatar_url",
+    ...(connection.scopes.includes("user.info.profile") ? ["username"] : []),
+  ].join(",");
   const raw = await apiCall<RawProfile>(
     `/v2/user/info/?fields=${fields}`,
     connection.accessToken,
@@ -458,13 +477,13 @@ export async function getStatus(): Promise<TikTokStatus> {
    * accounts apart when each posts in its own language. This asks again, and
    * only while a name is genuinely missing, so it costs nothing thereafter.
    */
-  const nameless = accounts.filter((a) => !a.username);
+  const nameless = accounts.filter((a) => !a.displayName && !a.username);
   if (nameless.length > 0) {
     const repaired = await Promise.all(
       nameless.map(async (account) => {
         try {
           const profile = await fetchProfile(account);
-          if (!profile.username) return null;
+          if (!profile.displayName && !profile.username) return null;
           const updated = { ...account, ...profile };
           await store.saveTikTokAccount(updated);
           return updated;
@@ -487,7 +506,8 @@ export async function getStatus(): Promise<TikTokStatus> {
     accounts: accounts.map((a) => ({
       openId: a.openId,
       username: a.username,
-      displayName: a.displayName,
+      displayName:
+        a.displayName || a.username || `TikTok ${a.openId.slice(-6) || "account"}`,
       avatarUrl: a.avatarUrl,
       language: a.language,
       scopes: a.scopes,

@@ -235,21 +235,6 @@ export function normaliseCarousel(raw: unknown): CarouselRecord | null {
  * It used to hold one connection; it now holds a map keyed by open id. Reading
  * the old form as a map yielded its own field values as if they were accounts.
  */
-/**
- * A label for an account whose profile was never read.
- *
- * The profile call is allowed to fail at connection time - the tokens are what
- * make an account usable - but the result was an account with no name at all,
- * rendering as a bare "@" that no one can tell from the next one.
- */
-function named(account: TikTokAccount): TikTokAccount {
-  if (account.username || account.displayName) return account;
-  return {
-    ...account,
-    displayName: `TikTok ${account.openId.slice(-6) || "account"}`,
-  };
-}
-
 export function normaliseAccounts(raw: unknown): Record<string, TikTokAccount> {
   if (!raw || typeof raw !== "object") return {};
   const value = raw as Record<string, any>;
@@ -259,20 +244,20 @@ export function normaliseAccounts(raw: unknown): Record<string, TikTokAccount> {
     const openId = typeof value.openId === "string" ? value.openId : "";
     if (!openId) return {};
     return {
-      [openId]: named({
+      [openId]: {
         ...(value as TikTokAccount),
         language: value.language ?? "en",
-      }),
+      },
     };
   }
 
   const out: Record<string, TikTokAccount> = {};
   for (const [key, account] of Object.entries(value)) {
     if (account && typeof account === "object" && typeof account.accessToken === "string") {
-      out[key] = named({
+      out[key] = {
         ...(account as TikTokAccount),
         language: account.language ?? "en",
-      });
+      };
     }
   }
   return out;
