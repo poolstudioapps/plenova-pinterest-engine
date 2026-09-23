@@ -66,6 +66,9 @@ export function PublishDialog({
   );
   const [creator, setCreator] = useState<TikTokCreatorInfo | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Bumped to ask TikTok again; its creator-info endpoint is rate limited on
+  // its own budget, separate from publishing.
+  const [attempt, setAttempt] = useState(0);
   const [privacy, setPrivacy] = useState("");
   const [brandContent, setBrandContent] = useState(false);
   const [brandOrganic, setBrandOrganic] = useState(false);
@@ -100,7 +103,9 @@ export function PublishDialog({
         }
         setLoadError(null);
         setCreator(data.creator);
-        setPrivacy(data.creator.privacyOptions[0] ?? "");
+        // Deliberately left unset. TikTok's guidelines require the operator to
+        // pick the privacy level themselves, with no default offered.
+        setPrivacy("");
       } catch {
         if (!cancelled) setLoadError(t("preview.unreachable"));
       }
@@ -108,7 +113,7 @@ export function PublishDialog({
     return () => {
       cancelled = true;
     };
-  }, [first, t]);
+  }, [first, t, attempt]);
 
   function toggle(openId: string) {
     setSelected((current) =>
@@ -247,7 +252,19 @@ export function PublishDialog({
           </div>
 
           {loadError ? (
-            <Notice tone="danger">{loadError}</Notice>
+            <Notice tone="warn" title={t("publish.creatorUnavailable")}>
+              <p className="mt-1">{loadError}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setLoadError(null);
+                  setAttempt((n) => n + 1);
+                }}
+                className="mt-2 rounded-[8px] border border-[var(--color-line)] px-2.5 py-1 text-[12px] font-medium transition-colors hover:border-[var(--color-accent)]"
+              >
+                {t("publish.retry")}
+              </button>
+            </Notice>
           ) : !creator && first ? (
             <div className="flex items-center gap-2 py-4 text-[13px] text-[var(--color-ink-soft)]">
               <Spinner /> {t("publish.loading")}
