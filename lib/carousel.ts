@@ -591,6 +591,72 @@ export async function updateSlide(
   return updated;
 }
 
+/**
+ * Asks TikTok again about every post still waiting, and records the answer.
+ *
+ * Publishing is asynchronous and can take minutes: TikTok acknowledges, then
+ * pulls every slide, then decides. The check made during the run is bounded by
+ * how long a request may stay open, so a post that is still being processed is
+ * recorded as waiting rather than guessed at - and this is how that wait is
+ * resolved without publishing anything twice.
+ */
+export async function refreshPublishStatus(
+  id: string,
+): Promise<CarouselRecord> {
+  const store = getStore();
+  const carousel = await store.getCarousel(id);
+  if (!carousel) throw notFound(`No carousel with id ${id}.`);
+
+  const posts = await Promise.all(
+    carousel.posts.map(async (post) => {
+      if (post.settled !== "pending" || !post.publishId) return post;
+      try {
+        const { status, failReason } = await getPublishStatus(
+          post.openId,
+          post.publishId,
+        );
+        const done =
+          post.postMode === "MEDIA_UPLOAD"
+            ? "SEND_TO_USER_INBOX"
+            : "PUBLISH_COMPLETE";
+        if (status === "FAILED") {
+          return {
+            ...post,
+            settled: "failed" as const,
+            publishedAt: null,
+            error: `TikTok rejected the post: ${failReason ?? "unknown reason"}`,
+          };
+        }
+        if (status === done || status === "PUBLISH_COMPLETE") {
+          return {
+            ...post,
+            settled: "published" as const,
+            publishedAt: post.publishedAt ?? new Date().toISOString(),
+            error: null,
+          };
+        }
+        return post;
+      } catch {
+        // Still inconclusive. Leave it waiting rather than decide for TikTok.
+        return post;
+      }
+    }),
+  );
+
+  const updated: CarouselRecord = {
+    ...carousel,
+    posts,
+    status: posts.some((p) => p.settled === "published")
+      ? "published"
+      : posts.some((p) => p.settled === "pending")
+        ? "publishing"
+        : "failed",
+    updatedAt: new Date().toISOString(),
+  };
+  await store.saveCarousel(updated);
+  return updated;
+}
+
 /** The images to publish for one language, composites where they exist. */
 /**
  * The image URLs handed to TikTok, for one language.
@@ -809,9 +875,14 @@ export async function publishToAccounts(
   const updated: CarouselRecord = {
     ...carousel,
     posts: allPosts,
-    status: allPosts.some((p) => p.settled !== "failed" && p.publishId)
+    // Acknowledged is not published. While anything is still waiting on
+    // TikTok the carousel stays "publishing", because saying "published" and
+    // then having nothing appear is the worst of the three answers.
+    status: allPosts.some((p) => p.settled === "published")
       ? "published"
-      : "failed",
+      : allPosts.some((p) => p.settled === "pending")
+        ? "publishing"
+        : "failed",
     updatedAt: new Date().toISOString(),
   };
   await store.saveCarousel(updated);
@@ -885,7 +956,7 @@ async function confirmPublish(
   // A draft's terminal success is landing in the inbox, not being published.
   const done = postMode === "MEDIA_UPLOAD" ? "SEND_TO_USER_INBOX" : "PUBLISH_COMPLETE";
 
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 6; attempt++) {
     try {
       const { status, failReason } = await getPublishStatus(openId, publishId);
       if (status === "FAILED") return { settled: "failed", reason: failReason };
@@ -906,7 +977,7 @@ async function confirmPublish(
       }
       // Anything else is inconclusive: keep trying rather than deciding.
     }
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await new Promise((resolve) => setTimeout(resolve, 2500));
   }
   return { settled: "pending", reason: null };
 }

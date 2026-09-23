@@ -93,6 +93,7 @@ export function CarouselStudio({
     uiLocale as ContentLocale,
   );
   const [composing, setComposing] = useState<string | null>(null);
+  const [checking, setChecking] = useState<string | null>(null);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   // Carousels this session has already tried to compose, so a failure is not
   // retried in a loop.
@@ -183,6 +184,33 @@ export function CarouselStudio({
       setError(t("preview.unreachable"));
     } finally {
       setBusy(false);
+    }
+  }
+
+  /** Asks TikTok again about posts it has not decided on yet. */
+  async function checkStatus(id: string) {
+    setChecking(id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/carousels/${id}/status`, {
+        method: "POST",
+      });
+      const data = (await res.json()) as {
+        carousel?: CarouselRecord;
+        error?: { message?: string };
+      };
+      if (!res.ok || !data.carousel) {
+        setError(data.error?.message ?? t("preview.requestFailed"));
+        return;
+      }
+      const updated = data.carousel;
+      setCarousels((current) =>
+        current.map((c) => (c.id === updated.id ? updated : c)),
+      );
+    } catch {
+      setError(t("preview.unreachable"));
+    } finally {
+      setChecking(null);
     }
   }
 
@@ -692,6 +720,19 @@ export function CarouselStudio({
                         <p className="mb-1.5 text-[12.5px] font-medium">
                           {t("carousels.posts")}
                         </p>
+                        {carousel.posts.some((p) => p.settled === "pending") ? (
+                          <div className="mb-2">
+                            <Button
+                              onClick={() => void checkStatus(carousel.id)}
+                              loading={checking === carousel.id}
+                            >
+                              {t("carousels.checkStatus")}
+                            </Button>
+                            <p className="mt-1 text-[11.5px] leading-snug text-[var(--color-ink-faint)]">
+                              {t("carousels.checkStatusHint")}
+                            </p>
+                          </div>
+                        ) : null}
                         <ul className="space-y-1 text-[12px]">
                           {carousel.posts.map((post) => (
                             <li key={post.openId}>
@@ -703,17 +744,31 @@ export function CarouselStudio({
                               <span className="text-[var(--color-ink-faint)] uppercase">
                                 {post.language}
                               </span>{" "}
-                              {post.publishId ? (
+                              {/*
+                                The outcome decides, never the publish id: an
+                                id means TikTok accepted the request, not that
+                                the post exists. Reading the id first is what
+                                labelled a rejected post "published".
+                              */}
+                              {post.settled === "failed" ||
+                              (!post.publishId && post.error) ? (
+                                <span className="text-[var(--color-danger)]">
+                                  ✕ {post.error ?? t("carousels.postFailed")}
+                                </span>
+                              ) : post.settled === "pending" ? (
+                                <span className="text-[var(--color-ink-soft)]">
+                                  ⋯ {t("carousels.postPending")}
+                                </span>
+                              ) : post.publishId ? (
                                 <span className="text-[var(--color-accent)]">
-                                  {post.settled === "pending"
-                                    ? t("carousels.postPending")
-                                    : post.postMode === "MEDIA_UPLOAD"
-                                      ? t("carousels.postDraft")
-                                      : t("carousels.postPublished")}
+                                  ✓{" "}
+                                  {post.postMode === "MEDIA_UPLOAD"
+                                    ? t("carousels.postDraft")
+                                    : t("carousels.postPublished")}
                                 </span>
                               ) : (
                                 <span className="text-[var(--color-danger)]">
-                                  {post.error}
+                                  ✕ {post.error ?? t("carousels.postFailed")}
                                 </span>
                               )}
                             </li>
