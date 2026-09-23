@@ -96,6 +96,7 @@ export function PublishDialog({
   const [message, setMessage] = useState<{
     tone: "info" | "danger";
     text: string;
+    where?: string;
   } | null>(null);
 
   const key = selected.join(",");
@@ -236,12 +237,21 @@ export function PublishDialog({
         return;
       }
 
+      const draft = postMode === "MEDIA_UPLOAD";
+      const ok = data.publishedCount ?? 0;
       setMessage({
         tone: (data.failedCount ?? 0) > 0 ? "danger" : "info",
-        text: t("publish.multiResult", {
-          ok: data.publishedCount ?? 0,
+        // A draft landing in the inbox is not a post on the profile, and
+        // calling both "published" is what sends someone looking for a post
+        // that was never meant to be there yet.
+        text: t(draft ? "publish.draftResult" : "publish.multiResult", {
+          ok,
           ko: data.failedCount ?? 0,
         }),
+        where:
+          ok > 0
+            ? t(draft ? "publish.draftWhere" : "publish.publishedWhere")
+            : undefined,
       });
     } catch {
       setMessage({ tone: "danger", text: t("preview.unreachable") });
@@ -530,6 +540,9 @@ export function PublishDialog({
           {message ? (
             <Notice tone={message.tone === "danger" ? "danger" : "info"}>
               {message.text}
+              {message.where ? (
+                <p className="mt-1.5">{message.where}</p>
+              ) : null}
             </Notice>
           ) : null}
 

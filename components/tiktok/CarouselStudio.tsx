@@ -97,6 +97,15 @@ export function CarouselStudio({
   // Carousels this session has already tried to compose, so a failure is not
   // retried in a loop.
   const autoComposed = useRef<Set<string>>(new Set());
+  /**
+   * Carousels the server confirmed deleted.
+   *
+   * The list is re-read while anything is generating, and that read can answer
+   * a moment out of date and bring a deleted carousel straight back. The
+   * server's own answer is the authority, so a confirmed deletion is kept.
+   */
+  const [deleted, setDeleted] = useState<string[]>([]);
+  const visible = carousels.filter((c) => !deleted.includes(c.id));
 
   function toggleLanguage(lang: ContentLocale) {
     setLanguages((current) =>
@@ -121,7 +130,7 @@ export function CarouselStudio({
   // The server owns the generation, so the page just watches for it to finish.
   // Polling stops as soon as nothing is in flight, including after a reload
   // that landed on a carousel someone else started.
-  const generating = carousels.some((c) => c.status === "generating");
+  const generating = visible.some((c) => c.status === "generating");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -178,9 +187,21 @@ export function CarouselStudio({
   }
 
   async function remove(id: string) {
-    const res = await fetch(`/api/carousels/${id}`, { method: "DELETE" });
-    if (!res.ok) return;
-    setCarousels((current) => current.filter((c) => c.id !== id));
+    setError(null);
+    try {
+      const res = await fetch(`/api/carousels/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as {
+          error?: { message?: string };
+        };
+        setError(data.error?.message ?? t("preview.requestFailed"));
+        return;
+      }
+      setDeleted((current) => [...current, id]);
+      setCarousels((current) => current.filter((c) => c.id !== id));
+    } catch {
+      setError(t("preview.unreachable"));
+    }
   }
 
   /**
@@ -304,7 +325,7 @@ export function CarouselStudio({
    */
   useEffect(() => {
     if (composing) return;
-    const pending = carousels.find(
+    const pending = visible.find(
       (c) =>
         (c.status === "draft" || c.status === "failed") &&
         c.slides.length > 0 &&
@@ -476,14 +497,14 @@ export function CarouselStudio({
         ) : null}
       </Card>
 
-      {carousels.length === 0 ? (
+      {visible.length === 0 ? (
         <EmptyState
           title={t("carousels.empty")}
           description={t("carousels.emptyBody")}
         />
       ) : (
         <div className="space-y-4">
-          {carousels.map((carousel) => {
+          {visible.map((carousel) => {
             const inFlight = carousel.status === "generating";
             const open = expanded === carousel.id;
             const lang = carousel.languages.includes(previewLang)
@@ -684,7 +705,11 @@ export function CarouselStudio({
                               </span>{" "}
                               {post.publishId ? (
                                 <span className="text-[var(--color-accent)]">
-                                  {post.publishId}
+                                  {post.settled === "pending"
+                                    ? t("carousels.postPending")
+                                    : post.postMode === "MEDIA_UPLOAD"
+                                      ? t("carousels.postDraft")
+                                      : t("carousels.postPublished")}
                                 </span>
                               ) : (
                                 <span className="text-[var(--color-danger)]">
