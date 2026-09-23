@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { config } from "@/lib/config";
+import { getStore } from "@/lib/store";
 
 /**
  * Public deployment check.
@@ -25,6 +26,17 @@ export function GET() {
       // one verified in the developer portal, and getting it wrong fails every
       // publish with a message about URL ownership.
       baseUrl: config.app.url,
+      // Which adapter is answering, and whether it survives a request. An
+      // in-memory store on a serverless platform loses everything between
+      // invocations: a connected account vanishes, a started carousel is not
+      // found by the next request. That looks like several unrelated bugs, so
+      // it is worth being able to read it from outside without signing in.
+      storage: {
+        persistent: getStore().persistent,
+        blobConfigured: Boolean(
+          process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID,
+        ),
+      },
       time: new Date().toISOString(),
     },
     { headers: { "Cache-Control": "no-store" } },
