@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Button, Card, Field, Notice, Select, Spinner } from "@/components/ui";
 import type { AccountView } from "@/components/tiktok/TikTokPanel";
 import { CONTENT_LOCALE_LABELS, translator, type Locale } from "@/lib/i18n";
@@ -92,6 +92,13 @@ export function PublishDialog({
   } | null>(null);
 
   const key = selected.join(",");
+  /**
+   * Accounts already asked about, so re-rendering or adding one more account
+   * cannot re-ask for the ones already answered. TikTok's creator-info
+   * endpoint has its own budget, and spending it is what produces a rate limit
+   * that looks like publishing being blocked.
+   */
+  const asked = useRef<Set<string>>(new Set());
 
   // One call per selected account: the options are per account, and applying
   // the first account's answer to the rest would be a guess.
@@ -100,7 +107,10 @@ export function PublishDialog({
       setCreators({});
       return;
     }
-    const ids = key.split(",");
+    const ids = key.split(",").filter((id) => !asked.current.has(id));
+    if (ids.length === 0) return;
+    for (const id of ids) asked.current.add(id);
+
     let cancelled = false;
     setLoading(true);
     void (async () => {
@@ -131,7 +141,7 @@ export function PublishDialog({
         if (entry.creator) found[entry.openId] = entry.creator;
         else firstError ??= entry.error ?? t("preview.requestFailed");
       }
-      setCreators(found);
+      setCreators((current) => ({ ...current, ...found }));
       setLoadError(firstError);
       setLoading(false);
       // Nothing is preselected: TikTok requires the operator to pick.
@@ -330,6 +340,7 @@ export function PublishDialog({
                 type="button"
                 onClick={() => {
                   setLoadError(null);
+                  asked.current.clear();
                   setAttempt((n) => n + 1);
                 }}
                 className="mt-2 rounded-[8px] border border-[var(--color-line)] px-2.5 py-1 text-[12px] font-medium transition-colors hover:border-[var(--color-accent)]"

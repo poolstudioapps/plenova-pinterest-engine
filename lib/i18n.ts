@@ -848,9 +848,23 @@ export type Translator = (
 ) => string;
 
 /** Returns a translator. Missing keys fall back to English, then to the key. */
+/**
+ * One translator per locale, kept, so its identity is stable.
+ *
+ * This is not an optimisation. A fresh function on every call makes any React
+ * effect that depends on it re-run on every render, and an effect that also
+ * sets state then re-renders and re-runs itself without end. That is what
+ * turned opening the publish screen into an unbounded stream of creator-info
+ * calls to TikTok, and into a rate limit that never cleared.
+ */
+const TRANSLATORS = new Map<Locale, Translator>();
+
 export function translator(locale: Locale): Translator {
+  const existing = TRANSLATORS.get(locale);
+  if (existing) return existing;
+
   const dict = DICTIONARIES[locale] ?? EN;
-  return (key, vars) => {
+  const translate: Translator = (key, vars) => {
     let out = dict[key] ?? EN[key] ?? key;
     if (vars) {
       for (const [k, v] of Object.entries(vars)) {
@@ -859,4 +873,6 @@ export function translator(locale: Locale): Translator {
     }
     return out;
   };
+  TRANSLATORS.set(locale, translate);
+  return translate;
 }
