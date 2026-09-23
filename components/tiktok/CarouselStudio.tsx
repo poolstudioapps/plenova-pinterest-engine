@@ -214,7 +214,7 @@ export function CarouselStudio({
           overlay: s.overlay ?? defaultOverlay(overlayStyle),
         }));
 
-        const captured = await captureSlides(slides, () =>
+        const { shots, failures } = await captureSlides(slides, () =>
           setProgress({ done: ++done, total }),
         );
 
@@ -222,9 +222,14 @@ export function CarouselStudio({
         // JPEGs in one body would exceed the platform request limit, and
         // several languages multiply that. These write no record.
         const stored: { index: number; url: string }[] = [];
-        let firstFailure: string | null = null;
+        // Every slide that did not make it, with its position, so the message
+        // names what to look at instead of a bare count.
+        const missed = failures.map((f) => ({
+          index: f.index,
+          reason: f.reason,
+        }));
 
-        for (const shot of captured) {
+        for (const shot of shots) {
           const res = await fetch(`/api/carousels/${carousel.id}/render`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -241,7 +246,10 @@ export function CarouselStudio({
           if (!res.ok || !data.url) {
             // Keep going. One slide failing is no reason to abandon the six
             // that would have worked, and what did land is recorded below.
-            firstFailure ??= data.error?.message ?? t("preview.requestFailed");
+            missed.push({
+              index: shot.index,
+              reason: data.error?.message ?? t("preview.requestFailed"),
+            });
             continue;
           }
           stored.push({ index: shot.index, url: data.url });
@@ -265,7 +273,15 @@ export function CarouselStudio({
           latest = data.carousel;
         }
 
-        if (firstFailure) setError(firstFailure);
+        if (missed.length > 0) {
+          setError(
+            t("carousels.slidesMissed", {
+              slides: missed.map((m) => m.index + 1).join(", "),
+              lang: language.toUpperCase(),
+              reason: missed[0]?.reason ?? "",
+            }),
+          );
+        }
       }
 
       setCarousels((current) =>
@@ -290,7 +306,7 @@ export function CarouselStudio({
     if (composing) return;
     const pending = carousels.find(
       (c) =>
-        c.status === "draft" &&
+        (c.status === "draft" || c.status === "failed") &&
         c.slides.length > 0 &&
         !autoComposed.current.has(c.id) &&
         c.slides.some((s) => c.languages.some((l) => !s.composed[l])),

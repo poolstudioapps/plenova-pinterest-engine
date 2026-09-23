@@ -111,15 +111,37 @@ export interface CapturedSlide {
   dataUrl: string;
 }
 
-/** Renders every slide of a carousel, reporting progress as it goes. */
+export interface CaptureRun {
+  shots: CapturedSlide[];
+  /** Slides that could not be drawn, by position, with the reason. */
+  failures: { index: number; reason: string }[];
+}
+
+/**
+ * Renders every slide of a carousel, reporting progress as it goes.
+ *
+ * A slide that cannot be drawn - usually its photograph failing to load - is
+ * recorded and skipped rather than thrown. Aborting the run on the first
+ * failure is how a seven-slide carousel ended up with one slide composed and
+ * no indication of which of the others went missing.
+ */
 export async function captureSlides(
   slides: CapturableSlide[],
   onProgress?: (done: number, total: number) => void,
-): Promise<CapturedSlide[]> {
-  const out: CapturedSlide[] = [];
+): Promise<CaptureRun> {
+  const shots: CapturedSlide[] = [];
+  const failures: { index: number; reason: string }[] = [];
+
   for (const [index, slide] of slides.entries()) {
-    out.push({ index, dataUrl: await captureSlide(slide) });
+    try {
+      shots.push({ index, dataUrl: await captureSlide(slide) });
+    } catch (err) {
+      failures.push({
+        index,
+        reason: err instanceof Error ? err.message : "Could not draw the slide.",
+      });
+    }
     onProgress?.(index + 1, slides.length);
   }
-  return out;
+  return { shots, failures };
 }
