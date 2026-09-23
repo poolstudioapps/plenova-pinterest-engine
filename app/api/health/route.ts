@@ -32,6 +32,7 @@ export function GET() {
       // found by the next request. That looks like several unrelated bugs, so
       // it is worth being able to read it from outside without signing in.
       storage: {
+        adapter: getStore().name,
         persistent: getStore().persistent,
         blobConfigured: Boolean(
           process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID,

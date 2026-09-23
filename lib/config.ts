@@ -108,6 +108,15 @@ export const config = {
     url: resolveAppUrl(),
     oneLink: env("APPSFLYER_ONELINK") ?? DEFAULT_ONELINK,
   },
+  supabase: {
+    /**
+     * The service role key, never the anon key: every table has row level
+     * security on with no policies, so the anon key can reach nothing. This
+     * app has no end users of its own - it is one operator behind a password.
+     */
+    url: env("SUPABASE_URL"),
+    serviceKey: env("SUPABASE_SERVICE_ROLE_KEY"),
+  },
   security: {
     tokenEncryptionKey: env("TOKEN_ENCRYPTION_KEY"),
     cronSecret: env("CRON_SECRET"),
