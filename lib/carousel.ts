@@ -628,6 +628,11 @@ export interface PublishOptions {
   allowComment?: boolean;
   /** Declares the slides as model-generated. True unless told otherwise. */
   isAigc?: boolean;
+  /**
+   * Replaces the title for every account. Empty means each language keeps the
+   * one written for it, which is the point of writing several.
+   */
+  title?: string;
 }
 
 export interface MultipostOutcome {
@@ -741,7 +746,9 @@ export async function publishToAccounts(
         openId,
         // TikTok takes the first line as the title.
         title: (
-          carousel.slides[0]?.text[language]?.title ?? carousel.theme
+          options.title?.trim() ||
+          carousel.slides[0]?.text[language]?.title ||
+          carousel.theme
         ).slice(0, 90),
         description: caption,
         imageUrls: urls,

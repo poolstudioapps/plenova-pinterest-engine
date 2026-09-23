@@ -23,6 +23,7 @@ export async function POST(request: Request) {
       brandOrganicToggle: input.brandOrganicToggle,
       allowComment: input.allowComment,
       isAigc: input.isAigc,
+      title: input.title,
     });
     return ok(outcome, outcome.publishedCount > 0 ? 200 : 502);
   });

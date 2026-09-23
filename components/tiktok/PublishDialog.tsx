@@ -76,6 +76,13 @@ export function PublishDialog({
   const [attempt, setAttempt] = useState(0);
 
   const [privacy, setPrivacy] = useState("");
+  // Prefilled from what was written, and editable, because TikTok's guidelines
+  // require the operator to be able to enter the title themselves.
+  const [title, setTitle] = useState(
+    () =>
+      carousel.slides[0]?.text[carousel.languages[0] ?? "en"]?.title ??
+      carousel.theme,
+  );
   // Every one of these starts off, which is what the guidelines require.
   const [discloses, setDiscloses] = useState(false);
   const [brandContent, setBrandContent] = useState(false);
@@ -203,6 +210,7 @@ export function PublishDialog({
           openIds: selected,
           postMode,
           privacyLevel: postMode === "DIRECT_POST" ? privacy : undefined,
+          title: title.trim() || undefined,
           brandContentToggle: discloses && brandContent,
           brandOrganicToggle: discloses && brandOrganic,
           allowComment: allowComment && !commentDisabled,
@@ -352,6 +360,20 @@ export function PublishDialog({
 
           {ready ? (
             <>
+              <Field
+                label={t("publish.postTitle")}
+                htmlFor="posttitle"
+                hint={t("publish.postTitleHint")}
+              >
+                <input
+                  id="posttitle"
+                  value={title}
+                  maxLength={90}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="w-full rounded-[10px] border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2 text-[14px] outline-none focus:border-[var(--color-accent)]"
+                />
+              </Field>
+
               <Field
                 label={t("publish.privacy")}
                 htmlFor="privacy"
