@@ -15,8 +15,14 @@
   --color-line: oklch(92.4% 0.004 106);
   --color-line-strong: oklch(86% 0.005 106);
   --color-ink: oklch(21% 0.008 106);
-  --color-ink-soft: oklch(48% 0.008 106);
-  --color-ink-faint: oklch(63% 0.008 106);
+  /*
+   * Secondary and tertiary text were set so light that every explanation on
+   * every screen read as noise to be skipped. They are darkened to the point
+   * where a sentence in them is worth reading, which is the only reason to
+   * write one.
+   */
+  --color-ink-soft: oklch(42% 0.008 106);
+  --color-ink-faint: oklch(52% 0.008 106);
 
   /* Plenova green - the single accent. */
   --color-accent: oklch(56% 0.106 158);
@@ -36,6 +42,15 @@
   --color-warn-soft: oklch(96.5% 0.04 75);
 
   --radius-card: 16px;
+  --radius-control: 10px;
+
+  /*
+   * Cards were a one pixel border and nothing else, so a page of them read as
+   * one flat grey field. A shadow this quiet is not decoration: it is what
+   * tells the eye where one thing ends and the next begins.
+   */
+  --shadow-card: 0 1px 2px oklch(20% 0.01 106 / 0.04), 0 4px 12px oklch(20% 0.01 106 / 0.05);
+  --shadow-raised: 0 1px 2px oklch(20% 0.01 106 / 0.06), 0 8px 24px oklch(20% 0.01 106 / 0.08);
 }
 
 @layer base {
@@ -77,8 +92,18 @@
       --color-line: oklch(28.5% 0.008 106);
       --color-line-strong: oklch(36% 0.009 106);
       --color-ink: oklch(96% 0.003 106);
-      --color-ink-soft: oklch(72% 0.006 106);
-      --color-ink-faint: oklch(56% 0.007 106);
+      --color-ink-soft: oklch(76% 0.006 106);
+      --color-ink-faint: oklch(63% 0.007 106);
+
+      /*
+       * A light-ink shadow is invisible on a dark ground, so the separation
+       * comes from a darker shadow plus a faint lift along the top edge -
+       * which is what actually reads as a raised surface in the dark.
+       */
+      --shadow-card: 0 1px 2px oklch(0% 0 0 / 0.4), 0 4px 14px oklch(0% 0 0 / 0.3),
+        inset 0 1px 0 oklch(100% 0 0 / 0.03);
+      --shadow-raised: 0 2px 4px oklch(0% 0 0 / 0.5), 0 10px 30px oklch(0% 0 0 / 0.4),
+        inset 0 1px 0 oklch(100% 0 0 / 0.04);
 
       --color-accent: oklch(72% 0.12 158);
       --color-accent-soft: oklch(28% 0.05 158);
@@ -103,6 +128,53 @@
     background-color: var(--color-surface);
     border: 1px solid var(--color-line);
     border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+  }
+
+  /*
+   * Every text input, select, textarea and file picker shares this, because
+   * they were each styled where they happened to be written and no two
+   * matched - the file picker was the browser's own control sitting next to
+   * hand-styled fields.
+   */
+  .input {
+    width: 100%;
+    border: 1px solid var(--color-line-strong);
+    border-radius: var(--radius-control);
+    background-color: var(--color-surface);
+    color: var(--color-ink);
+    padding: 0.55rem 0.75rem;
+    font-size: 14px;
+    line-height: 1.45;
+    transition: border-color 120ms ease, box-shadow 120ms ease;
+  }
+
+  .input:hover:not(:disabled) {
+    border-color: var(--color-ink-faint);
+  }
+
+  .input:focus {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px var(--color-accent-soft);
+  }
+
+  .input:disabled {
+    background-color: var(--color-surface-muted);
+    color: var(--color-ink-faint);
+    cursor: not-allowed;
+  }
+
+  .input::file-selector-button {
+    margin: -0.55rem 0.75rem -0.55rem -0.75rem;
+    padding: 0.55rem 0.9rem;
+    border: 0;
+    border-right: 1px solid var(--color-line);
+    background-color: var(--color-surface-muted);
+    color: var(--color-ink);
+    font-size: 13.5px;
+    font-weight: 500;
+    cursor: pointer;
   }
 
   @keyframes shimmer {

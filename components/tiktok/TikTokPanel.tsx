@@ -136,7 +136,9 @@ export function TikTokPanel({
     <Card className="p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-[15px] font-semibold">{t("tiktok.connection")}</h2>
+          <h2 className="text-[17px] font-semibold tracking-[-0.01em]">
+            {t("tiktok.connection")}
+          </h2>
           <p className="mt-1 text-[13px] leading-relaxed text-[var(--color-ink-soft)]">
             {t("tiktok.connectBody")}
           </p>

@@ -389,8 +389,10 @@ export function CarouselStudio({
   return (
     <div className="space-y-8">
       <Card className="p-5">
-        <h2 className="text-[15px] font-semibold">{t("carousels.build")}</h2>
-        <p className="mt-1 mb-4 text-[13px] leading-relaxed text-[var(--color-ink-soft)]">
+        <h2 className="text-[17px] font-semibold tracking-[-0.01em]">
+          {t("carousels.build")}
+        </h2>
+        <p className="mt-1.5 mb-5 max-w-2xl text-[13.5px] leading-relaxed text-[var(--color-ink-soft)]">
           {t("carousels.buildHint")}
         </p>
 

@@ -32,11 +32,11 @@ export function SectionHeader({
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
       <div>
-        <h1 className="text-[26px] font-semibold tracking-[-0.02em] text-[var(--color-ink)]">
+        <h1 className="text-[30px] font-semibold tracking-[-0.025em] text-[var(--color-ink)]">
           {title}
         </h1>
         {description ? (
-          <p className="mt-1.5 max-w-2xl text-[15px] leading-relaxed text-[var(--color-ink-soft)]">
+          <p className="mt-2 max-w-2xl text-[14.5px] leading-relaxed text-[var(--color-ink-soft)]">
             {description}
           </p>
         ) : null}
@@ -50,25 +50,36 @@ export function SectionHeader({
 
 type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 
+/*
+ * A disabled primary used to be the accent at forty per cent, which reads as a
+ * broken button rather than one waiting for something. Disabled is now its own
+ * flat, quiet shape in every variant.
+ */
+const DISABLED =
+  "disabled:bg-[var(--color-surface-muted)] disabled:text-[var(--color-ink-faint)] disabled:border-[var(--color-line)] disabled:shadow-none";
+
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
-  primary:
-    "bg-[var(--color-accent)] text-white hover:opacity-90 disabled:opacity-40",
-  secondary:
-    "bg-[var(--color-surface)] text-[var(--color-ink)] border border-[var(--color-line-strong)] hover:bg-[var(--color-surface-muted)] disabled:opacity-40",
-  ghost:
-    "text-[var(--color-ink-soft)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-ink)] disabled:opacity-40",
-  danger:
-    "bg-[var(--color-danger)] text-white hover:opacity-90 disabled:opacity-40",
+  primary: `bg-[var(--color-accent)] text-white border border-transparent shadow-[var(--shadow-card)] hover:brightness-110 active:brightness-95 ${DISABLED}`,
+  secondary: `bg-[var(--color-surface)] text-[var(--color-ink)] border border-[var(--color-line-strong)] hover:border-[var(--color-ink-faint)] hover:bg-[var(--color-surface-muted)] ${DISABLED}`,
+  ghost: `text-[var(--color-ink-soft)] border border-transparent hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-ink)] ${DISABLED} disabled:bg-transparent`,
+  danger: `bg-[var(--color-danger)] text-white border border-transparent hover:brightness-110 ${DISABLED}`,
 };
+
+const BUTTON_SIZES = {
+  md: "px-4 py-2.5 text-[14px]",
+  sm: "px-3 py-1.5 text-[13px]",
+} as const;
 
 export function Button({
   variant = "secondary",
+  size = "md",
   className,
   loading,
   children,
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant;
+  size?: keyof typeof BUTTON_SIZES;
   loading?: boolean;
 }) {
   return (
@@ -76,7 +87,8 @@ export function Button({
       {...props}
       disabled={props.disabled || loading}
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-[10px] px-4 py-2.5 text-[14px] font-medium transition-[opacity,background-color] disabled:cursor-not-allowed",
+        "inline-flex items-center justify-center gap-2 rounded-[var(--radius-control)] font-medium transition-[filter,background-color,border-color,box-shadow] disabled:cursor-not-allowed",
+        BUTTON_SIZES[size],
         BUTTON_VARIANTS[variant],
         className,
       )}
@@ -131,8 +143,8 @@ export function Field({
   );
 }
 
-const CONTROL_CLASS =
-  "w-full rounded-[10px] border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-3 py-2.5 text-[14px] text-[var(--color-ink)] placeholder:text-[var(--color-ink-faint)] transition-colors focus:border-[var(--color-accent)] focus:outline-none disabled:opacity-50";
+/** Shared with the plain file inputs and textareas the app writes by hand. */
+const CONTROL_CLASS = "input placeholder:text-[var(--color-ink-faint)]";
 
 export function Select({
   className,

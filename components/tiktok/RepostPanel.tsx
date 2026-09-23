@@ -112,8 +112,10 @@ export function RepostPanel({
 
   return (
     <Card className="p-5">
-      <h2 className="text-[15px] font-semibold">{t("repost.title")}</h2>
-      <p className="mt-1 mb-4 text-[13px] leading-relaxed text-[var(--color-ink-soft)]">
+      <h2 className="text-[17px] font-semibold tracking-[-0.01em]">
+        {t("repost.title")}
+      </h2>
+      <p className="mt-1.5 mb-5 max-w-2xl text-[13.5px] leading-relaxed text-[var(--color-ink-soft)]">
         {t("repost.body")}
       </p>
 
@@ -127,7 +129,7 @@ export function RepostPanel({
           setError(null);
           setFiles(Array.from(e.target.files ?? []));
         }}
-        className="block w-full text-[13px] file:mr-3 file:rounded-[9px] file:border file:border-[var(--color-line)] file:bg-[var(--color-surface)] file:px-3 file:py-1.5 file:text-[13px] file:font-medium"
+        className="input cursor-pointer"
       />
 
       <p className="mt-2 text-[12px] text-[var(--color-ink-faint)]">
