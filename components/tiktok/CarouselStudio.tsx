@@ -80,6 +80,8 @@ export function CarouselStudio({
     hasPexels ? "photo" : "generate",
   );
   const [overlayStyle, setOverlayStyle] = useState<OverlayStyle>("stroke");
+  /** Which way in is showing: writing a new carousel, or rebuilding one. */
+  const [mode, setMode] = useState<"new" | "repost">("new");
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -388,15 +390,43 @@ export function CarouselStudio({
 
   return (
     <div className="space-y-8">
-      <Card className="p-5">
-        <h2 className="text-[17px] font-semibold tracking-[-0.01em]">
-          {t("carousels.build")}
-        </h2>
-        <p className="mt-1.5 mb-5 max-w-2xl text-[13.5px] leading-relaxed text-[var(--color-ink-soft)]">
-          {t("carousels.buildHint")}
-        </p>
+      {/*
+        Two ways in, one card. As two stacked blocks they pushed the carousels
+        themselves below the fold, and both were always open even though only
+        one is ever being used.
+      */}
+      <Card className="overflow-hidden">
+        <div
+          role="tablist"
+          className="flex border-b border-[var(--color-line)]"
+        >
+          {(
+            [
+              { key: "new" as const, label: t("carousels.build") },
+              { key: "repost" as const, label: t("repost.title") },
+            ]
+          ).map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              role="tab"
+              aria-selected={mode === tab.key}
+              onClick={() => setMode(tab.key)}
+              className={cn(
+                "-mb-px border-b-2 px-5 py-3.5 text-[14px] font-medium transition-colors",
+                mode === tab.key
+                  ? "border-[var(--color-accent)] text-[var(--color-ink)]"
+                  : "border-transparent text-[var(--color-ink-faint)] hover:text-[var(--color-ink)]",
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
 
-        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,220px)]">
+        <div className={cn("p-5 md:p-6", mode === "new" ? "" : "hidden")}>
+
+        <div className="grid gap-5">
           <Field label={t("carousels.theme")} htmlFor="theme">
             <Input
               id="theme"
@@ -549,18 +579,22 @@ export function CarouselStudio({
             </Notice>
           </div>
         ) : null}
-      </Card>
+        </div>
 
-      <RepostPanel
-        uiLocale={uiLocale}
-        languages={languages}
-        overlayStyle={overlayStyle}
-        canGenerate={canGenerate}
-        onStarted={(carousel) => {
-          setCarousels((current) => [carousel, ...current]);
-          setPreviewLang(carousel.languages[0] ?? previewLang);
-        }}
-      />
+        <div className={cn("p-5 md:p-6", mode === "repost" ? "" : "hidden")}>
+          <RepostPanel
+            uiLocale={uiLocale}
+            languages={languages}
+            overlayStyle={overlayStyle}
+            canGenerate={canGenerate}
+            onStarted={(carousel) => {
+              setCarousels((current) => [carousel, ...current]);
+              setPreviewLang(carousel.languages[0] ?? previewLang);
+              setMode("new");
+            }}
+          />
+        </div>
+      </Card>
 
       {visible.length === 0 ? (
         <EmptyState

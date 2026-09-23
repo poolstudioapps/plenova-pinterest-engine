@@ -23,7 +23,12 @@ export default async function RootLayout({
         <div className="md:flex">
           <Sidebar locale={locale} />
           <main className="min-w-0 flex-1 px-5 py-8 md:px-10 md:py-12">
-            <div className="mx-auto max-w-6xl">{children}</div>
+            {/*
+              Narrower than it was. A form field stretched across a wide screen
+              is harder to read, not more generous: the eye has to travel the
+              width of the window to get from a label to its value.
+            */}
+            <div className="mx-auto max-w-5xl">{children}</div>
           </main>
         </div>
       </body>

@@ -179,7 +179,9 @@ export class SupabaseStore implements EngineStore {
     const { data, error } = await db()
       .from("media")
       .select("data")
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      // Bounded, so one page can never try to hold the whole library at once.
+      .limit(500);
     check("listing media", error);
     return filterMedia(
       (data ?? []).map((row) => row.data as MediaAsset),
@@ -203,6 +205,23 @@ export class SupabaseStore implements EngineStore {
 
   async saveManyMedia(assets: MediaAsset[]): Promise<void> {
     if (assets.length === 0) return;
+
+    /*
+     * A row holds a link to an image, never the image.
+     *
+     * Without an image host the app falls back to inlining pictures as data
+     * URLs, and writing those here put megabytes into a JSON column each -
+     * enough that simply listing the library timed out and took the page down.
+     * Refusing is the honest answer: the fix is an image store, not a bigger
+     * row.
+     */
+    const inlined = assets.filter((a) => a.url.startsWith("data:"));
+    if (inlined.length > 0) {
+      throw new Error(
+        "Images are being inlined rather than hosted, so they cannot be filed. Attach a Blob store.",
+      );
+    }
+
     const { error } = await db()
       .from("media")
       .upsert(
