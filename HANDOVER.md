@@ -114,7 +114,8 @@ déboguer quoi que ce soit sur la connexion.**
 
 | Quoi | Où |
 | --- | --- |
-| Projet Vercel | `prj_QTPvGoFeNBTHUmNwWI4eNVkbRplq`, scope CLI `pool-studios` |
+| Projet Vercel | **`plenova-pinterest-engine-9htq`** (`prj_BgNH5jleYQ9uWXQFpJFRtVlutsuC`), scope CLI `pool-studios` |
+| ⚠️ Doublon | `plenova-pinterest-engine` (`prj_QTPv…`) est un projet **vide** qui déploie le même repo. Il ne sert PAS le domaine. Une variable posée dessus n'a aucun effet en prod — c'est arrivé. Vérifier avec `vercel alias ls \| grep studio.latelierugc`. |
 | Projet Supabase | `snlehcwteclikxhqgvqs` (`plenova-studio`) |
 | CLI Vercel | **authentifié**, le checkout est lié (`.vercel/`) |
 | MCP Vercel | `create_project_env` refuse le format de `requestBody` — passer par le CLI |
