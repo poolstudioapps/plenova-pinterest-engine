@@ -3,21 +3,87 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
+/** How far a press must travel before it becomes a drag, in pixels. */
+const ACTIVATE = 8;
+/** How far the dragged item may lean past the edges of its list. */
+const SLACK = 12;
+const EASE = "cubic-bezier(0.2, 0, 0, 1)";
+
+interface Box {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+interface Drag {
+  id: string;
+  pointerId: number;
+  startX: number;
+  startY: number;
+  x: number;
+  y: number;
+  scrollX: number;
+  scrollY: number;
+  /** The item's resting box when it was grabbed, in list coordinates. */
+  origin: Box;
+  /** The list's inner size, which the item is kept inside. */
+  bounds: { width: number; height: number };
+  started: boolean;
+}
+
+/**
+ * An item's resting place in its list: layout only, whatever transform it
+ * wears. Everything the drag computes is measured this way.
+ *
+ * The first version measured `getBoundingClientRect()`, which includes the
+ * transform - and an item that had been dragged or slid aside once kept a CSS
+ * transition, so on the next drag the rect reported where the item was
+ * EASING FROM, not where it had been put. Every move then corrected against a
+ * stale position, the error grew with each event, and the item ran away from
+ * the pointer - measured at 180 px off after a few moves on the second drag.
+ */
+function restBox(el: HTMLElement): Box {
+  return {
+    left: el.offsetLeft,
+    top: el.offsetTop,
+    width: el.offsetWidth,
+    height: el.offsetHeight,
+  };
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), Math.max(min, max));
+}
+
+/** Clears an item's transition once its own transform has finished easing. */
+function settleWhenDone(el: HTMLElement) {
+  el.ontransitionend = (event) => {
+    if (event.target !== el || event.propertyName !== "transform") return;
+    el.style.transition = "";
+    el.ontransitionend = null;
+  };
+}
+
 /**
  * A grid you reorder by dragging.
  *
  * Pointer events rather than the HTML5 drag-and-drop API: that API does not
  * work on touch screens, gives no control over what the dragged item looks
  * like, and cannot animate the other items out of the way. Here the grabbed
- * item follows the pointer, the others slide aside to show where it will land
- * (a FLIP animation: measured before and after each move, then eased), and
- * nothing is committed until release.
+ * item follows the pointer - held inside its own grid, never loose across the
+ * page - the others slide aside to show where it will land (a FLIP animation),
+ * and nothing is committed until release.
+ *
+ * An item takes a slot when its CENTRE passes over another item, not the
+ * moment the pointer touches one: grabbed by its edge, a thumbnail used to
+ * swap with its neighbour after a few pixels.
  *
  * Keyboard: focus an item and use the arrow keys to move it one place.
  *
  * `onReorder` receives the new order of ids once, on drop. A press that never
- * moves more than a few pixels is left alone, so a click on the item - to open
- * it, to delete it - still works.
+ * travels further than a few pixels is left alone, so a click on the item - to
+ * open it, to delete it - still works.
  */
 export function SortableGrid<T>({
   items,
@@ -50,23 +116,13 @@ export function SortableGrid<T>({
     setOrderState(next);
   };
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const els = useRef(new Map<string, HTMLElement>());
-  const drag = useRef<{
-    id: string;
-    pointerId: number;
-    grabX: number;
-    grabY: number;
-    x: number;
-    y: number;
-    startX: number;
-    startY: number;
-    started: boolean;
-  } | null>(null);
-  /** The translate currently applied to the dragged element. */
-  const shift = useRef({ x: 0, y: 0 });
+  const drag = useRef<Drag | null>(null);
+  /** Removes the window listeners of the gesture in progress. */
+  const detach = useRef<(() => void) | null>(null);
   /** Positions just before a reorder, for the FLIP animation. */
   const before = useRef<Map<string, DOMRect> | null>(null);
-  const [tick, setTick] = useState(0);
 
   const baseIds = items.map(getId);
   const ids = order ?? baseIds;
@@ -88,62 +144,126 @@ export function SortableGrid<T>({
     return next;
   }
 
-  // After every render during a drag: pin the dragged item under the pointer,
-  // and slide every other item from where it was to where it now is.
-  useLayoutEffect(() => {
-    const d = drag.current;
-    if (d?.started) {
-      const el = els.current.get(d.id);
-      if (el) {
-        const rect = el.getBoundingClientRect();
-        // The element's resting place is its rect minus the translate we set.
-        const restX = rect.left - shift.current.x;
-        const restY = rect.top - shift.current.y;
-        shift.current = { x: d.x - d.grabX - restX, y: d.y - d.grabY - restY };
-        el.style.transform = `translate(${shift.current.x}px, ${shift.current.y}px) scale(1.04)`;
+  /**
+   * Where the dragged item is drawn, in list coordinates: its box at the
+   * press, moved exactly as far as the pointer, and kept inside the list. The
+   * page scrolling under a still pointer counts as movement too.
+   */
+  function drawnAt(d: Drag): { left: number; top: number } {
+    const dx = d.x - d.startX + (window.scrollX - d.scrollX);
+    const dy = d.y - d.startY + (window.scrollY - d.scrollY);
+    return {
+      left: clamp(d.origin.left + dx, -SLACK, d.bounds.width - d.origin.width + SLACK),
+      top: clamp(d.origin.top + dy, -SLACK, d.bounds.height - d.origin.height + SLACK),
+    };
+  }
+
+  /** Draws the dragged item where it belongs, from wherever its slot is now. */
+  function pin(d: Drag) {
+    const el = els.current.get(d.id);
+    if (!el) return;
+    const at = drawnAt(d);
+    const rest = restBox(el);
+    el.style.transition = "none";
+    el.style.transform = `translate3d(${at.left - rest.left}px, ${at.top - rest.top}px, 0) scale(1.03)`;
+  }
+
+  /**
+   * The order the list would have if the item were dropped now, or null if
+   * that is where it already sits: it takes the slot of the item its centre
+   * is over. Stable by construction - after a swap the centre lies in the
+   * dragged item's own new slot, which is skipped, so a still pointer never
+   * makes two items trade places back and forth.
+   */
+  function orderAt(d: Drag, list: string[]): string[] | null {
+    const at = drawnAt(d);
+    const cx = at.left + d.origin.width / 2;
+    const cy = at.top + d.origin.height / 2;
+    let target: string | null = null;
+    for (const id of list) {
+      if (id === d.id) continue;
+      const el = els.current.get(id);
+      if (!el) continue;
+      const r = restBox(el);
+      if (cx >= r.left && cx <= r.left + r.width && cy >= r.top && cy <= r.top + r.height) {
+        target = id;
+        break;
       }
     }
+    if (!target) return null;
+    const from = list.indexOf(d.id);
+    const to = list.indexOf(target);
+    return from < 0 || from === to ? null : move(from, to, list);
+  }
+
+  // After every render during a drag: keep the dragged item under the pointer
+  // from its new slot, and slide the others from where they were drawn to
+  // where they now rest.
+  useLayoutEffect(() => {
+    const d = drag.current;
+    if (d?.started) pin(d);
     const prev = before.current;
-    if (prev) {
-      before.current = null;
-      for (const [id, old] of prev) {
-        if (id === d?.id) continue;
-        const el = els.current.get(id);
-        if (!el) continue;
-        const now = el.getBoundingClientRect();
-        const dx = old.left - now.left;
-        const dy = old.top - now.top;
-        if (!dx && !dy) continue;
-        el.style.transition = "none";
-        el.style.transform = `translate(${dx}px, ${dy}px)`;
-        // Read a layout property so the browser applies the jump before the
-        // transition back starts.
-        void el.offsetWidth;
-        el.style.transition = "transform 180ms cubic-bezier(0.2, 0, 0, 1)";
-        el.style.transform = "";
-      }
+    if (!prev) return;
+    before.current = null;
+    for (const [id, old] of prev) {
+      if (id === d?.id) continue;
+      const el = els.current.get(id);
+      if (!el) continue;
+      // Measured bare, so an item still easing from the last swap starts
+      // this one from where it truly rests.
+      el.style.transition = "none";
+      el.style.transform = "";
+      const now = el.getBoundingClientRect();
+      const dx = old.left - now.left;
+      const dy = old.top - now.top;
+      if (!dx && !dy) continue;
+      el.style.transform = `translate(${dx}px, ${dy}px)`;
+      // Read a layout property so the browser applies the jump before the
+      // transition back starts.
+      void el.offsetWidth;
+      el.style.transition = `transform 180ms ${EASE}`;
+      el.style.transform = "";
+      settleWhenDone(el);
     }
   });
 
   function onPointerDown(e: React.PointerEvent<HTMLElement>, id: string) {
-    if (disabled || e.button !== 0) return;
-    // Buttons inside an item (delete, open) keep their own click.
-    if ((e.target as HTMLElement).closest("button, a, input, [data-no-drag]")) return;
+    if (disabled || e.button !== 0 || !e.isPrimary) return;
+    // Controls inside an item (delete, open) keep their own click.
+    if ((e.target as HTMLElement).closest("button, a, input, textarea, select, [data-no-drag]")) {
+      return;
+    }
     const el = els.current.get(id);
-    if (!el) return;
-    const r = el.getBoundingClientRect();
+    const list = listRef.current;
+    if (!el || !list) return;
+    // A gesture whose release never arrived - the pointer let go outside the
+    // window - is closed before a new one starts, never left listening.
+    handlers.current.finish(null, false);
+
+    // Taken from where the item is DRAWN, which is its resting place unless
+    // it is still gliding in from the last drop - grabbed mid-glide, it
+    // carries on from under the pointer instead of jumping to its slot.
+    const drawn = el.getBoundingClientRect();
+    const frame = list.getBoundingClientRect();
+    const rest = restBox(el);
     drag.current = {
       id,
       pointerId: e.pointerId,
-      grabX: e.clientX - r.left,
-      grabY: e.clientY - r.top,
-      x: e.clientX,
-      y: e.clientY,
       startX: e.clientX,
       startY: e.clientY,
+      x: e.clientX,
+      y: e.clientY,
+      scrollX: window.scrollX,
+      scrollY: window.scrollY,
+      origin: {
+        left: drawn.left + drawn.width / 2 - frame.left - list.clientLeft - rest.width / 2,
+        top: drawn.top + drawn.height / 2 - frame.top - list.clientTop - rest.height / 2,
+        width: rest.width,
+        height: rest.height,
+      },
+      bounds: { width: list.clientWidth, height: list.clientHeight },
       started: false,
     };
-    shift.current = { x: 0, y: 0 };
     /*
      * Listen on the window, not through pointer capture on the item.
      *
@@ -153,51 +273,23 @@ export function SortableGrid<T>({
      * listeners do not care which node the pointer is over or where it moved.
      */
     const onMove = (ev: PointerEvent) => handlers.current.move(ev);
-    const onUp = (ev: PointerEvent) => {
-      handlers.current.finish(ev, true);
-      detach();
-    };
-    const onCancel = (ev: PointerEvent) => {
-      handlers.current.finish(ev, false);
-      detach();
-    };
-    const detach = () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onCancel);
+    const onUp = (ev: PointerEvent) => handlers.current.finish(ev, true);
+    const onCancel = (ev: PointerEvent) => handlers.current.finish(ev, false);
+    const onScroll = () => {
+      const d = drag.current;
+      if (d?.started) pin(d);
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onCancel);
-  }
-
-  /**
-   * The order the list would have if the dragged item were dropped where the
-   * pointer is now, or null if that is where it already sits.
-   *
-   * The slot is the item the pointer is OVER - not the nearest centre within
-   * some radius. A radius wide enough to reach a tall 9:16 thumbnail's centre
-   * also reaches its neighbour once the dragged item has moved in beside it,
-   * and the item then swaps back and forth under a still pointer. Over-the-rect
-   * is stable: after a move the pointer sits on the dragged item's own new
-   * slot, which is excluded, so nothing else is under it until it moves on.
-   */
-  function orderAt(d: NonNullable<typeof drag.current>, list: string[]): string[] | null {
-    let target: string | null = null;
-    for (const id of list) {
-      if (id === d.id) continue;
-      const el = els.current.get(id);
-      if (!el) continue;
-      const r = el.getBoundingClientRect();
-      if (d.x >= r.left && d.x <= r.right && d.y >= r.top && d.y <= r.bottom) {
-        target = id;
-        break;
-      }
-    }
-    if (!target) return null;
-    const from = list.indexOf(d.id);
-    const to = list.indexOf(target);
-    return from === to ? null : move(from, to, list);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    detach.current = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onCancel);
+      window.removeEventListener("scroll", onScroll);
+      detach.current = null;
+    };
   }
 
   function onPointerMove(e: PointerEvent) {
@@ -207,49 +299,51 @@ export function SortableGrid<T>({
     d.y = e.clientY;
 
     if (!d.started) {
-      if (Math.hypot(d.x - d.startX, d.y - d.startY) < 6) return;
+      if (Math.hypot(d.x - d.startX, d.y - d.startY) < ACTIVATE) return;
       d.started = true;
       setDraggingId(d.id);
       // No early return: a quick flick may send only this one move before
       // the release, and it must still land where it was aimed.
     }
 
-    const live = orderRef.current ?? baseIds;
-    const next = orderAt(d, live);
+    pin(d);
+    const next = orderAt(d, orderRef.current ?? baseIds);
     if (next) {
       before.current = snapshot();
       setOrder(next);
-    } else {
-      if (!orderRef.current) setOrder(baseIds);
-      setTick((n) => n + 1);
     }
   }
 
-  function finish(e: PointerEvent, commit: boolean) {
+  function finish(e: PointerEvent | null, commit: boolean) {
     const d = drag.current;
-    if (!d || e.pointerId !== d.pointerId) return;
+    if (!d || (e && e.pointerId !== d.pointerId)) return;
     drag.current = null;
+    detach.current?.();
+
     const el = els.current.get(d.id);
     if (el) {
-      el.style.transition = "transform 160ms cubic-bezier(0.2, 0, 0, 1)";
+      // Glide from where it is drawn into its slot, then drop the transition
+      // so nothing carries it into the next gesture.
+      el.style.transition = `transform 160ms ${EASE}`;
       el.style.transform = "";
+      settleWhenDone(el);
     }
-    shift.current = { x: 0, y: 0 };
 
     /*
      * The release does NOT re-aim. The last move already placed the item
-     * where the pointer is, and orderRef holds that order. Re-aiming here read
-     * the DOM before React had redrawn it from that move - so the pointer sat
-     * over the previous occupant of the slot and the item was pushed back one
-     * place, landing a slot short.
-     *
-     * The one case to settle at release is a gesture with no move at all
-     * between press and release: then nothing has been reordered, the DOM is
-     * exactly the starting order, and aiming against it is safe.
+     * where it is drawn, and orderRef holds that order. The one case to settle
+     * here is a quick flick with no move event between press and release:
+     * nothing has been reordered, the layout is the starting one, and aiming
+     * against it is safe.
      */
     let finalOrder = orderRef.current ?? baseIds;
     let started = d.started;
-    if (commit && !started && Math.hypot(e.clientX - d.startX, e.clientY - d.startY) >= 6) {
+    if (
+      commit &&
+      e &&
+      !started &&
+      Math.hypot(e.clientX - d.startX, e.clientY - d.startY) >= ACTIVATE
+    ) {
       d.x = e.clientX;
       d.y = e.clientY;
       started = true;
@@ -285,11 +379,9 @@ export function SortableGrid<T>({
     requestAnimationFrame(() => els.current.get(id)?.focus());
   }
 
-  // `tick` only exists to re-render while the pointer moves.
-  void tick;
-
   return (
-    <div className={className} role="list">
+    // Positioned, so every item's offsets are measured against the list.
+    <div ref={listRef} className={cn("relative", className)} role="list">
       {ids.map((id, index) => {
         const item = byId.get(id);
         if (item === undefined) return null;
