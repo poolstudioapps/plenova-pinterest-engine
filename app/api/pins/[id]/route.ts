@@ -12,7 +12,7 @@ export async function GET(_request: Request, { params }: Params) {
   return handle(async () => {
     const { id } = await params;
     const pin = await getStore().getPin(id);
-    if (!pin) throw notFound(`No Pin with id ${id}.`);
+    if (!pin) throw notFound(`Aucun Pin avec l'identifiant ${id}.`);
     return ok({ pin });
   });
 }
@@ -31,7 +31,7 @@ export async function DELETE(_request: Request, { params }: Params) {
     const { id } = await params;
     const store = getStore();
     const pin = await store.getPin(id);
-    if (!pin) throw notFound(`No Pin with id ${id}.`);
+    if (!pin) throw notFound(`Aucun Pin avec l'identifiant ${id}.`);
     await store.deletePin(id);
     return ok({ deleted: id });
   });

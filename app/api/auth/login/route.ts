@@ -7,7 +7,7 @@ export async function POST(request: Request) {
   const secret = process.env.ADMIN_PASSWORD;
   if (!secret) {
     return NextResponse.json(
-      { error: { code: "not_configured", message: "No password is set." } },
+      { error: { code: "not_configured", message: "Aucun mot de passe n'est configuré sur ce déploiement." } },
       { status: 503 },
     );
   }
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
   if (!(await checkPassword(secret, password))) {
     // Deliberately vague: never confirm whether a password was close.
     return NextResponse.json(
-      { error: { code: "unauthorized", message: "Incorrect password." } },
+      { error: { code: "unauthorized", message: "Mot de passe incorrect." } },
       { status: 401 },
     );
   }

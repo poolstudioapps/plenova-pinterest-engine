@@ -36,7 +36,7 @@ const TOKEN_REFRESH_MARGIN_MS = 5 * 60 * 1000;
 export function buildAuthorizeUrl(state: string): string {
   if (!isPinterestConfigured()) {
     throw notConfigured(
-      "Pinterest is not configured. Set PINTEREST_APP_ID, PINTEREST_APP_SECRET and the redirect URI.",
+      "Pinterest n'est pas configuré. Renseigne PINTEREST_APP_ID, PINTEREST_APP_SECRET et l'URI de redirection.",
     );
   }
   const url = new URL(config.pinterest.authorizeUrl);
@@ -76,7 +76,7 @@ async function requestToken(body: URLSearchParams): Promise<TokenResponse> {
   const text = await res.text();
   if (!res.ok) {
     // Never echo the raw body: it can contain the submitted code.
-    throw upstream(`Pinterest rejected the token request (HTTP ${res.status}).`, {
+    throw upstream(`Pinterest a refusé la demande de jeton (HTTP ${res.status}).`, {
       hint: safeHint(text),
     });
   }
@@ -84,7 +84,7 @@ async function requestToken(body: URLSearchParams): Promise<TokenResponse> {
   try {
     return JSON.parse(text) as TokenResponse;
   } catch {
-    throw upstream("Pinterest returned a malformed token response.");
+    throw upstream("Pinterest a renvoyé une réponse de jeton illisible.");
   }
 }
 
@@ -124,7 +124,7 @@ export async function exchangeCodeForToken(
   code: string,
 ): Promise<PinterestConnection> {
   if (!isPinterestConfigured()) {
-    throw notConfigured("Pinterest is not configured.");
+    throw notConfigured("Pinterest n'est pas configuré.");
   }
   const body = new URLSearchParams({
     grant_type: "authorization_code",
@@ -151,7 +151,7 @@ async function refreshConnection(
 ): Promise<PinterestConnection> {
   if (!connection.refreshToken) {
     throw notConnected(
-      "The Pinterest access token expired and no refresh token is stored. Reconnect the account.",
+      "Le jeton d'accès Pinterest a expiré et aucun jeton de rafraîchissement n'est stocké. Reconnecte le compte.",
     );
   }
   const body = new URLSearchParams({
@@ -189,7 +189,7 @@ async function activeConnection(): Promise<PinterestConnection> {
   if (!connection) {
     // Fall back to a manually supplied token while the app awaits approval.
     if (hasManualPinterestToken()) return manualConnection();
-    throw notConnected("No Pinterest account is connected.");
+    throw notConnected("Aucun compte Pinterest n'est connecté.");
   }
   if (
     connection.expiresAt !== null &&
@@ -281,7 +281,7 @@ async function apiFetch<T>(
 
   if (res.status === 429) {
     throw rateLimited(
-      "Pinterest rate limit reached. Wait before publishing again.",
+      "Limite de requêtes Pinterest atteinte. Attends un moment avant de publier à nouveau.",
     );
   }
 
@@ -289,10 +289,10 @@ async function apiFetch<T>(
   if (!res.ok) {
     if (res.status === 401) {
       throw notConnected(
-        "Pinterest rejected the access token. Reconnect the account.",
+        "Pinterest a refusé le jeton d'accès. Reconnecte le compte.",
       );
     }
-    throw upstream(`Pinterest API error (HTTP ${res.status}).`, {
+    throw upstream(`L'API Pinterest a renvoyé une erreur (HTTP ${res.status}).`, {
       hint: safeHint(text),
     });
   }
@@ -300,7 +300,7 @@ async function apiFetch<T>(
   try {
     return JSON.parse(text) as T;
   } catch {
-    throw upstream("Pinterest returned a malformed response.");
+    throw upstream("Pinterest a renvoyé une réponse illisible.");
   }
 }
 
@@ -388,7 +388,7 @@ export async function publishPin(
 ): Promise<PublishPinResult> {
   if (input.imageUrl.startsWith("data:")) {
     throw upstream(
-      "This Pin's image is stored inline. Attach a Blob store so Pinterest can fetch a public image URL.",
+      "L'image de ce Pin est stockée en inline. Attache un store Blob pour que Pinterest puisse récupérer une URL publique.",
     );
   }
 
@@ -396,7 +396,7 @@ export async function publishPin(
 
   if (connection.scopes.length > 0 && !connection.scopes.includes("pins:write")) {
     throw notConnected(
-      "The current Pinterest token is read-only (no pins:write scope). Publishing needs an approved app with write access.",
+      "Le jeton Pinterest actuel est en lecture seule (scope pins:write absent). La publication demande une app approuvée avec accès en écriture.",
     );
   }
 
@@ -417,7 +417,7 @@ export async function publishPin(
   });
 
   if (!response.id) {
-    throw upstream("Pinterest accepted the request but returned no Pin id.");
+    throw upstream("Pinterest a accepté la requête mais n'a pas renvoyé d'id de Pin.");
   }
   return { pinterestPinId: response.id };
 }

@@ -25,15 +25,15 @@ export async function GET(_request: Request, { params }: Params) {
 
     const position = Number(index);
     if (!Number.isInteger(position) || position < 0) {
-      throw badRequest("index must be a slide position.");
+      throw badRequest("La position de la slide est invalide.");
     }
 
     const carousel = await getStore().getCarousel(id);
-    if (!carousel) throw notFound(`No carousel with id ${id}.`);
+    if (!carousel) throw notFound(`Aucun carrousel avec l'identifiant ${id}.`);
 
     const slide = carousel.slides[position];
     if (!slide?.imageUrl) {
-      throw notFound(`Slide ${position} has no image.`);
+      throw notFound(`La slide ${position} n'a pas d'image.`);
     }
 
     // Local development stores images inline; decode rather than re-fetch.
@@ -47,7 +47,7 @@ export async function GET(_request: Request, { params }: Params) {
 
     const upstream = await fetch(slide.imageUrl, { cache: "no-store" });
     if (!upstream.ok || !upstream.body) {
-      throw notFound(`Slide ${position} image could not be fetched.`);
+      throw notFound(`L'image de la slide ${position} n'a pas pu être chargée.`);
     }
     return new NextResponse(upstream.body, {
       headers: {

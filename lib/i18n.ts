@@ -1,53 +1,50 @@
 /**
- * Bilingual support (FR / EN).
+ * Language.
  *
- * Two distinct concerns share this module:
- *  1. UI language  - what the operator sees in the dashboard.
- *  2. Pin language - what Gemini writes into the Pin, which drives which
- *     Pinterest audience the content reaches.
+ * Two different concerns used to share this module. Only one is left.
  *
- * They are deliberately independent: an English-speaking operator may well be
- * producing French Pins, and vice versa.
+ *  1. The dashboard is French, and only French. There is one operator and they
+ *     are French-speaking, so a second interface language was a dictionary to
+ *     keep in sync for nobody's benefit - and a switcher that could strand the
+ *     tool in a language its owner did not ask for.
+ *
+ *  2. `ContentLocale` is what a pin or a carousel is WRITTEN in, and that one
+ *     IS plural on purpose: a single carousel feeds a French, a Spanish and a
+ *     German account in their own words.
+ *
+ * Do not conflate the two. Narrowing the second would remove the reason this
+ * tool exists.
  *
  * Plant care facts stay canonical in English in the catalog and are handed to
- * the model as reference data. The model writes the Pin in the target locale.
- * That avoids maintaining 50 plants x 6 care fields in two languages, where
- * translation drift would silently degrade horticultural accuracy.
- * What IS translated is the plant *name*, because French common names differ
- * substantially and are what people actually search on Pinterest.
+ * the model as reference data; the model writes in the target language. What
+ * IS translated is the plant *name*, because French common names differ
+ * substantially and are what people actually search on.
  */
-
-/**
- * Two locale sets, deliberately separate.
- *
- * `Locale` is the dashboard language, and only exists where a full UI
- * dictionary does. `ContentLocale` is what a Pin or a carousel can be WRITTEN
- * in, which is a much cheaper thing to add: the model composes in the target
- * language, no dictionary required.
- *
- * Conflating them would mean either a half-translated interface or refusing to
- * publish in Spanish because nobody translated the word "Queue".
- */
-export const LOCALES = ["en", "fr"] as const;
-export type Locale = (typeof LOCALES)[number];
 
 export const CONTENT_LOCALES = ["fr", "en", "es", "de", "it"] as const;
 export type ContentLocale = (typeof CONTENT_LOCALES)[number];
 
-/** French: this is a French-speaking operator publishing mainly in French. */
-export const DEFAULT_LOCALE: Locale = "fr";
+/**
+ * What a pin or carousel is written in when nothing else says.
+ *
+ * This is a CONTENT language, not an interface one - it decides what the model
+ * writes, not what the operator reads.
+ */
+export const DEFAULT_CONTENT_LOCALE: ContentLocale = "fr";
 
-export const LOCALE_LABELS: Record<Locale, string> = {
-  en: "English",
-  fr: "Français",
-};
-
+/*
+ * Named in French, not each in its own language.
+ *
+ * "English" and "Español" sitting in a French dropdown is the interface
+ * speaking two languages at once. What is multilingual here is what gets
+ * WRITTEN, not the label naming it.
+ */
 export const CONTENT_LOCALE_LABELS: Record<ContentLocale, string> = {
   fr: "Français",
-  en: "English",
-  es: "Español",
-  de: "Deutsch",
-  it: "Italiano",
+  en: "Anglais",
+  es: "Espagnol",
+  de: "Allemand",
+  it: "Italien",
 };
 
 export function isContentLocale(value: unknown): value is ContentLocale {
@@ -88,425 +85,17 @@ export const LOCALE_WRITING: Record<
   },
 };
 
-export function isLocale(value: unknown): value is Locale {
-  return typeof value === "string" && (LOCALES as readonly string[]).includes(value);
-}
-
-export function coerceLocale(value: unknown): Locale {
-  return isLocale(value) ? value : DEFAULT_LOCALE;
-}
-
-/** Picks the localized string from a `{ en, fr }` pair. */
-export function pick<T>(record: Record<Locale, T>, locale: Locale): T {
-  return record[locale] ?? record[DEFAULT_LOCALE];
-}
-
-export const LOCALE_COOKIE = "plenova_locale";
-
 /* ------------------------------------------------------------ dictionary -- */
 
 /**
- * English is the source of truth for what keys exist. Every other dictionary
- * is typed against it, so a key added on one side and forgotten on the other
- * is a compile error rather than a raw "publish.modeDraft" shown to a user.
+ * The interface, in French.
+ *
+ * This object is the only dictionary there is, so it also defines what keys
+ * exist: `TranslationKey` is derived from it below, and a key referenced in a
+ * component but absent here is a compile error rather than a raw
+ * "publish.modeDraft" rendered to the screen.
  */
-const EN = {
-  "nav.dashboard": "Dashboard",
-  "nav.account": "Account",
-  "nav.groupPinterest": "Pinterest",
-  "nav.groupTikTok": "TikTok",
-  "nav.groupShared": "Shared",
-  "nav.generate": "Generate",
-  "nav.library": "Pins",
-  "nav.queue": "Queue",
-  "nav.pinterest": "Pinterest",
-  "nav.tiktok": "TikTok",
-  "nav.accountPinterest": "Pinterest account",
-  "nav.accountTikTok": "TikTok account",
-  "nav.carousels": "Carousels",
-
-  "tiktok.addAccount": "Add another account",
-  "tiktok.noAccounts": "No account connected",
-  "tiktok.noAccountsBody":
-    "Connect a TikTok account, then set the language it publishes in. Several accounts can be connected, each posting in its own language.",
-  "tiktok.noDirectPost": "no direct post",
-  "tiktok.language": "Publishing language",
-
-  "carousels.languages": "Languages to write",
-  "carousels.languagesHint":
-    "Each account posts in its assigned language. Writing a language nothing publishes in just costs a generation.",
-  "carousels.posts": "Posted to",
-  "carousels.mentionHint": "This slide carries the Plenova mention",
-
-  "publish.accounts": "Accounts",
-  "publish.selected": "{n} selected",
-  "publish.noEligible":
-    "No connected account publishes in a language this carousel was written in.",
-  "publish.skipped": "Not shown, no matching language: {names}",
-  "publish.multiResult": "{ok} published, {ko} failed.",
-  "publish.someFailed": "Some accounts failed",
-  "publish.confirmMulti": "Publish to {n}",
-  "tiktok.title": "TikTok",
-  "tiktok.subtitle":
-    "Connect the Plenova TikTok account so the engine can publish photo carousels.",
-  "tiktok.connection": "Connection",
-  "tiktok.connectBody":
-    "Authorise the Plenova TikTok account. Tokens are encrypted before storage and never reach the browser.",
-  "tiktok.connect": "Connect TikTok",
-  "tiktok.disconnect": "Disconnect",
-  "tiktok.notConfigured": "TikTok credentials are not set",
-  "tiktok.notConfiguredBody":
-    "Add TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET and TIKTOK_REDIRECT_URI, then redeploy.",
-  "tiktok.connectedTitle": "Account connected",
-  "tiktok.connectedBody": "The TikTok account is linked and carousels can be published.",
-  "tiktok.failedTitle": "Connection failed",
-  "tiktok.directPost": "Direct post",
-  "tiktok.draft": "Draft upload",
-  "tiktok.available": "Available",
-  "tiktok.unavailable": "Not granted",
-  "tiktok.config": "App configuration",
-  "tiktok.redirectUri": "Redirect URI",
-  "tiktok.redirectHint":
-    "Must match the value registered on the TikTok app exactly.",
-  "tiktok.clientKey": "Client key",
-  "tiktok.clientKeyMissing": "not set",
-  "tiktok.secret": "Secret",
-  "tiktok.devMode": "A sandbox is required before approval",
-  "tiktok.devModeBody":
-    "TikTok refuses OAuth for an app it has not approved, and reports it as a client_key error even though the key is fine. In the developer portal, flip the toggle beside the app name to Sandbox, create one cloned from production, add your account under Target users, and use the sandbox client key and secret here until the app is approved.",
-  "tiktok.scopes": "Requested scopes",
-
-  "carousels.title": "Carousels",
-  "carousels.subtitle":
-    "Build a TikTok carousel from the image library, then publish it. Images already paid for by a Pin cost nothing here.",
-  "carousels.build": "New carousel",
-  "carousels.buildHint":
-    "Describe the theme. Gemini writes every slide - hook, content, call to action - then paints an image for each one. A theme containing a number sets the slide count.",
-  "carousels.theme": "Theme",
-  "carousels.plantOptional": "Plant (optional)",
-  "carousels.anyPlant": "No specific plant",
-  "carousels.generate": "Generate carousel",
-  "carousels.generating": "Generating...",
-  "carousels.starting": "Starting...",
-  "carousels.inFlight": "writing and illustrating, {done}/{total} slides",
-  "carousels.generatingHint":
-    "Runs on the server - you can navigate away or close the tab, it keeps going.",
-  "carousels.caption": "Caption",
-  "carousels.compose": "Add text",
-  "carousels.recompose": "Redo text",
-  "carousels.imageSource": "Images",
-  "carousels.sourcePhoto": "From real photos (most believable)",
-  "carousels.sourceGenerate": "Generated from scratch (fastest)",
-  "carousels.sourceLibrary": "Reuse the library (free)",
-  "carousels.sourceHint":
-    "Real photos are used only as a reference: the model paints an original frame from one, which keeps the result from looking generated.",
-  "carousels.noPexels":
-    "PEXELS_API_KEY is not set, so slides fall back to being generated from scratch.",
-  "carousels.overlayStyle": "Text style",
-  "carousels.styleStroke": "White with green outline",
-  "carousels.stylePill": "White pills (TikTok)",
-  "carousels.styleNone": "Plain white",
-  "carousels.overlayHint":
-    "Text is burned into the slides by your browser, so what you see is what publishes.",
-  "carousels.notComposed":
-    "Slides still have no text on them. Add it before publishing, or the carousel posts as bare photographs.",
-  "carousels.empty": "No carousels yet",
-  "carousels.emptyBody":
-    "Describe a theme above and Gemini will design and illustrate the whole carousel.",
-  "carousels.publish": "Publish to TikTok",
-  "carousels.delete": "Delete",
-  "carousels.slides": "{n} slides",
-
-  "publish.title": "Publish to TikTok",
-  "publish.mode": "How to post",
-  "publish.modeDirect": "Publish now",
-  "publish.modeDirectHint": "Goes live on the profile immediately.",
-  "publish.modeDraft": "Send to drafts",
-  "publish.modeDraftHint": "Lands in the TikTok inbox to finish and post by hand.",
-  "publish.privacy": "Who can view this post",
-  "publish.privacyHint":
-    "Options come from your TikTok account and are honoured exactly as chosen.",
-  "publish.brandContent": "Branded content — promoting another brand or a third party",
-  "publish.brandOrganic": "Your brand — promoting yourself or your own business",
-  "publish.confirm": "Publish",
-  "publish.cancel": "Cancel",
-  "publish.loading": "Loading your TikTok account...",
-  "publish.published": "Published. TikTok publish id: {id}",
-  "publish.draftDone": "Sent to your TikTok drafts.",
-  "publish.needPrivacy": "Choose who can view the post first.",
-  "nav.media": "Images",
-
-  "media.title": "Image library",
-  "media.subtitle":
-    "Every image the engine has generated, filed by plant and cultivar. Reuse one instead of paying for a new generation.",
-  "media.empty": "No images yet",
-  "media.emptyBody":
-    "Generate a Pin and its image lands here automatically, filed under its plant.",
-  "media.allPlants": "All plants",
-  "media.search": "Search plant, cultivar or prompt",
-  "media.count": "{count} images across {plants} plants",
-  "media.used": "used {n}x",
-  "media.reuse": "Reuse this image",
-  "media.delete": "Remove from library",
-  "media.noMatch": "No image matches these filters.",
-
-  "generate.variety": "Cultivar",
-  "generate.varietyHint":
-    "Optional, free text - e.g. variegata, Thai Constellation. Files the image under it in the library.",
-  "generate.reuse": "Reuse an existing image",
-  "generate.reuseHint":
-    "Skips image generation and reuses a library image for this plant.",
-  "generate.reuseNone": "Generate a new image",
-  "generate.reuseAvailable": "{n} available for this plant",
-
-  "dashboard.title": "Dashboard",
-  "dashboard.subtitle":
-    "Generation and publishing status for the Plenova Pinterest channel.",
-  "dashboard.plants": "Plants",
-  "dashboard.plantsHint": "in the catalog",
-  "dashboard.angles": "Content angles",
-  "dashboard.anglesHint": "across 5 categories",
-  "dashboard.possible": "Possible Pins",
-  "dashboard.possibleHint": "per language, 4 variations per slot",
-  "dashboard.generated": "Generated",
-  "dashboard.generatedHint": "stored in this engine",
-  "dashboard.published": "Published",
-  "dashboard.queued": "Queued",
-  "dashboard.scheduled": "Scheduled",
-  "dashboard.failed": "Failed",
-  "dashboard.media": "Library images",
-  "dashboard.mediaHint": "reusable across channels",
-  "dashboard.reuses": "Image reuses",
-  "dashboard.reusesHint": "generations that skipped the image model",
-  "dashboard.recent": "Recent Pins",
-  "dashboard.viewLibrary": "View library",
-  "dashboard.empty": "Nothing generated yet.",
-  "dashboard.emptyCta": "Generate the first Pin",
-  "dashboard.system": "System",
-  "dashboard.gemini": "Gemini",
-  "dashboard.pinterestApp": "Pinterest app",
-  "dashboard.connected": "Account connected",
-  "dashboard.hosting": "Public image hosting",
-  "dashboard.encryption": "Token encryption",
-  "dashboard.storage": "Storage",
-  "dashboard.ready": "Ready",
-  "dashboard.notSet": "Not set",
-  "dashboard.notPersistentTitle": "Storage is not persistent",
-  "dashboard.notPersistent":
-    "Pins are held in memory only and will disappear when the serverless function recycles. Attach a Vercel Blob store before generating at volume.",
-
-  "generate.title": "Generate",
-  "generate.subtitle":
-    "Pick a plant and a content angle. Gemini writes the copy, then paints a 2:3 visual matched to that angle.",
-  "generate.plant": "Plant",
-  "generate.angle": "Content angle",
-  "generate.pinLanguage": "Pin language",
-  "generate.pinLanguageHint":
-    "The language the Pin copy is written in. Independent of the dashboard language.",
-  "generate.style": "Visual style",
-  "generate.styleHint":
-    "Leave on Auto to let the engine pick a format that suits the angle.",
-  "generate.styleAuto": "Auto",
-  "generate.custom": "Custom direction",
-  "generate.customHint": "Optional. Takes priority over the angle's default intent.",
-  "generate.customPlaceholder":
-    "e.g. focus on winter watering in a flat with no south-facing window",
-  "generate.variation": "Variation",
-  "generate.variationHint":
-    "Each variation uses a different title structure and composition.",
-  "generate.regenerate": "Regenerate over an existing Pin in this slot",
-  "generate.cta": "Generate Pin",
-  "generate.working": "Generating...",
-  "generate.needKey": "Set GEMINI_API_KEY in your environment to enable generation.",
-  "generate.failed": "Generation failed",
-  "generate.duplicateHint": "Bump the variation number or tick the regenerate box.",
-  "generate.unreachable":
-    "Could not reach the server. Check that the dev server is running.",
-
-  "preview.empty": "No Pin yet",
-  "preview.emptyBody":
-    "Pick a plant and an angle, then generate. The preview lands here at Pinterest's 2:3 ratio.",
-  "preview.working":
-    "Writing the copy, then painting the visual. This usually takes 20-60 seconds.",
-  "preview.titleField": "Title",
-  "preview.descField": "Description",
-  "preview.keywords": "Keywords",
-  "preview.destination": "Destination",
-  "preview.board": "Pinterest board",
-  "preview.selectBoard": "Select a board...",
-  "preview.connectFirst": "Connect Pinterest to load boards",
-  "preview.save": "Save changes",
-  "preview.queue": "Add to queue",
-  "preview.publish": "Publish now",
-  "preview.saved": "Changes saved.",
-  "preview.queued": "Added to the publishing queue.",
-  "preview.notConnected":
-    "Pinterest is not connected, so publishing is disabled. Everything else - generating, editing and queueing - works normally.",
-  "preview.inline":
-    "Stored inline - not publishable. Attach a Blob store, then regenerate.",
-  "preview.lastError": "Last error",
-  "preview.requestFailed": "Request failed.",
-  "preview.unreachable": "Could not reach the server.",
-
-  "library.title": "Library",
-  "library.subtitle":
-    "Every Pin this engine has generated, with its current publishing status.",
-  "library.allPlants": "All plants",
-  "library.allAngles": "All angles",
-  "library.allStatuses": "All statuses",
-  "library.allLanguages": "All languages",
-  "library.allVarieties": "All cultivars",
-  "library.search": "Search title, copy or keywords",
-  "library.count": "{shown} of {total} Pins",
-  "library.editing": "Editing",
-  "library.close": "Close",
-  "library.edit": "Edit",
-  "library.delete": "Delete",
-  "library.empty": "No Pins yet",
-  "library.emptyBody":
-    "Generated Pins are stored here with their status, so you can review, edit and publish them later.",
-  "library.emptyCta": "Generate a Pin",
-  "library.noMatch": "No matches",
-  "library.noMatchBody":
-    "No Pin matches the current filters. Try clearing the search or status.",
-
-  "queue.title": "Queue",
-  "queue.subtitle":
-    "Pins waiting to be published. The Vercel cron worker drains this hourly in small batches.",
-  "queue.empty": "Queue is empty",
-  "queue.emptyBody":
-    "Generate a Pin, select a board, then add it to the queue to schedule publishing.",
-  "queue.noCronTitle": "Cron worker is not armed",
-  "queue.noCron":
-    "Set CRON_SECRET in the Vercel project so the scheduled publisher can authenticate. Until then, publish manually from the Library.",
-  "queue.noBoard": "No board selected",
-  "queue.board": "Board",
-  "queue.attempts": "attempt(s)",
-
-  "pinterest.title": "Pinterest",
-  "pinterest.subtitle":
-    "Connect the Plenova Pinterest account so the engine can read boards and publish Pins.",
-  "pinterest.connection": "Connection",
-  "pinterest.connectBody":
-    "Authorise the Plenova Pinterest account. Tokens are encrypted before storage and never reach the browser.",
-  "pinterest.connect": "Connect Pinterest",
-  "pinterest.disconnect": "Disconnect",
-  "pinterest.connectedAt": "Connected",
-  "pinterest.expires": "token expires",
-  "pinterest.boards": "Boards",
-  "pinterest.loadingBoards": "Loading boards...",
-  "pinterest.noBoards": "No boards found",
-  "pinterest.noBoardsBody": "Create a board on Pinterest, then reload this page.",
-  "pinterest.config": "App configuration",
-  "pinterest.redirectUri": "Redirect URI",
-  "pinterest.redirectHint":
-    "This must match the value registered on the Pinterest app exactly.",
-  "pinterest.scopes": "Requested scopes",
-  "pinterest.apiBase": "API base",
-  "pinterest.destination": "Pin destination",
-  "pinterest.notConfigured": "Pinterest credentials are not set",
-  "pinterest.noHostingTitle": "No public image hosting",
-  "pinterest.noHosting":
-    "Pinterest fetches Pin images by URL. Attach a Vercel Blob store so generated images get a public URL; until then Pins can be generated and reviewed but not published.",
-  "pinterest.connectedTitle": "Account connected",
-  "pinterest.connectedBody":
-    "The Pinterest account is linked and boards are now available in the generator.",
-  "pinterest.failedTitle": "Connection failed",
-  "pinterest.trialTitle": "Read-only trial token in use",
-  "pinterest.trialBody":
-    "The engine is authenticated with a manually supplied trial token. Boards can be read, but publishing needs the pins:write scope, which trial access does not grant.",
-
-  "login.intro":
-    "Internal content studio for Plenova, a houseplant care app. It generates plant-care images and copy, and publishes them to our own Pinterest and TikTok accounts. Access is restricted to authorised staff.",
-  "login.terms": "Terms of Service",
-  "login.privacy": "Privacy Policy",
-  "login.password": "Password",
-  "login.cta": "Sign in",
-  "login.failed": "Incorrect password.",
-
-  "common.language": "Language",
-  "common.uiLanguage": "Dashboard language",
-  "editor.title": "Edit slide {n}",
-  "editor.displayLanguage": "Displayed language",
-  "editor.blockTitle": "Title",
-  "editor.blockSubtitle": "Subtitle",
-  "carousels.slidesMissed": "Slides {slides} could not be rendered in {lang}: {reason}",
-  "repost.title": "Repost an existing carousel",
-  "repost.body": "Take screenshots of a carousel you like, one per slide. The words are read and rewritten in your languages, and each photograph is cleaned of the app's interface and of its original text. You get an ordinary carousel you can then edit and publish.",
-  "repost.pick": "Choose screenshots",
-  "repost.none": "No screenshot chosen yet.",
-  "repost.chosen": "{n} screenshot(s) chosen.",
-  "repost.order": "They are used in the order you selected them.",
-  "repost.sending": "Sending {done} of {total}",
-  "repost.start": "Rebuild as ours · {n}",
-  "carousels.composeBusy": "Wait for the text pass already running to finish.",
-  "carousels.confirmDelete": "Click again to delete",
-  "carousels.openLabel": "Open this carousel",
-  "carousels.needsText": "Add the text to the slides before publishing.",
-  "common.dismiss": "Dismiss",
-  "carousels.postFailed": "rejected by TikTok",
-  "carousels.checkStatus": "Ask TikTok again",
-  "carousels.checkStatusHint": "TikTok pulls the slides after accepting, which takes minutes. This asks it where the post got to.",
-  "carousels.postDraft": "in drafts",
-  "carousels.postPublished": "published",
-  "carousels.postPending": "waiting on TikTok",
-  "publish.draftResult": "{ok} sent to drafts, {ko} failed.",
-  "publish.draftWhere": "Open TikTok on the phone: the carousel is waiting in the inbox, ready to review and post by hand. It is not on the profile yet.",
-  "publish.publishedWhere": "It is on the account's profile. A post set to Only me is visible to you alone, so check while signed in to that account.",
-  "publish.postTitle": "Title",
-  "publish.postTitleHint": "Leave it as it is and each language keeps the title written for it. Type here and that title is used for every selected account.",
-  "publish.disclosure": "This content promotes a brand, product or service",
-  "publish.disclosureNeeded": "You need to indicate if your content promotes yourself, a third party, or both.",
-  "publish.labelPromotional": "Your photo will be labelled “Promotional content”.",
-  "publish.labelPaid": "Your photo will be labelled “Paid partnership”.",
-  "publish.brandedNotPrivate": "Branded content visibility cannot be set to private.",
-  "publish.consentBranded": "By posting, you agree to TikTok's Branded Content Policy and Music Usage Confirmation.",
-  "publish.aigc": "These slides were generated by an image model",
-  "publish.aigcHint": "Declared to TikTok, which is what the slides actually are.",
-  "publish.perAccount": "Each account's own options are used, and only the choices every selected account allows are offered.",
-  "publish.creatorUnavailable": "TikTok would not return this account's information just now, which publishing directly requires. Sending a draft does not.",
-  "publish.retry": "Try again",
-  "publish.allowComment": "Allow comments",
-  "publish.commentDisabled": "This account has comments turned off in its own settings.",
-  "publish.consent": "By posting, you agree to TikTok's Music Usage Confirmation.",
-  "publish.unaudited": "Until the app passes TikTok's audit, a direct post is only accepted as “Only me”, from an account that is itself set to private. A draft has no such restriction.",
-  "publish.postNow": "Publish now · {n}",
-  "publish.sendDraft": "Send as draft · {n}",
-  "publish.actionHint": "A draft lands in the account's inbox on the phone, ready to review and post by hand. Publishing goes out immediately.",
-  "editor.imageBroken": "This slide's photograph could not be loaded, so the preview shows only the text. Regenerate the carousel if it stays broken.",
-  "editor.blockCta": "Plenova mention",
-  "editor.ctaHint": "Shown only when it has text. One slide usually carries it.",
-  "editor.slideStyle": "Slide style",
-  "editor.blockStyle": "Style",
-  "editor.styleInherit": "Same as slide",
-  "editor.styleStroke": "Plenova outline",
-  "editor.stylePillWhite": "White pill",
-  "editor.stylePillBlack": "Black pill",
-  "editor.styleNone": "Plain text",
-  "editor.align": "Alignment",
-  "editor.size": "Size",
-  "editor.weight": "Weight",
-  "editor.lineHeight": "Line spacing",
-  "editor.strokeColor": "Outline colour",
-  "editor.strokeWidth": "Outline width",
-  "editor.hint": "Text is written per language. Position, size and style are shared across all of them.",
-  "editor.drag": "Drag a block to move it, its corners to resize it.",
-  "editor.undo": "Undo",
-  "editor.redo": "Redo",
-  "editor.keys": "The arrow keys move the selected block, Shift moves it ten at a time, and Ctrl+Z undoes.",
-  "editor.reset": "Reset layout",
-  "editor.save": "Save",
-  "editor.cancel": "Cancel",
-  "editor.saving": "Saving...",
-  "editor.empty": "This slide has no text in {lang} yet. Type it here.",
-  "editor.open": "Edit",
-};
-
-export type TranslationKey = keyof typeof EN;
-
-type Dict = Record<TranslationKey, string>;
-
-const FR: Dict = {
+const FR = {
   "nav.dashboard": "Tableau de bord",
   "nav.account": "Compte",
   "nav.groupPinterest": "Pinterest",
@@ -633,6 +222,33 @@ const FR: Dict = {
   "publish.needPrivacy": "Choisis d'abord qui peut voir la publication.",
   "nav.media": "Images",
 
+  "pinterest.boardsFailed": "Impossible de charger les tableaux.",
+  "pinterest.pinCount": "{n} pins",
+  "pinterest.privacyPublic": "public",
+  "pinterest.privacySecret": "secret",
+  "pinterest.privacyProtected": "protégé",
+  "carousels.more": "Autres actions",
+  "carousels.composingCount": "Incrustation du texte, {done}/{total}",
+  "status.generating": "en cours",
+  "status.draft": "brouillon",
+  "status.generated": "généré",
+  "status.queued": "en file",
+  "status.scheduled": "programmé",
+  "status.publishing": "publication…",
+  "status.published": "publié",
+  "status.failed": "échec",
+  "generate.advanced": "Options avancées",
+  "carousels.examples": "Exemples",
+  "carousels.themeHint":
+    "Un nombre dans le thème fixe le nombre de slides : « Top 5 » donne 5 slides plus une couverture.",
+  "carousels.blockedNoKey": "Il manque la clé GEMINI_API_KEY.",
+  "carousels.blockedTheme": "Écris un thème d'au moins 3 caractères.",
+  "carousels.blockedLanguages": "Choisis au moins une langue.",
+  "repost.blockedFiles": "Choisis d'abord tes captures d'écran.",
+  "repost.reading": "Lecture des captures…",
+  "repost.pickHint":
+    "Une capture par slide, dans l'ordre. Le texte est relu et réécrit dans tes langues, et chaque photo est nettoyée de l'interface de l'app et de son texte d'origine.",
+  "plant.unconfirmed": "espèce non confirmée",
   "media.title": "Bibliothèque d'images",
   "media.subtitle":
     "Toutes les images générées par le moteur, classées par plante et cultivar. Réutilise-en une plutôt que de repayer une génération.",
@@ -901,39 +517,36 @@ const FR: Dict = {
   "editor.open": "Modifier",
 };
 
-const DICTIONARIES: Record<Locale, Dict> = { en: EN, fr: FR };
+export type TranslationKey = keyof typeof FR;
 
 export type Translator = (
   key: TranslationKey,
   vars?: Record<string, string | number>,
 ) => string;
 
-/** Returns a translator. Missing keys fall back to English, then to the key. */
 /**
- * One translator per locale, kept, so its identity is stable.
+ * One translator, kept.
  *
- * This is not an optimisation. A fresh function on every call makes any React
- * effect that depends on it re-run on every render, and an effect that also
- * sets state then re-renders and re-runs itself without end. That is what
- * turned opening the publish screen into an unbounded stream of creator-info
- * calls to TikTok, and into a rate limit that never cleared.
+ * Its stable identity is not an optimisation. A fresh function on every call
+ * makes any React effect that depends on it re-run on every render, and an
+ * effect that also sets state then re-renders and re-runs itself without end.
+ * That is what turned opening the publish screen into an unbounded stream of
+ * creator-info calls to TikTok, and into a rate limit that never cleared.
  */
-const TRANSLATORS = new Map<Locale, Translator>();
-
-export function translator(locale: Locale): Translator {
-  const existing = TRANSLATORS.get(locale);
-  if (existing) return existing;
-
-  const dict = DICTIONARIES[locale] ?? EN;
-  const translate: Translator = (key, vars) => {
-    let out = dict[key] ?? EN[key] ?? key;
-    if (vars) {
-      for (const [k, v] of Object.entries(vars)) {
-        out = out.split(`{${k}}`).join(String(v));
-      }
+const TRANSLATE: Translator = (key, vars) => {
+  let out = FR[key] ?? key;
+  if (vars) {
+    for (const [k, v] of Object.entries(vars)) {
+      out = out.split(`{${k}}`).join(String(v));
     }
-    return out;
-  };
-  TRANSLATORS.set(locale, translate);
-  return translate;
+  }
+  return out;
+};
+
+/** The interface dictionary. Takes no locale: there is one. */
+export function translator(): Translator {
+  return TRANSLATE;
 }
+
+/** Shorthand for the common case of translating a single string. */
+export const t = TRANSLATE;

@@ -100,7 +100,7 @@ export class BlobStore extends DocumentStore {
         const parsed = JSON.parse(text) as StateDocument;
         if (parsed.version !== 1 || typeof parsed.pins !== "object") {
           throw new Error(
-            "The stored state document is not in a shape this version understands. Refusing to overwrite it.",
+            "Le document d'état enregistré n'a pas une forme que cette version comprend. Il ne sera pas écrasé.",
           );
         }
         accessMode = access;
@@ -177,6 +177,6 @@ export class BlobStore extends DocumentStore {
     }
     throw lastError instanceof Error
       ? lastError
-      : new Error("Could not write the state document to Blob storage.");
+      : new Error("Impossible d'écrire le document d'état dans le stockage Blob.");
   }
 }

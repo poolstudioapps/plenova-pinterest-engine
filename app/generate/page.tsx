@@ -5,19 +5,17 @@ import { ANGLES, ANGLE_CATEGORIES } from "@/lib/data/angles";
 import {
   angleCategoryLabel,
   angleLabel,
-  plantName,
+  plantIdentity,
   visualStyleLabel,
 } from "@/lib/data/localize";
 import { PLANTS } from "@/lib/data/plants";
 import { VISUAL_STYLES } from "@/lib/data/visual-styles";
 import { translator } from "@/lib/i18n";
-import { getUiLocale } from "@/lib/locale-server";
 
 export const dynamic = "force-dynamic";
 
 export default async function GeneratePage() {
-  const locale = await getUiLocale();
-  const t = translator(locale);
+  const t = translator();
 
   // Labels are localized server-side so the client component stays a dumb
   // renderer and never needs the catalog or the dictionaries.
@@ -25,20 +23,19 @@ export default async function GeneratePage() {
     <>
       <SectionHeader title={t("generate.title")} description={t("generate.subtitle")} />
       <GenerateClient
-        uiLocale={locale}
-        plants={PLANTS.map((p) => ({ slug: p.slug, name: plantName(p, locale) }))}
+        plants={PLANTS.map((p) => plantIdentity({ slug: p.slug }))}
         angles={ANGLES.map((a) => ({
           slug: a.slug,
-          label: angleLabel(a, locale),
+          label: angleLabel(a),
           category: a.category,
         }))}
         styles={VISUAL_STYLES.map((s) => ({
           slug: s.slug,
-          label: visualStyleLabel(s, locale),
+          label: visualStyleLabel(s),
         }))}
         categories={ANGLE_CATEGORIES.map((c) => ({
           key: c.key,
-          label: angleCategoryLabel(c.key, locale),
+          label: angleCategoryLabel(c.key),
         }))}
         canGenerate={isGeminiConfigured()}
       />

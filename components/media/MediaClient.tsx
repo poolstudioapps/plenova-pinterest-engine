@@ -1,16 +1,23 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Badge, Button, Card, EmptyState, Input, Select } from "@/components/ui";
-import { groupByPlant, mediaLabel } from "@/lib/media";
-import { translator, type Locale } from "@/lib/i18n";
+import {
+  Button,
+  Card,
+  EmptyState,
+  Input,
+  PlantName,
+  Select,
+} from "@/components/ui";
+import { groupByPlant, identityForAsset, normaliseSearch } from "@/lib/media";
+import type { PlantIdentity } from "@/lib/data/localize";
+import { translator } from "@/lib/i18n";
 import type { MediaAsset } from "@/lib/types";
 import { relativeTime } from "@/lib/utils";
 
 interface Props {
-  uiLocale: Locale;
   initialAssets: MediaAsset[];
-  plants: { slug: string; name: string }[];
+  plants: PlantIdentity[];
   styles: { slug: string; label: string }[];
 }
 
@@ -19,29 +26,39 @@ interface Props {
  * a reusable image: "what do I already have for a Monstera?" rather than
  * "what did I generate last Tuesday?".
  */
-export function MediaClient({ uiLocale, initialAssets, plants, styles }: Props) {
-  const t = translator(uiLocale);
+export function MediaClient({ initialAssets, plants, styles }: Props) {
+  const t = translator();
   const styleLabels = useMemo(
     () => new Map(styles.map((s) => [s.slug, s.label])),
     [styles],
+  );
+  /*
+   * The catalog, indexed. Built from a prop rather than imported: the plant
+   * catalog carries every care field and every visual description, and none of
+   * that belongs in a browser bundle.
+   */
+  const catalog = useMemo(
+    () => new Map(plants.map((p) => [p.slug, p])),
+    [plants],
   );
   const [assets, setAssets] = useState(initialAssets);
   const [plantSlug, setPlantSlug] = useState("");
   const [search, setSearch] = useState("");
 
   const filtered = useMemo(() => {
-    const q = search.toLowerCase().trim();
+    const q = normaliseSearch(search);
     return assets.filter((a) => {
       if (plantSlug && a.plantSlug !== plantSlug) return false;
       if (!q) return true;
+      // Both names are on screen, so both have to be searchable - typing
+      // "Epipremnum" must find the pothos, and so must "lierre du diable".
       return (
-        a.plantName.toLowerCase().includes(q) ||
-        (a.variety ?? "").toLowerCase().includes(q) ||
-        a.prompt.toLowerCase().includes(q) ||
-        a.tags.some((tag) => tag.includes(q))
+        identityForAsset(a, catalog).search.includes(q) ||
+        normaliseSearch(a.prompt).includes(q) ||
+        a.tags.some((tag) => normaliseSearch(tag).includes(q))
       );
     });
-  }, [assets, plantSlug, search]);
+  }, [assets, plantSlug, search, catalog]);
 
   const groups = useMemo(() => groupByPlant(filtered), [filtered]);
 
@@ -62,7 +79,7 @@ export function MediaClient({ uiLocale, initialAssets, plants, styles }: Props) 
           <option value="">{t("media.allPlants")}</option>
           {plants.map((p) => (
             <option key={p.slug} value={p.slug}>
-              {p.name}
+              {p.label}
             </option>
           ))}
         </Select>
@@ -86,12 +103,24 @@ export function MediaClient({ uiLocale, initialAssets, plants, styles }: Props) 
       ) : (
         groups.map((group) => (
           <section key={group.plantSlug} className="space-y-3">
-            <h2 className="text-[15px] font-semibold">
-              {group.plantName}{" "}
-              <span className="font-normal text-[var(--color-ink-faint)]">
-                ({group.assets.length})
+            {/*
+              The heading is the highest-value line on this page: it is what
+              says which species the row below actually is. Derived from the
+              slug, never from the name stored on the asset - that one was
+              captured in the pin's own language, so a Spanish pin filed its
+              image under an English name.
+            */}
+            <div className="flex items-baseline gap-2">
+              <PlantName
+                identity={identityForAsset(
+                  { plantSlug: group.plantSlug, plantName: group.fallbackName, variety: null },
+                  catalog,
+                )}
+              />
+              <span className="shrink-0 text-[12.5px] text-[var(--color-ink-faint)]">
+                {group.assets.length}
               </span>
-            </h2>
+            </div>
 
             <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
               {group.assets.map((asset) => (
@@ -99,12 +128,14 @@ export function MediaClient({ uiLocale, initialAssets, plants, styles }: Props) 
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={asset.url}
-                    alt={mediaLabel(asset)}
+                    alt={identityForAsset(asset, catalog).label}
                     className="aspect-pin w-full object-cover"
                   />
                   <div className="space-y-1.5 p-2.5">
                     {asset.variety ? (
-                      <Badge className="w-full justify-center">{asset.variety}</Badge>
+                      <p className="truncate text-[11.5px] text-[var(--color-ink-soft)]">
+                        {`'${asset.variety}'`}
+                      </p>
                     ) : null}
                     <p className="truncate text-[11.5px] text-[var(--color-ink-faint)]">
                       {styleLabels.get(asset.visualStyle) ?? asset.visualStyle}

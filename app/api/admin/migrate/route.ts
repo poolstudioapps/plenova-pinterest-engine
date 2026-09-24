@@ -24,19 +24,19 @@ export async function POST() {
   if (secret) {
     const session = (await cookies()).get(AUTH_COOKIE)?.value;
     if (!(await verifySession(secret, session))) {
-      return NextResponse.json({ error: "Sign in first." }, { status: 401 });
+      return NextResponse.json({ error: "Connecte-toi d'abord." }, { status: 401 });
     }
   }
 
   if (!config.supabase.url || !config.supabase.serviceKey) {
     return NextResponse.json(
-      { error: "Supabase is not configured yet." },
+      { error: "Supabase n'est pas encore configuré." },
       { status: 400 },
     );
   }
   if (!isBlobConfigured()) {
     return NextResponse.json(
-      { error: "There is no blob store to read from." },
+      { error: "Aucun store Blob à lire." },
       { status: 400 },
     );
   }

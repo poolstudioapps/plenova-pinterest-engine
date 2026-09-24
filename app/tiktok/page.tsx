@@ -3,7 +3,6 @@ import { Card, Notice, SectionHeader } from "@/components/ui";
 import { config, isTikTokConfigured, resolveTikTokRedirectUri } from "@/lib/config";
 import { translator } from "@/lib/i18n";
 import { canHostPublicly } from "@/lib/images";
-import { getUiLocale } from "@/lib/locale-server";
 import { getStatus } from "@/lib/tiktok";
 
 export const dynamic = "force-dynamic";
@@ -13,8 +12,7 @@ export default async function TikTokPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const locale = await getUiLocale();
-  const t = translator(locale);
+  const t = translator();
 
   const params = await searchParams;
   const status = await getStatus();
@@ -63,7 +61,6 @@ export default async function TikTokPage({
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,340px)]">
         <TikTokPanel
-          uiLocale={locale}
           configured={status.configured}
           accounts={status.accounts}
         />

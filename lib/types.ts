@@ -1,6 +1,6 @@
 /** Shared domain types for the Pinterest engine. */
 
-import type { ContentLocale, Locale } from "@/lib/i18n";
+import type { ContentLocale } from "@/lib/i18n";
 import type { SlideOverlay } from "@/lib/overlay";
 
 export type Difficulty = "easy" | "medium" | "hard";

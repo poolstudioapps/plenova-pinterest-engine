@@ -11,7 +11,7 @@ import {
   generatePinImage,
   reinterpretImage,
 } from "@/lib/gemini";
-import { DEFAULT_LOCALE, type ContentLocale } from "@/lib/i18n";
+import { DEFAULT_CONTENT_LOCALE, type ContentLocale } from "@/lib/i18n";
 import { extensionFor, hostImageAt } from "@/lib/images";
 import { mediaPath, varietySlug } from "@/lib/media";
 import { findReference, isPexelsConfigured } from "@/lib/pexels";
@@ -90,16 +90,16 @@ export async function startCarousel(
   input: GenerateCarouselInput,
 ): Promise<CarouselRecord> {
   const theme = input.theme.trim();
-  if (theme.length < 3) throw badRequest("Describe the carousel theme.");
+  if (theme.length < 3) throw badRequest("Décris le thème du carrousel.");
 
   const languages =
     input.languages && input.languages.length > 0
       ? Array.from(new Set(input.languages))
-      : [DEFAULT_LOCALE as ContentLocale];
+      : [DEFAULT_CONTENT_LOCALE];
 
   const plant = input.plantSlug ? getPlant(input.plantSlug) : undefined;
   if (input.plantSlug && !plant) {
-    throw badRequest(`Unknown plant: ${input.plantSlug}`);
+    throw badRequest(`Plante inconnue : ${input.plantSlug}`);
   }
 
   const now = new Date().toISOString();
@@ -139,7 +139,7 @@ export async function runCarouselGeneration(
   try {
     await generateCarousel(id, input);
   } catch (err) {
-    const reason = err instanceof Error ? err.message : "Generation failed.";
+    const reason = err instanceof Error ? err.message : "La génération a échoué. Réessaie.";
     try {
       const store = getStore();
       const carousel = await store.getCarousel(id);
@@ -171,12 +171,12 @@ async function generateCarousel(
   const languages =
     input.languages && input.languages.length > 0
       ? Array.from(new Set(input.languages))
-      : [DEFAULT_LOCALE as ContentLocale];
+      : [DEFAULT_CONTENT_LOCALE];
 
   const store = getStore();
   const plant = input.plantSlug ? getPlant(input.plantSlug) : undefined;
   if (input.plantSlug && !plant) {
-    throw badRequest(`Unknown plant: ${input.plantSlug}`);
+    throw badRequest(`Plante inconnue : ${input.plantSlug}`);
   }
 
   // Past themes go back into the prompt so a new carousel does not re-tread one.
@@ -429,9 +429,9 @@ export async function uploadComposedSlide(
   mimeType: string,
 ): Promise<{ url: string }> {
   const carousel = await getStore().getCarousel(id);
-  if (!carousel) throw notFound(`No carousel with id ${id}.`);
+  if (!carousel) throw notFound(`Aucun carrousel avec l'identifiant ${id}.`);
   if (!carousel.slides[index]) {
-    throw badRequest(`Slide ${index} does not exist on this carousel.`);
+    throw badRequest(`La slide ${index} n'existe pas dans ce carrousel.`);
   }
 
   const hosted = await hostImageAt(
@@ -455,7 +455,7 @@ export async function recordComposedSlides(
 ): Promise<CarouselRecord> {
   const store = getStore();
   const carousel = await store.getCarousel(id);
-  if (!carousel) throw notFound(`No carousel with id ${id}.`);
+  if (!carousel) throw notFound(`Aucun carrousel avec l'identifiant ${id}.`);
 
   const byIndex = new Map(entries.map((e) => [e.index, e.url]));
   const slides = carousel.slides.map((slide, i) => {
@@ -555,10 +555,10 @@ export async function updateSlide(
 ): Promise<CarouselRecord> {
   const store = getStore();
   const carousel = await store.getCarousel(id);
-  if (!carousel) throw notFound(`No carousel with id ${id}.`);
+  if (!carousel) throw notFound(`Aucun carrousel avec l'identifiant ${id}.`);
 
   const slide = carousel.slides[index];
-  if (!slide) throw badRequest(`This carousel has no slide ${index + 1}.`);
+  if (!slide) throw badRequest(`Ce carrousel n'a pas de slide ${index + 1}.`);
 
   const text = { ...slide.text };
   const stale = new Set<ContentLocale>();
@@ -611,7 +611,7 @@ export async function refreshPublishStatus(
 ): Promise<CarouselRecord> {
   const store = getStore();
   const carousel = await store.getCarousel(id);
-  if (!carousel) throw notFound(`No carousel with id ${id}.`);
+  if (!carousel) throw notFound(`Aucun carrousel avec l'identifiant ${id}.`);
 
   const posts = await Promise.all(
     carousel.posts.map(async (post) => {
@@ -630,7 +630,7 @@ export async function refreshPublishStatus(
             ...post,
             settled: "failed" as const,
             publishedAt: null,
-            error: `TikTok rejected the post: ${failReason ?? "unknown reason"}`,
+            error: `TikTok a refusé la publication : ${failReason ?? "raison inconnue"}`,
           };
         }
         if (status === done || status === "PUBLISH_COMPLETE") {
@@ -728,8 +728,8 @@ export async function publishToAccounts(
 ): Promise<MultipostOutcome> {
   const store = getStore();
   const carousel = await store.getCarousel(id);
-  if (!carousel) throw notFound(`No carousel with id ${id}.`);
-  if (openIds.length === 0) throw badRequest("Select at least one account.");
+  if (!carousel) throw notFound(`Aucun carrousel avec l'identifiant ${id}.`);
+  if (openIds.length === 0) throw badRequest("Choisis au moins un compte.");
 
   await store.saveCarousel({
     ...carousel,
@@ -765,7 +765,7 @@ export async function publishToAccounts(
     const account = await store.getTikTokAccount(openId);
     if (!account) {
       posts.push(
-        failedPost(openId, "", DEFAULT_LOCALE as ContentLocale, options, "Account is not connected."),
+        failedPost(openId, "", DEFAULT_CONTENT_LOCALE, options, "Ce compte n'est pas connecté. Reconnecte-le dans Compte TikTok."),
       );
       await persist("publishing");
       continue;
@@ -796,7 +796,7 @@ export async function publishToAccounts(
           account.username,
           language,
           options,
-          `This carousel has nothing written in ${language}.`,
+          `Ce carrousel n'a rien de rédigé en ${language}.`,
         ),
       );
       await persist("publishing");
@@ -812,7 +812,7 @@ export async function publishToAccounts(
           account.username,
           language,
           options,
-          `Only ${urls.length} of ${carousel.slides.length} slides have their text burned in for ${language}. Open the carousel and wait for it to finish, then publish.`,
+          `Seules ${urls.length} slides sur ${carousel.slides.length} ont leur texte incrusté en ${language}. Ouvre le carrousel, attends la fin de l'incrustation, puis publie.`,
         ),
       );
       await persist("publishing");
@@ -861,7 +861,7 @@ export async function publishToAccounts(
         settled: outcome.settled,
         error:
           outcome.settled === "failed"
-            ? `TikTok rejected the post: ${outcome.reason ?? "unknown reason"}`
+            ? `TikTok a refusé la publication : ${outcome.reason ?? "raison inconnue"}`
             : null,
       });
     } catch (err) {
@@ -919,7 +919,7 @@ export async function publishToAccounts(
  * error" and named nothing that could be acted on.
  */
 function reasonFrom(err: unknown): string {
-  const base = err instanceof Error ? err.message : "Publishing failed.";
+  const base = err instanceof Error ? err.message : "La publication a échoué.";
   const hint =
     err instanceof AppError && err.details && typeof err.details === "object"
       ? (err.details as { hint?: unknown }).hint

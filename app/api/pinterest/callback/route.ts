@@ -23,13 +23,13 @@ export async function GET(request: Request) {
 
   const denied = url.searchParams.get("error");
   if (denied) {
-    return done({ status: "error", message: "Pinterest authorization was declined." });
+    return done({ status: "error", message: "L'autorisation Pinterest a été refusée." });
   }
 
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   if (!code || !state) {
-    return done({ status: "error", message: "Pinterest returned an incomplete response." });
+    return done({ status: "error", message: "Pinterest a renvoyé une réponse incomplète." });
   }
 
   const jar = await cookies();
@@ -37,7 +37,7 @@ export async function GET(request: Request) {
   if (!expected || !safeEqual(expected, state)) {
     return done({
       status: "error",
-      message: "OAuth state mismatch. Start the connection again from this page.",
+      message: "Le state OAuth ne correspond pas. Relance la connexion depuis cette page.",
     });
   }
 
@@ -49,7 +49,7 @@ export async function GET(request: Request) {
     });
   } catch (err) {
     const message =
-      err instanceof Error ? err.message : "Could not complete the connection.";
+      err instanceof Error ? err.message : "La connexion n'a pas pu aboutir.";
     return done({ status: "error", message });
   }
 }

@@ -1,9 +1,28 @@
+import type { PlantIdentity } from "@/lib/data/localize";
 import type { MediaAsset } from "@/lib/types";
 
 /**
  * Media library helpers. Kept free of server-only imports so the client can
  * reuse the slug logic when displaying a picker.
  */
+
+/**
+ * The one way a searchable string is flattened.
+ *
+ * It lives here rather than next to the catalog because a client component
+ * needs it too: the media library builds its query with it and matches that
+ * against a haystack built by the same function. They used to differ - the
+ * query was only lowercased while the haystack had its accents stripped - so
+ * searching "bégonia", "doré" or "fougère" found nothing at all.
+ */
+export function normaliseSearch(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
 
 /** Normalises a free-form cultivar into a safe path segment. */
 export function varietySlug(variety: string | null | undefined): string | null {
@@ -36,9 +55,44 @@ export function mediaPath(
   return parts.join("/");
 }
 
-/** Display label for a plant + cultivar pair. */
-export function mediaLabel(asset: MediaAsset): string {
-  return asset.variety ? `${asset.plantName} '${asset.variety}'` : asset.plantName;
+/**
+ * Resolves a stored asset against the catalog the server handed down.
+ *
+ * A lookup, not a second naming rule: the rule lives once in `plantIdentity`.
+ * The type import above is erased at compile time, so no part of the catalog
+ * reaches the browser through this module.
+ */
+export function identityForAsset(
+  asset: Pick<MediaAsset, "plantSlug" | "plantName" | "variety">,
+  catalog: Map<string, PlantIdentity>,
+): PlantIdentity {
+  const known = catalog.get(asset.plantSlug);
+  const variety = asset.variety?.trim();
+  const cultivar = variety ? `'${variety}'` : null;
+
+  if (known) {
+    if (!cultivar) return known;
+    return {
+      ...known,
+      cultivar,
+      label:
+        `${known.primary} ${cultivar}` +
+        (known.latin ? ` (${known.latin})` : ""),
+    };
+  }
+
+  // Filed under something the catalog does not carry - "unfiled", a cultivar,
+  // or a genus the model named on its own. Show what was stored, claim nothing.
+  const primary = asset.plantName || asset.plantSlug.replace(/-/g, " ");
+  return {
+    slug: asset.plantSlug,
+    primary,
+    latin: null,
+    cultivar,
+    known: false,
+    label: cultivar ? `${primary} ${cultivar}` : primary,
+    search: normaliseSearch(`${primary} ${variety ?? ""} ${asset.plantSlug}`),
+  };
 }
 
 export interface MediaFilter {
@@ -60,30 +114,41 @@ export function filterMedia(
   if (filter.aspectRatio)
     out = out.filter((a) => a.aspectRatio === filter.aspectRatio);
   if (filter.search) {
-    const q = filter.search.toLowerCase().trim();
+    // Accent- and punctuation-insensitive, exactly like the library on screen:
+    // the two used to disagree, so /api/media?search=bégonia found nothing.
+    const q = normaliseSearch(filter.search);
     out = out.filter(
       (a) =>
-        a.plantName.toLowerCase().includes(q) ||
-        (a.variety ?? "").toLowerCase().includes(q) ||
-        a.prompt.toLowerCase().includes(q) ||
-        a.tags.some((t) => t.includes(q)),
+        normaliseSearch(`${a.plantName} ${a.variety ?? ""} ${a.prompt}`).includes(q) ||
+        a.tags.some((t) => normaliseSearch(t).includes(q)),
     );
   }
   out = [...out].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   return filter.limit ? out.slice(0, filter.limit) : out;
 }
 
-/** Groups assets by plant, for a library browsed plant-first. */
+/**
+ * Groups assets by plant, for a library browsed plant-first.
+ *
+ * The name it returns is called `fallbackName` rather than `plantName` on
+ * purpose: it is whatever was stored when the image was filed, which for pins
+ * written in Spanish or German is not even French. It is there to be passed to
+ * `identityForAsset` as a last resort, not to be rendered.
+ */
 export function groupByPlant(
   assets: MediaAsset[],
-): { plantSlug: string; plantName: string; assets: MediaAsset[] }[] {
-  const groups = new Map<string, { plantName: string; assets: MediaAsset[] }>();
+): { plantSlug: string; fallbackName: string; assets: MediaAsset[] }[] {
+  const groups = new Map<string, { fallbackName: string; assets: MediaAsset[] }>();
   for (const asset of assets) {
     const entry = groups.get(asset.plantSlug);
     if (entry) entry.assets.push(asset);
-    else groups.set(asset.plantSlug, { plantName: asset.plantName, assets: [asset] });
+    else
+      groups.set(asset.plantSlug, {
+        fallbackName: asset.plantName,
+        assets: [asset],
+      });
   }
   return [...groups.entries()]
     .map(([plantSlug, v]) => ({ plantSlug, ...v }))
-    .sort((a, b) => a.plantName.localeCompare(b.plantName));
+    .sort((a, b) => a.fallbackName.localeCompare(b.fallbackName, "fr"));
 }

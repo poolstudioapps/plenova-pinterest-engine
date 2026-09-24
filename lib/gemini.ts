@@ -38,7 +38,7 @@ let client: GoogleGenAI | null = null;
 function getClient(): GoogleGenAI {
   if (!isGeminiConfigured()) {
     throw notConfigured(
-      "GEMINI_API_KEY is not set. Add it to .env.local (or the Vercel project) and reload.",
+      "Il manque la clé GEMINI_API_KEY. Ajoute-la dans .env.local (ou dans le projet Vercel), puis recharge la page.",
     );
   }
   client ??= new GoogleGenAI({ apiKey: config.gemini.apiKey! });
@@ -64,7 +64,7 @@ interface RawCopy {
 
 function asString(v: unknown, field: string): string {
   if (typeof v !== "string" || v.trim().length === 0) {
-    throw upstream(`Gemini returned no usable "${field}".`);
+    throw upstream(`Gemini n'a pas renvoyé de "${field}" exploitable.`);
   }
   return v.trim();
 }
@@ -86,7 +86,7 @@ function normaliseCopy(raw: RawCopy): GeneratedCopy {
     : [];
 
   if (keywords.length < 3) {
-    throw upstream("Gemini returned too few usable keywords.");
+    throw upstream("Gemini a renvoyé trop peu de mots-clés exploitables.");
   }
 
   return {
@@ -111,25 +111,25 @@ function wrapUpstream(err: unknown, what: string): never {
 
   if (lower.includes("api key") || lower.includes("permission") || lower.includes("401")) {
     throw notConfigured(
-      `Gemini rejected the API key while ${what}. Check GEMINI_API_KEY.`,
+      `Gemini a refusé la clé API pendant ${what}. Vérifie GEMINI_API_KEY.`,
     );
   }
   if (lower.includes("quota") || lower.includes("429") || lower.includes("resource_exhausted")) {
     throw upstream(
-      `Gemini quota or rate limit hit while ${what}. Wait a moment and retry.`,
+      `Quota ou limite de débit Gemini atteint pendant ${what}. Attends un instant et réessaie.`,
     );
   }
   if (lower.includes("not found") || lower.includes("404")) {
     throw upstream(
-      `Gemini model not found while ${what}. Check GEMINI_TEXT_MODEL / GEMINI_IMAGE_MODEL.`,
+      `Modèle Gemini introuvable pendant ${what}. Vérifie GEMINI_TEXT_MODEL / GEMINI_IMAGE_MODEL.`,
     );
   }
   if (lower.includes("safety") || lower.includes("blocked")) {
     throw upstream(
-      `Gemini blocked the request while ${what}. Try a different angle or custom direction.`,
+      `Gemini a bloqué la demande pendant ${what}. Essaie un autre angle ou une autre direction personnalisée.`,
     );
   }
-  throw upstream(`Gemini failed while ${what}.`, { reason: message.slice(0, 300) });
+  throw upstream(`Gemini a échoué pendant ${what}.`, { reason: message.slice(0, 300) });
 }
 
 /** Generates the structured Pin copy. */
@@ -153,18 +153,18 @@ export async function generatePinCopy(
     });
 
     const text = response.text;
-    if (!text) throw upstream("Gemini returned an empty copy response.");
+    if (!text) throw upstream("Gemini a renvoyé une réponse vide pour le texte.");
 
     let parsed: RawCopy;
     try {
       parsed = JSON.parse(text) as RawCopy;
     } catch {
-      throw upstream("Gemini returned copy that was not valid JSON.");
+      throw upstream("Gemini a renvoyé un texte qui n'est pas du JSON valide.");
     }
     return normaliseCopy(parsed);
   } catch (err) {
     if (err && typeof err === "object" && "code" in err) throw err;
-    wrapUpstream(err, "generating Pin copy");
+    wrapUpstream(err, "la génération du texte du Pin");
   }
 }
 
@@ -212,12 +212,12 @@ export async function generatePinImage(
     const refusal = response.text?.slice(0, 200);
     throw upstream(
       refusal
-        ? `Gemini returned no image. Model said: ${refusal}`
-        : "Gemini returned no image data.",
+        ? `Gemini n'a pas renvoyé d'image. Réponse du modèle : ${refusal}`
+        : "Gemini n'a renvoyé aucune image.",
     );
   } catch (err) {
     if (err && typeof err === "object" && "code" in err) throw err;
-    wrapUpstream(err, "generating the Pin image");
+    wrapUpstream(err, "la génération de l'image du Pin");
   }
 }
 
@@ -264,7 +264,7 @@ export async function generateCarouselConcept(
     });
 
     const text = response.text;
-    if (!text) throw upstream("Gemini returned an empty carousel concept.");
+    if (!text) throw upstream("Gemini a renvoyé un concept de carrousel vide.");
 
     let parsed: {
       slides?: unknown;
@@ -275,7 +275,7 @@ export async function generateCarouselConcept(
     try {
       parsed = JSON.parse(text) as typeof parsed;
     } catch {
-      throw upstream("Gemini returned a carousel that was not valid JSON.");
+      throw upstream("Gemini a renvoyé un carrousel qui n'est pas du JSON valide.");
     }
 
     const slides: CarouselSlideDraft[] = (
@@ -307,7 +307,7 @@ export async function generateCarouselConcept(
       .slice(0, 35);
 
     if (slides.length < 2) {
-      throw upstream("Gemini returned too few usable slides for a carousel.");
+      throw upstream("Gemini a renvoyé trop peu de slides exploitables pour un carrousel.");
     }
 
     const hashtags: Partial<Record<ContentLocale, string[]>> = {};
@@ -342,7 +342,7 @@ export async function generateCarouselConcept(
     };
   } catch (err) {
     if (err && typeof err === "object" && "code" in err) throw err;
-    wrapUpstream(err, "designing the carousel");
+    wrapUpstream(err, "la conception du carrousel");
   }
 }
 
@@ -411,9 +411,9 @@ export async function reinterpretImage(
         };
       }
     }
-    throw upstream("Gemini returned no image when reinterpreting the reference.");
+    throw upstream("Gemini n'a renvoyé aucune image en réinterprétant la photo de référence.");
   } catch (err) {
     if (err && typeof err === "object" && "code" in err) throw err;
-    wrapUpstream(err, "reinterpreting the reference photograph");
+    wrapUpstream(err, "la réinterprétation de la photo de référence");
   }
 }

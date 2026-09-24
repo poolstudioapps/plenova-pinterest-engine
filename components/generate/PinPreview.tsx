@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Badge,
   Button,
@@ -10,14 +10,19 @@ import {
   Notice,
   StatusBadge,
   Textarea,
+  PlantName,
 } from "@/components/ui";
-import { translator, type Locale } from "@/lib/i18n";
+import { translator } from "@/lib/i18n";
+import { VISUAL_STYLE_LABELS_FR } from "@/lib/data/angles.fr";
+import { identityForAsset } from "@/lib/media";
+import type { PlantIdentity } from "@/lib/data/localize";
 import type { PinRecord, PinterestBoard } from "@/lib/types";
 
 interface Props {
   pin: PinRecord | null;
+  /** The catalog, so the preview can name the species both ways. */
+  plants: PlantIdentity[];
   loading?: boolean;
-  uiLocale: Locale;
   /** Called after any mutation so a parent list can refresh. */
   onChange?: (pin: PinRecord) => void;
 }
@@ -31,8 +36,12 @@ interface ConnectionState {
  * The Pin preview is the visual focus of the tool (spec §28). It doubles as the
  * editor: copy can be corrected before anything reaches Pinterest.
  */
-export function PinPreview({ pin, loading, uiLocale, onChange }: Props) {
-  const t = translator(uiLocale);
+export function PinPreview({ pin, plants, loading, onChange }: Props) {
+  const t = translator();
+  const catalog = useMemo(
+    () => new Map(plants.map((p) => [p.slug, p])),
+    [plants],
+  );
 
   const [draft, setDraft] = useState<PinRecord | null>(pin);
   const [boards, setBoards] = useState<PinterestBoard[]>([]);
@@ -179,10 +188,32 @@ export function PinPreview({ pin, loading, uiLocale, onChange }: Props) {
             <div className="aspect-pin w-full rounded-[12px] bg-[var(--color-surface-muted)]" />
           )}
 
+          {/*
+            The species, named both ways, right under the image.
+            
+            This is the moment the operator decides whether the picture is
+            actually the plant they asked for, and the preview did not name it
+            at all - only its title, which the model wrote.
+          */}
+          <div className="mt-3">
+            <PlantName
+              identity={identityForAsset(
+                {
+                  plantSlug: draft.plantSlug,
+                  plantName: draft.plantName,
+                  variety: draft.variety,
+                },
+                catalog,
+              )}
+            />
+          </div>
+
           <div className="mt-3 flex flex-wrap gap-1.5">
             <StatusBadge status={draft.status} />
             <Badge className="uppercase">{draft.locale}</Badge>
-            <Badge>{draft.visualStyle.replace(/-/g, " ")}</Badge>
+            <Badge>
+              {VISUAL_STYLE_LABELS_FR[draft.visualStyle] ?? draft.visualStyle}
+            </Badge>
             <Badge>#{draft.variation}</Badge>
           </div>
 

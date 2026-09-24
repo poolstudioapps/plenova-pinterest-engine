@@ -23,7 +23,7 @@ export async function GET() {
   if (secret) {
     const session = (await cookies()).get(AUTH_COOKIE)?.value;
     if (!(await verifySession(secret, session))) {
-      return NextResponse.json({ error: "Sign in first." }, { status: 401 });
+      return NextResponse.json({ error: "Connecte-toi d'abord." }, { status: 401 });
     }
   }
 
@@ -66,7 +66,7 @@ export async function GET() {
       steps.push({
         step: "readback",
         ok: text === body,
-        detail: text ? undefined : "nothing came back",
+        detail: text ? undefined : "rien n'est revenu",
       });
     } catch (err) {
       steps.push({

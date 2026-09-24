@@ -41,7 +41,7 @@ export class FileStore extends DocumentStore {
     const parsed = JSON.parse(raw) as StateDocument;
     if (parsed.version !== 1 || typeof parsed.pins !== "object") {
       throw new Error(
-        `${FILE} is not in a shape this version understands. Refusing to overwrite it.`,
+        `${FILE} n'a pas une forme que cette version comprend. Il ne sera pas écrasé.`,
       );
     }
     return { doc: { ...emptyState(), ...parsed }, version: null };

@@ -3,7 +3,6 @@ import { Card, Notice, SectionHeader } from "@/components/ui";
 import { config, isPinterestConfigured, resolveRedirectUri } from "@/lib/config";
 import { translator } from "@/lib/i18n";
 import { canHostPublicly } from "@/lib/images";
-import { getUiLocale } from "@/lib/locale-server";
 import { getConnectionStatus } from "@/lib/pinterest";
 
 export const dynamic = "force-dynamic";
@@ -13,8 +12,7 @@ export default async function PinterestPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const locale = await getUiLocale();
-  const t = translator(locale);
+  const t = translator();
 
   const params = await searchParams;
   const status = await getConnectionStatus();
@@ -55,7 +53,6 @@ export default async function PinterestPage({
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,340px)]">
         <ConnectionPanel
-          uiLocale={locale}
           configured={configured}
           mode={status.mode}
           initialConnected={status.connected}

@@ -227,25 +227,25 @@ export function readiness(): ReadinessReport {
   const blobStorage = isBlobConfigured();
   const encryptionKey = Boolean(config.security.tokenEncryptionKey);
 
-  if (!gemini) warnings.push("GEMINI_API_KEY is missing - generation is disabled.");
+  if (!gemini) warnings.push("Il manque GEMINI_API_KEY : la génération est désactivée.");
   if (!pinterest && hasManualPinterestToken()) {
     warnings.push(
       manualTokenCanPublish()
-        ? "Using a manually supplied Pinterest token - OAuth is not configured."
-        : "Pinterest trial token is read-only (no pins:write). Boards can be read, but Pins cannot be published yet.",
+        ? "Jeton Pinterest fourni à la main : OAuth n'est pas configuré."
+        : "Le jeton d'essai Pinterest est en lecture seule (pas de pins:write) : les tableaux se lisent, mais rien ne peut encore être publié.",
     );
   } else if (!pinterest) {
     warnings.push(
-      "Pinterest credentials are missing - publishing stays in preview mode.",
+      "Il manque les identifiants Pinterest : la publication reste en aperçu.",
     );
   }
   if (!blobStorage)
     warnings.push(
-      "No Blob store attached - images stay inline and Pins cannot be published to Pinterest.",
+      "Aucun stockage d'images attaché : les images restent intégrées et rien ne peut être publié sur Pinterest.",
     );
   if (!encryptionKey && pinterest)
     warnings.push(
-      "TOKEN_ENCRYPTION_KEY is missing - OAuth tokens cannot be stored at rest.",
+      "Il manque TOKEN_ENCRYPTION_KEY : les jetons OAuth ne peuvent pas être stockés."
     );
 
   return {

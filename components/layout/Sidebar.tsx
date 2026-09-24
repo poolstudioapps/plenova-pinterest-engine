@@ -2,8 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LocaleSwitcher } from "@/components/layout/LocaleSwitcher";
-import { translator, type Locale, type TranslationKey } from "@/lib/i18n";
+import { translator, type TranslationKey } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 /**
@@ -49,16 +48,16 @@ const GROUPS: {
   },
 ];
 
-export function Sidebar({ locale }: { locale: Locale }) {
+export function Sidebar() {
   const pathname = usePathname();
-  const t = translator(locale);
+  const t = translator();
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
   return (
     <nav
-      aria-label="Main"
+      aria-label="Navigation principale"
       className="flex gap-1 overflow-x-auto border-b border-[var(--color-line)] bg-[var(--color-surface)] px-4 py-3 md:sticky md:top-0 md:h-dvh md:w-64 md:shrink-0 md:flex-col md:gap-0 md:overflow-y-auto md:border-r md:border-b-0 md:px-3 md:py-6"
     >
       <div className="mb-0 hidden items-center gap-2.5 px-3 md:mb-7 md:flex">
@@ -108,9 +107,6 @@ export function Sidebar({ locale }: { locale: Locale }) {
         </div>
       ))}
 
-      <div className="ml-auto shrink-0 self-center md:mt-auto md:ml-0 md:w-full md:self-auto md:border-t md:border-[var(--color-line)] md:pt-4">
-        <LocaleSwitcher current={locale} />
-      </div>
     </nav>
   );
 }

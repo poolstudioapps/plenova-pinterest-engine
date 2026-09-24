@@ -28,15 +28,15 @@ export async function POST(request: Request) {
     try {
       body = (await request.json()) as typeof body;
     } catch {
-      throw badRequest("Request body must be valid JSON.");
+      throw badRequest("Le corps de la requête n'est pas du JSON valide.");
     }
 
     if (!Array.isArray(body.frames) || body.frames.length === 0) {
-      throw badRequest("Add at least one screenshot.");
+      throw badRequest("Ajoute au moins une capture d'écran.");
     }
     const frames = body.frames.map((frame) => {
       if (typeof frame !== "string" || !frame) {
-        throw badRequest("Each screenshot must be a stored image.");
+        throw badRequest("Chaque capture doit être une image déjà envoyée.");
       }
       return frame;
     });
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
       ? body.languages.filter((l): l is ContentLocale => isContentLocale(l))
       : [];
     if (languages.length === 0) {
-      throw badRequest("Choose at least one language to write in.");
+      throw badRequest("Choisis au moins une langue de rédaction.");
     }
 
     const overlayStyle = OVERLAY_STYLES.includes(body.overlayStyle as OverlayStyle)

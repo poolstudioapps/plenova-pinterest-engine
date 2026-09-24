@@ -22,7 +22,7 @@ export async function GET(request: Request) {
     const header = request.headers.get("authorization") ?? "";
     if (!safeEqual(header, `Bearer ${secret}`)) {
       return NextResponse.json(
-        { error: { code: "bad_request", message: "Unauthorized." } },
+        { error: { code: "bad_request", message: "Accès refusé." } },
         { status: 401 },
       );
     }
@@ -32,7 +32,7 @@ export async function GET(request: Request) {
       {
         error: {
           code: "not_configured",
-          message: "CRON_SECRET must be set before the publishing worker can run.",
+          message: "Renseigne CRON_SECRET pour que le publieur programmé puisse tourner.",
         },
       },
       { status: 503 },

@@ -1,10 +1,9 @@
 import { CarouselStudio } from "@/components/tiktok/CarouselStudio";
 import { Notice, SectionHeader } from "@/components/ui";
 import { isGeminiConfigured } from "@/lib/config";
-import { plantName } from "@/lib/data/localize";
+import { plantIdentity } from "@/lib/data/localize";
 import { PLANTS } from "@/lib/data/plants";
 import { translator } from "@/lib/i18n";
-import { getUiLocale } from "@/lib/locale-server";
 import { isPexelsConfigured } from "@/lib/pexels";
 import { getStore } from "@/lib/store";
 import { getStatus } from "@/lib/tiktok";
@@ -12,8 +11,7 @@ import { getStatus } from "@/lib/tiktok";
 export const dynamic = "force-dynamic";
 
 export default async function CarouselsPage() {
-  const locale = await getUiLocale();
-  const t = translator(locale);
+  const t = translator();
 
   const [carousels, status] = await Promise.all([
     getStore().listCarousels(),
@@ -34,9 +32,8 @@ export default async function CarouselsPage() {
       ) : null}
 
       <CarouselStudio
-        uiLocale={locale}
         initialCarousels={carousels}
-        plants={PLANTS.map((p) => ({ slug: p.slug, name: plantName(p, locale) }))}
+        plants={PLANTS.map((p) => plantIdentity({ slug: p.slug }))}
         accounts={status.accounts}
         canGenerate={isGeminiConfigured()}
         hasPexels={isPexelsConfigured()}

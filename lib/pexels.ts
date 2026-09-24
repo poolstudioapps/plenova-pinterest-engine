@@ -50,7 +50,7 @@ export async function searchPhotos(
   limit = 5,
 ): Promise<PexelsPhoto[]> {
   if (!isPexelsConfigured()) {
-    throw notConfigured("PEXELS_API_KEY is not set.");
+    throw notConfigured("Il manque la clé PEXELS_API_KEY.");
   }
 
   const url = new URL(API);
@@ -65,11 +65,11 @@ export async function searchPhotos(
   });
 
   if (!res.ok) {
-    throw upstream(`Pexels search failed (HTTP ${res.status}).`);
+    throw upstream(`La recherche Pexels a échoué (HTTP ${res.status}).`);
   }
 
   const data = (await res.json()) as RawResponse;
-  if (data.error) throw upstream("Pexels rejected the search.", { hint: data.error });
+  if (data.error) throw upstream("Pexels a refusé la recherche.", { hint: data.error });
 
   return (data.photos ?? [])
     .map((p) => ({
@@ -87,7 +87,7 @@ export async function searchPhotos(
 export async function fetchPhoto(photo: PexelsPhoto): Promise<Buffer> {
   const res = await fetch(photo.url, { cache: "no-store" });
   if (!res.ok) {
-    throw upstream(`Could not download the reference photograph (HTTP ${res.status}).`);
+    throw upstream(`Impossible de télécharger la photo de référence (HTTP ${res.status}).`);
   }
   return Buffer.from(await res.arrayBuffer());
 }

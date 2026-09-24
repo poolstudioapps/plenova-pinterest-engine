@@ -34,10 +34,10 @@ export async function startRepost(
   input: RepostInput,
 ): Promise<CarouselRecord> {
   if (input.frames.length === 0) {
-    throw badRequest("Add at least one screenshot.");
+    throw badRequest("Ajoute au moins une capture d'écran.");
   }
   if (input.frames.length > 35) {
-    throw badRequest("A carousel holds at most 35 slides.");
+    throw badRequest("Un carrousel contient 35 slides au maximum.");
   }
 
   const now = new Date().toISOString();
@@ -154,7 +154,7 @@ export async function runRepost(id: string, input: RepostInput): Promise<void> {
       updatedAt: new Date().toISOString(),
     });
   } catch (err) {
-    const reason = err instanceof Error ? err.message : "The repost failed.";
+    const reason = err instanceof Error ? err.message : "Le repost a échoué.";
     try {
       const carousel = await store.getCarousel(id);
       if (!carousel) return;
@@ -179,7 +179,7 @@ async function fetchFrame(
 ): Promise<{ data: Buffer; mimeType: string }> {
   if (frame.startsWith("data:")) {
     const match = frame.match(/^data:([^;]+);base64,(.+)$/);
-    if (!match) throw badRequest("A screenshot is not a readable image.");
+    if (!match) throw badRequest("Une des captures n'est pas une image lisible.");
     return {
       data: Buffer.from(match[2]!, "base64"),
       mimeType: match[1]!,
@@ -187,7 +187,7 @@ async function fetchFrame(
   }
 
   const res = await fetch(frame, { cache: "no-store" });
-  if (!res.ok) throw notFound("A screenshot could not be read back.");
+  if (!res.ok) throw notFound("Une des captures n'a pas pu être relue.");
   return {
     data: Buffer.from(await res.arrayBuffer()),
     mimeType: res.headers.get("content-type") ?? "image/jpeg",

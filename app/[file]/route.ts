@@ -28,7 +28,7 @@ export async function GET(_request: Request, { params }: Params) {
     const body = process.env.TIKTOK_VERIFICATION;
 
     if (!VERIFICATION_FILE.test(file) || !body) {
-      throw notFound("Not found.");
+      throw notFound("Introuvable.");
     }
 
     return new NextResponse(body, {

@@ -26,24 +26,24 @@ export async function POST(request: Request, { params }: Params) {
     try {
       body = (await request.json()) as typeof body;
     } catch {
-      throw badRequest("Request body must be valid JSON.");
+      throw badRequest("Le corps de la requête n'est pas du JSON valide.");
     }
 
     const index = Number(body.index);
     if (!Number.isInteger(index) || index < 0 || index > 34) {
-      throw badRequest("index must be a slide position.");
+      throw badRequest("La position de la slide est invalide.");
     }
     if (!isContentLocale(body.language)) {
-      throw badRequest("language must be one of the supported content locales.");
+      throw badRequest("Cette langue de rédaction n'est pas prise en charge.");
     }
 
     const dataUrl = typeof body.dataUrl === "string" ? body.dataUrl : "";
     const match = dataUrl.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
-    if (!match) throw badRequest("dataUrl must be a base64 image data URL.");
+    if (!match) throw badRequest("L'image doit arriver en data URL base64.");
 
     const data = Buffer.from(match[2]!, "base64");
-    if (data.length === 0) throw badRequest("The composed slide is empty.");
-    if (data.length > MAX_BYTES) throw badRequest("The composed slide is too large.");
+    if (data.length === 0) throw badRequest("La slide composée est vide.");
+    if (data.length > MAX_BYTES) throw badRequest("La slide composée est trop lourde.");
 
     // Returns the stored URL and writes no record; the whole language is
     // recorded in one call once every slide is up.

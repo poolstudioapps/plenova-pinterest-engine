@@ -28,7 +28,7 @@ let fontCache: string | null = null;
 export async function loadFont(): Promise<string> {
   if (fontCache) return fontCache;
   const res = await fetch("/fonts/TikTokSans.woff2");
-  if (!res.ok) throw new Error("Could not load the TikTok Sans font file.");
+  if (!res.ok) throw new Error("Impossible de charger la police TikTok Sans.");
   fontCache = bufferToBase64(await res.arrayBuffer());
   return fontCache;
 }
@@ -47,12 +47,12 @@ function bufferToBase64(buffer: ArrayBuffer): string {
 /** Pulls an image through our own origin and returns it as a data URL. */
 async function loadBackground(src: string): Promise<string> {
   const res = await fetch(src);
-  if (!res.ok) throw new Error("Could not load the slide image.");
+  if (!res.ok) throw new Error("Impossible de charger l'image de la slide.");
   const blob = await res.blob();
   return await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error("Could not read the slide image."));
+    reader.onerror = () => reject(new Error("Impossible de lire l'image de la slide."));
     reader.readAsDataURL(blob);
   });
 }
@@ -96,7 +96,7 @@ export async function captureSlide(slide: CapturableSlide): Promise<string> {
   canvas.width = SLIDE_WIDTH;
   canvas.height = SLIDE_HEIGHT;
   const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Canvas is unavailable in this browser.");
+  if (!ctx) throw new Error("Le canvas n'est pas disponible dans ce navigateur.");
 
   // JPEG has no alpha, so paint a base colour rather than get black fringing.
   ctx.fillStyle = "#000";
@@ -138,7 +138,7 @@ export async function captureSlides(
     } catch (err) {
       failures.push({
         index,
-        reason: err instanceof Error ? err.message : "Could not draw the slide.",
+        reason: err instanceof Error ? err.message : "Impossible de composer la slide.",
       });
     }
     onProgress?.(index + 1, slides.length);

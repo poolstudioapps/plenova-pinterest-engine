@@ -10,7 +10,7 @@ export async function POST(request: Request) {
       openId?: unknown;
     };
     const openId = typeof body.openId === "string" ? body.openId : "";
-    if (!openId) throw badRequest("openId is required.");
+    if (!openId) throw badRequest("Il manque openId, l'identifiant du compte TikTok.");
 
     await disconnect(openId);
     return ok({ disconnected: openId });

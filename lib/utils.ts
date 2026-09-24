@@ -8,7 +8,9 @@ export function formatDate(iso: string | null): string {
   if (!iso) return "-";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "-";
-  return d.toLocaleString(undefined, {
+  // Explicitly fr-FR, not the browser's locale: the interface is French, and
+  // an operator on an English-configured machine was getting "Sep 24, 2026".
+  return d.toLocaleString("fr-FR", {
     year: "numeric",
     month: "short",
     day: "numeric",
@@ -23,12 +25,12 @@ export function relativeTime(iso: string | null): string {
   if (Number.isNaN(then)) return "-";
   const diff = Date.now() - then;
   const mins = Math.round(diff / 60000);
-  if (Math.abs(mins) < 1) return "just now";
-  if (Math.abs(mins) < 60) return `${mins}m ago`;
+  if (Math.abs(mins) < 1) return "à l'instant";
+  if (Math.abs(mins) < 60) return `il y a ${mins} min`;
   const hours = Math.round(mins / 60);
-  if (Math.abs(hours) < 24) return `${hours}h ago`;
+  if (Math.abs(hours) < 24) return `il y a ${hours} h`;
   const days = Math.round(hours / 24);
-  return `${days}d ago`;
+  return `il y a ${days} j`;
 }
 
 /** Pinterest hard limits, enforced before we ever call the API (spec §15). */

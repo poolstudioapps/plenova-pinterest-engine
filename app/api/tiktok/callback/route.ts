@@ -31,14 +31,14 @@ export async function GET(request: Request) {
       status: "error",
       message:
         url.searchParams.get("error_description") ??
-        "TikTok authorization was declined.",
+        "L'autorisation TikTok a été refusée.",
     });
   }
 
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   if (!code || !state) {
-    return done({ status: "error", message: "TikTok returned an incomplete response." });
+    return done({ status: "error", message: "TikTok a renvoyé une réponse incomplète. Relance la connexion." });
   }
 
   const jar = await cookies();
@@ -48,13 +48,13 @@ export async function GET(request: Request) {
   if (!expectedState || !safeEqual(expectedState, state)) {
     return done({
       status: "error",
-      message: "OAuth state mismatch. Start the connection again from this page.",
+      message: "Le state OAuth ne correspond pas. Relance la connexion depuis cette page.",
     });
   }
   if (!verifier) {
     return done({
       status: "error",
-      message: "The PKCE verifier expired. Start the connection again.",
+      message: "Le vérificateur PKCE a expiré. Relance la connexion.",
     });
   }
 
@@ -63,7 +63,7 @@ export async function GET(request: Request) {
     return done({ status: "connected", account: connection.username });
   } catch (err) {
     const message =
-      err instanceof Error ? err.message : "Could not complete the connection.";
+      err instanceof Error ? err.message : "La connexion n'a pas pu aboutir.";
     return done({ status: "error", message });
   }
 }

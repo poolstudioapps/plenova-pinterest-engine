@@ -6,6 +6,8 @@ import type {
   TextareaHTMLAttributes,
 } from "react";
 import { cn } from "@/lib/utils";
+import { t, type TranslationKey } from "@/lib/i18n";
+import type { PlantIdentity } from "@/lib/data/localize";
 import type { PinStatus } from "@/lib/types";
 
 /* --------------------------------------------------------------- layout -- */
@@ -103,7 +105,7 @@ export function Spinner({ className }: { className?: string }) {
   return (
     <span
       role="status"
-      aria-label="Loading"
+      aria-label="Chargement"
       className={cn(
         "size-4 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent opacity-70",
         className,
@@ -172,6 +174,69 @@ export function Textarea({
   );
 }
 
+/* ----------------------------------------------------------------- menu -- */
+
+/**
+ * The overflow menu on a list row.
+ *
+ * Built on <details> rather than a state machine: the open/closed state, the
+ * Escape key and the toggle semantics come from the element itself, which is
+ * less to get wrong than a hand-rolled popover. The only thing added is
+ * closing when focus leaves, so a click elsewhere on the page dismisses it.
+ */
+export function RowMenu({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <details
+      className="relative"
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+          e.currentTarget.removeAttribute("open");
+        }
+      }}
+    >
+      <summary
+        aria-label={label}
+        title={label}
+        className="grid size-8 cursor-pointer list-none place-items-center rounded-[var(--radius-control)] text-[var(--color-ink-soft)] transition-colors hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-ink)] [&::-webkit-details-marker]:hidden"
+      >
+        <span aria-hidden className="text-[16px] leading-none">
+          ⋯
+        </span>
+      </summary>
+      <div className="absolute right-0 z-20 mt-1 min-w-[190px] overflow-hidden rounded-[12px] border border-[var(--color-line)] bg-[var(--color-surface)] py-1 shadow-[var(--shadow-raised)]">
+        {children}
+      </div>
+    </details>
+  );
+}
+
+export function RowMenuItem({
+  danger,
+  children,
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & { danger?: boolean }) {
+  return (
+    <button
+      {...props}
+      type="button"
+      className={cn(
+        "block w-full px-3 py-2 text-left text-[13px] transition-colors disabled:cursor-not-allowed disabled:text-[var(--color-ink-faint)]",
+        danger
+          ? "text-[var(--color-danger)] hover:bg-[var(--color-danger-soft)]"
+          : "text-[var(--color-ink)] hover:bg-[var(--color-surface-muted)]",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
 /* --------------------------------------------------------------- status -- */
 
 const STATUS_STYLES: Record<PinStatus, string> = {
@@ -184,15 +249,89 @@ const STATUS_STYLES: Record<PinStatus, string> = {
   failed: "bg-[var(--color-danger-soft)] text-[var(--color-danger)]",
 };
 
+/*
+ * The stored status is an English identifier; it was being printed straight to
+ * the screen with a `capitalize` class, so a French interface said "Published".
+ */
+const STATUS_KEYS: Record<PinStatus, TranslationKey> = {
+  draft: "status.draft",
+  generated: "status.generated",
+  queued: "status.queued",
+  scheduled: "status.scheduled",
+  publishing: "status.publishing",
+  published: "status.published",
+  failed: "status.failed",
+};
+
 export function StatusBadge({ status }: { status: PinStatus }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-1 text-[11.5px] font-medium capitalize",
+        "inline-flex items-center rounded-full px-2.5 py-1 text-[11.5px] font-medium",
         STATUS_STYLES[status],
       )}
     >
-      {status}
+      {t(STATUS_KEYS[status])}
+    </span>
+  );
+}
+
+/**
+ * A plant, named both ways.
+ *
+ * The common name is what you look for; the botanical name is what tells you
+ * the image is actually the species you meant. Eight of the fifty species are
+ * commonly called by their botanical name already, and those render as one
+ * line - `identity.latin` is null for them rather than a repeat.
+ *
+ * When the species was never established, the second line says so instead of
+ * showing a botanical name nobody confirmed.
+ */
+export function PlantName({
+  identity,
+  size = "md",
+}: {
+  identity: PlantIdentity;
+  size?: "sm" | "md";
+}) {
+  const small = size === "sm";
+  return (
+    <span className="block min-w-0">
+      <span
+        className={cn(
+          "block truncate font-semibold text-[var(--color-ink)]",
+          small ? "text-[13px]" : "text-[15px]",
+        )}
+      >
+        {identity.primary}
+        {identity.cultivar ? (
+          <span className="font-normal text-[var(--color-ink-soft)]">
+            {" "}
+            {identity.cultivar}
+          </span>
+        ) : null}
+      </span>
+
+      {identity.latin ? (
+        <span
+          lang="la"
+          className={cn(
+            "block truncate italic text-[var(--color-ink-faint)]",
+            small ? "text-[11.5px]" : "text-[12.5px]",
+          )}
+        >
+          {identity.latin}
+        </span>
+      ) : !identity.known ? (
+        <span
+          className={cn(
+            "block truncate text-[var(--color-ink-faint)]",
+            small ? "text-[11.5px]" : "text-[12.5px]",
+          )}
+        >
+          {t("plant.unconfirmed")}
+        </span>
+      ) : null}
     </span>
   );
 }

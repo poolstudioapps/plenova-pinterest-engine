@@ -16,7 +16,7 @@ import type {
   Plant,
   VisualStyle,
 } from "@/lib/types";
-import { DEFAULT_LOCALE, type ContentLocale } from "@/lib/i18n";
+import { DEFAULT_CONTENT_LOCALE, type ContentLocale } from "@/lib/i18n";
 import { angleLabel as angleLabelFor, plantName } from "@/lib/data/localize";
 
 /**
@@ -54,10 +54,10 @@ interface ResolvedSlot {
 
 function resolveSlot(input: GenerateInput): ResolvedSlot {
   const plant = getPlant(input.plantSlug);
-  if (!plant) throw badRequest(`Unknown plant: ${input.plantSlug}`);
+  if (!plant) throw badRequest(`Plante inconnue : ${input.plantSlug}. Choisis-en une dans la liste.`);
 
   const angle = getAngle(input.angleSlug);
-  if (!angle) throw badRequest(`Unknown angle: ${input.angleSlug}`);
+  if (!angle) throw badRequest(`Angle inconnu : ${input.angleSlug}. Choisis-en un dans la liste.`);
 
   const variation = Number.isFinite(input.variation)
     ? Math.max(0, Math.trunc(input.variation!))
@@ -68,14 +68,14 @@ function resolveSlot(input: GenerateInput): ResolvedSlot {
   const style = input.visualStyle
     ? (getVisualStyle(input.visualStyle) ??
       (() => {
-        throw badRequest(`Unknown visual style: ${input.visualStyle}`);
+        throw badRequest(`Style visuel inconnu : ${input.visualStyle}. Choisis-en un dans la liste, ou laisse le moteur décider.`);
       })())
     : pickVisualStyle(
         angle.category,
         hashSeed(plant.slug, angle.slug) + variation,
       );
 
-  const locale = input.locale ?? (DEFAULT_LOCALE as ContentLocale);
+  const locale = input.locale ?? (DEFAULT_CONTENT_LOCALE);
   const vSlug = varietySlug(input.variety);
 
   return {
@@ -112,7 +112,7 @@ export async function generatePin(input: GenerateInput): Promise<PinRecord> {
   const existing = await store.findByDedupeKey(slot.key);
   if (existing && !input.allowDuplicate) {
     throw duplicate(
-      `A Pin already exists for ${slot.plant.name}${input.variety ? ` '${input.variety}'` : ""} / ${slot.angle.label} (variation ${slot.variation}). Bump the variation or enable "allow duplicate".`,
+      `Un Pin existe déjà pour ${slot.plant.name}${input.variety ? ` '${input.variety}'` : ""} / ${slot.angle.label} (variation ${slot.variation}). Change la variation, ou coche "Régénérer par-dessus le Pin existant de ce slot".`,
       { existingPinId: existing.id },
     );
   }
@@ -140,7 +140,7 @@ export async function generatePin(input: GenerateInput): Promise<PinRecord> {
 
   if (input.reuseMediaId) {
     const asset = await store.getMedia(input.reuseMediaId);
-    if (!asset) throw notFound(`No media asset with id ${input.reuseMediaId}.`);
+    if (!asset) throw notFound(`Aucune image dans la bibliothèque avec l'id ${input.reuseMediaId}.`);
     imageUrl = asset.url;
     imageIsInline = asset.url.startsWith("data:");
     mediaId = asset.id;
@@ -172,7 +172,7 @@ export async function generatePin(input: GenerateInput): Promise<PinRecord> {
     plantSlug: slot.plant.slug,
     plantName: plantName(slot.plant, slot.locale),
     angleSlug: slot.angle.slug,
-    angleLabel: angleLabelFor(slot.angle, slot.locale === "fr" ? "fr" : "en"),
+    angleLabel: angleLabelFor(slot.angle),
     visualStyle: slot.style.slug,
     variation: slot.variation,
     variety: input.variety ?? null,
@@ -225,7 +225,7 @@ export async function updatePin(
 ): Promise<PinRecord> {
   const store = getStore();
   const pin = await store.getPin(id);
-  if (!pin) throw notFound(`No Pin with id ${id}.`);
+  if (!pin) throw notFound(`Aucun Pin avec l'id ${id}.`);
 
   const updated: PinRecord = {
     ...pin,

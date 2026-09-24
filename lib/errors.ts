@@ -94,7 +94,7 @@ export function toErrorResponse(err: unknown): {
       status: err.status,
     };
   }
-  const message = err instanceof Error ? err.message : "Unexpected error";
+  const message = err instanceof Error ? err.message : "Erreur inattendue";
   const name = err instanceof Error ? err.name : "Error";
   console.error("[unhandled]", redact(message));
   // The real reason travels back, redacted. The whole app sits behind a

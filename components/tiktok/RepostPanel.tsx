@@ -1,15 +1,21 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Button, Card, Notice } from "@/components/ui";
-import { translator, type ContentLocale, type Locale } from "@/lib/i18n";
+import { Button, Field } from "@/components/ui";
+import { WritingOptions } from "@/components/tiktok/WritingOptions";
+import {
+  translator,
+  type ContentLocale,
+  type TranslationKey,
+} from "@/lib/i18n";
 import type { OverlayStyle } from "@/lib/overlay";
 import type { CarouselRecord } from "@/lib/types";
 
 interface Props {
-  uiLocale: Locale;
   languages: ContentLocale[];
+  onToggleLanguage: (lang: ContentLocale) => void;
   overlayStyle: OverlayStyle;
+  onOverlayStyle: (style: OverlayStyle) => void;
   canGenerate: boolean;
   onStarted: (carousel: CarouselRecord) => void;
 }
@@ -46,13 +52,14 @@ async function shrink(file: File): Promise<string> {
  * their reviewers. A screenshot is something the operator already has.
  */
 export function RepostPanel({
-  uiLocale,
   languages,
+  onToggleLanguage,
   overlayStyle,
+  onOverlayStyle,
   canGenerate,
   onStarted,
 }: Props) {
-  const t = translator(uiLocale);
+  const t = translator();
   const input = useRef<HTMLInputElement>(null);
 
   const [files, setFiles] = useState<File[]>([]);
@@ -110,53 +117,76 @@ export function RepostPanel({
     }
   }
 
+  /* Same reasoning as the other panel: say why the button is dead. */
+  const blocked: TranslationKey | null = !canGenerate
+    ? "carousels.blockedNoKey"
+    : files.length === 0
+      ? "repost.blockedFiles"
+      : languages.length === 0
+        ? "carousels.blockedLanguages"
+        : null;
+
+  /*
+   * Two phases, not one.
+   *
+   * The label used to revert to the idle text the moment the last upload
+   * landed - which is exactly when the slow part starts, so the button sat
+   * spinning under a label that said it had not begun.
+   */
+  const label = !busy
+    ? t("repost.start", { n: files.length })
+    : sent < files.length
+      ? t("repost.sending", { done: sent, total: files.length })
+      : t("repost.reading");
+
   return (
-    <Card className="p-5">
-      <h2 className="text-[17px] font-semibold tracking-[-0.01em]">
-        {t("repost.title")}
-      </h2>
-      <p className="mt-1.5 mb-5 max-w-2xl text-[13.5px] leading-relaxed text-[var(--color-ink-soft)]">
-        {t("repost.body")}
-      </p>
-
-      <input
-        ref={input}
-        type="file"
-        accept="image/*"
-        multiple
-        aria-label={t("repost.pick")}
-        onChange={(e) => {
-          setError(null);
-          setFiles(Array.from(e.target.files ?? []));
-        }}
-        className="input cursor-pointer"
-      />
-
-      <p className="mt-2 text-[12px] text-[var(--color-ink-faint)]">
-        {files.length > 0
-          ? t("repost.chosen", { n: files.length })
-          : t("repost.none")}{" "}
-        {t("repost.order")}
-      </p>
+    <div className="grid max-w-[760px] gap-5">
+      {/*
+        No card and no heading here: the tab already names this panel, and the
+        parent already pads it. Both were drawn a second time, as a bordered
+        white card floating on a bordered white card.
+      */}
+      <Field label={t("repost.pick")} hint={t("repost.pickHint")}>
+        <input
+          ref={input}
+          type="file"
+          accept="image/*"
+          multiple
+          aria-label={t("repost.pick")}
+          onChange={(e) => {
+            setError(null);
+            setFiles(Array.from(e.target.files ?? []));
+          }}
+          className="input cursor-pointer"
+        />
+        {files.length > 0 ? (
+          <p className="text-[12.5px] text-[var(--color-ink-soft)]">
+            {t("repost.chosen", { n: files.length })}
+          </p>
+        ) : null}
+      </Field>
 
       {error ? (
-        <div className="mt-3">
-          <Notice tone="danger">{error}</Notice>
-        </div>
+        <p className="text-[12.5px] text-[var(--color-danger)]">{error}</p>
       ) : null}
 
-      <div className="mt-4">
-        <Button
-          variant="primary"
-          onClick={() => void start()}
-          loading={busy}
-          disabled={!canGenerate || files.length === 0 || languages.length === 0}
-        >
-          {busy && sent < files.length
-            ? t("repost.sending", { done: sent, total: files.length })
-            : t("repost.start", { n: files.length })}
+      <WritingOptions
+        languages={languages}
+        onToggleLanguage={onToggleLanguage}
+        overlayStyle={overlayStyle}
+        onOverlayStyle={onOverlayStyle}
+      />
+
+      <div className="border-t border-[var(--color-line)] pt-5">
+        <Button variant="primary" onClick={() => void start()} loading={busy} disabled={busy || blocked !== null}>
+          {label}
         </Button>
+        {blocked && !busy ? (
+          <p className="mt-2 text-[12.5px] text-[var(--color-ink-faint)]">
+            {t(blocked)}
+          </p>
+        ) : null}
       </div>
-    </Card>
+    </div>
   );
 }

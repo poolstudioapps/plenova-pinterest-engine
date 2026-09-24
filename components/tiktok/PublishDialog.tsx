@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Button, Card, Field, Notice, Select, Spinner } from "@/components/ui";
 import type { AccountView } from "@/components/tiktok/TikTokPanel";
-import { CONTENT_LOCALE_LABELS, translator, type Locale } from "@/lib/i18n";
+import { CONTENT_LOCALE_LABELS, translator } from "@/lib/i18n";
 import type {
   CarouselPost,
   CarouselRecord,
@@ -12,7 +12,6 @@ import type {
 import { cn } from "@/lib/utils";
 
 interface Props {
-  uiLocale: Locale;
   carousel: CarouselRecord;
   accounts: AccountView[];
   onClose: () => void;
@@ -20,10 +19,10 @@ interface Props {
 }
 
 const PRIVACY_LABELS: Record<string, string> = {
-  PUBLIC_TO_EVERYONE: "Everyone",
-  MUTUAL_FOLLOW_FRIENDS: "Friends",
-  FOLLOWER_OF_CREATOR: "Followers",
-  SELF_ONLY: "Only me",
+  PUBLIC_TO_EVERYONE: "Tout le monde",
+  MUTUAL_FOLLOW_FRIENDS: "Amis",
+  FOLLOWER_OF_CREATOR: "Abonnés",
+  SELF_ONLY: "Moi uniquement",
 };
 
 /** Branded content may not be private, so these two are the only ones left. */
@@ -52,13 +51,12 @@ function label(account: AccountView, creator?: TikTokCreatorInfo): string {
  * selected. Posting an empty caption would be worse than not posting.
  */
 export function PublishDialog({
-  uiLocale,
   carousel,
   accounts,
   onClose,
   onPublished,
 }: Props) {
-  const t = translator(uiLocale);
+  const t = translator();
 
   const eligible = accounts.filter((a) =>
     carousel.languages.includes(a.language),

@@ -10,7 +10,7 @@ export async function GET(_request: Request, { params }: Params) {
   return handle(async () => {
     const { id } = await params;
     const asset = await getStore().getMedia(id);
-    if (!asset) throw notFound(`No media asset with id ${id}.`);
+    if (!asset) throw notFound(`Aucune image avec l'identifiant ${id}.`);
     return ok({ asset });
   });
 }
@@ -25,7 +25,7 @@ export async function DELETE(_request: Request, { params }: Params) {
     const { id } = await params;
     const store = getStore();
     const asset = await store.getMedia(id);
-    if (!asset) throw notFound(`No media asset with id ${id}.`);
+    if (!asset) throw notFound(`Aucune image avec l'identifiant ${id}.`);
     await store.deleteMedia(id);
     return ok({ deleted: id });
   });

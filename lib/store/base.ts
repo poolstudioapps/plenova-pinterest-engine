@@ -269,7 +269,7 @@ export abstract class DocumentStore implements EngineStore {
     const opened = this.openEnvelope<unknown>(envelope, "TikTok");
     if (envelope && opened === null) {
       throw new Error(
-        "The stored TikTok accounts could not be decrypted. Refusing to overwrite them.",
+        "Impossible de déchiffrer les comptes TikTok enregistrés. Ils ne seront pas écrasés : vérifie TOKEN_ENCRYPTION_KEY.",
       );
     }
     return normaliseAccounts(opened);

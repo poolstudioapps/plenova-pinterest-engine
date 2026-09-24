@@ -18,14 +18,12 @@ import {
   CONTENT_LOCALE_LABELS,
   translator,
   type ContentLocale,
-  type Locale,
   type TranslationKey,
 } from "@/lib/i18n";
 import type { CarouselRecord } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface Props {
-  uiLocale: Locale;
   carousel: CarouselRecord;
   index: number;
   language: ContentLocale;
@@ -62,15 +60,21 @@ type Corner = (typeof CORNERS)[number];
  * Editing French does not move the English text, which is the only way seven
  * translations stay one design.
  */
+/** The buttons show only an arrow, so this is their whole description. */
+const ALIGN_LABELS: Record<"left" | "center" | "right", string> = {
+  left: "gauche",
+  center: "centré",
+  right: "droite",
+};
+
 export function SlideEditor({
-  uiLocale,
   carousel,
   index,
   language,
   onClose,
   onSaved,
 }: Props) {
-  const t = translator(uiLocale);
+  const t = translator();
   const slide = carousel.slides[index];
 
   const [overlay, setOverlay] = useState<SlideOverlay>(() =>
@@ -792,7 +796,7 @@ function BlockControls({
                 type="button"
                 onClick={() => onChange({ align })}
                 aria-pressed={block.align === align}
-                aria-label={`${label} — ${align}`}
+                aria-label={`${label} — ${ALIGN_LABELS[align]}`}
                 className={cn(
                   "flex-1 rounded-[8px] border py-1.5 text-[12px] transition-colors",
                   block.align === align

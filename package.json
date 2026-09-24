@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "check": "tsc --noEmit && next build"
+    "check": "tsc --noEmit && next build",
+    "dev:offline": "node scripts/dev-offline.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.21.0",

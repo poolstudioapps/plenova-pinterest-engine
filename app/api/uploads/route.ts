@@ -22,16 +22,16 @@ export async function POST(request: Request) {
     try {
       body = (await request.json()) as typeof body;
     } catch {
-      throw badRequest("Request body must be valid JSON.");
+      throw badRequest("Le contenu envoyé n'est pas du JSON valide.");
     }
 
     const dataUrl = typeof body.dataUrl === "string" ? body.dataUrl : "";
     const match = dataUrl.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
-    if (!match) throw badRequest("Send a JPEG, PNG or WebP as a data URL.");
+    if (!match) throw badRequest("Choisis une image JPEG, PNG ou WebP.");
 
     const data = Buffer.from(match[2]!, "base64");
-    if (data.length === 0) throw badRequest("That image is empty.");
-    if (data.length > MAX_BYTES) throw badRequest("That image is too large.");
+    if (data.length === 0) throw badRequest("Cette image est vide.");
+    if (data.length > MAX_BYTES) throw badRequest("Cette image est trop lourde (8 Mo maximum).");
 
     const mimeType = match[1]!;
     const hosted = await hostImageAt(

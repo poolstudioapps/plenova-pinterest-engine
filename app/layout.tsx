@@ -1,27 +1,24 @@
 import type { Metadata } from "next";
 import { Sidebar } from "@/components/layout/Sidebar";
-import { getUiLocale } from "@/lib/locale-server";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Plenova Pinterest Engine",
+  title: "Plenova Studio",
   description:
-    "Generate, review and publish high-quality Pinterest Pins for Plenova.",
+    "Rédiger, illustrer et publier les contenus Plenova sur Pinterest et TikTok.",
   robots: { index: false, follow: false },
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const locale = await getUiLocale();
-
   return (
-    <html lang={locale}>
+    <html lang="fr">
       <body className="min-h-dvh">
         <div className="md:flex">
-          <Sidebar locale={locale} />
+          <Sidebar />
           <main className="min-w-0 flex-1 px-5 py-8 md:px-10 md:py-12">
             {/*
               Narrower than it was. A form field stretched across a wide screen

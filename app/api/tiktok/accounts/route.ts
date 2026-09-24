@@ -17,9 +17,9 @@ export async function PATCH(request: Request) {
       language?: unknown;
     };
     const openId = typeof body.openId === "string" ? body.openId : "";
-    if (!openId) throw badRequest("openId is required.");
+    if (!openId) throw badRequest("Il manque openId, l'identifiant du compte TikTok.");
     if (!isContentLocale(body.language)) {
-      throw badRequest("language must be one of the supported content locales.");
+      throw badRequest("language doit être une des langues de publication prises en charge.");
     }
 
     const account = await setAccountLanguage(openId, body.language);

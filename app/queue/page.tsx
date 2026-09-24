@@ -7,16 +7,15 @@ import {
   StatusBadge,
 } from "@/components/ui";
 import { config } from "@/lib/config";
+import { plantIdentity } from "@/lib/data/localize";
 import { translator } from "@/lib/i18n";
-import { getUiLocale } from "@/lib/locale-server";
 import { getStore } from "@/lib/store";
 import { formatDate } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
 export default async function QueuePage() {
-  const locale = await getUiLocale();
-  const t = translator(locale);
+  const t = translator();
 
   const pins = await getStore().listPins();
   const queued = pins.filter((p) =>
@@ -72,7 +71,15 @@ export default async function QueuePage() {
 
               <div className="flex shrink-0 flex-col items-end gap-1.5">
                 <StatusBadge status={pin.status} />
-                <Badge>{pin.plantName}</Badge>
+                <Badge>
+                  {
+                    plantIdentity({
+                      slug: pin.plantSlug,
+                      fallbackName: pin.plantName,
+                      variety: pin.variety,
+                    }).label
+                  }
+                </Badge>
               </div>
             </div>
           ))}

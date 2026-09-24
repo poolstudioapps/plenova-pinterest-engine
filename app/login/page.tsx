@@ -1,12 +1,10 @@
 import { LoginForm } from "@/components/layout/LoginForm";
 import { translator } from "@/lib/i18n";
-import { getUiLocale } from "@/lib/locale-server";
 
 export const dynamic = "force-dynamic";
 
 export default async function LoginPage() {
-  const locale = await getUiLocale();
-  const t = translator(locale);
+  const t = translator();
 
   return (
     <div className="grid min-h-[70vh] place-items-center">
@@ -18,7 +16,7 @@ export default async function LoginPage() {
           <div className="leading-tight">
             <p className="text-[15px] font-semibold tracking-[-0.01em]">Plenova</p>
             <p className="text-[12px] text-[var(--color-ink-faint)]">
-              Pinterest Engine
+              Studio
             </p>
           </div>
         </div>

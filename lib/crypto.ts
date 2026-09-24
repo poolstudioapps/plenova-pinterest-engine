@@ -21,13 +21,13 @@ function key(): Buffer {
   const raw = config.security.tokenEncryptionKey;
   if (!raw) {
     throw new Error(
-      "TOKEN_ENCRYPTION_KEY is not set. Generate one with: node -e \"console.log(require('crypto').randomBytes(32).toString('base64'))\"",
+      "Il manque TOKEN_ENCRYPTION_KEY. Génères-en une avec : node -e \"console.log(require('crypto').randomBytes(32).toString('base64'))\"",
     );
   }
   const buf = Buffer.from(raw, "base64");
   if (buf.length !== 32) {
     throw new Error(
-      `TOKEN_ENCRYPTION_KEY must decode to exactly 32 bytes (got ${buf.length}).`,
+      `TOKEN_ENCRYPTION_KEY doit faire exactement 32 octets une fois décodée (${buf.length} obtenus).`,
     );
   }
   return buf;
@@ -60,7 +60,7 @@ export function encryptJson(value: unknown): string {
 export function decryptJson<T>(payload: string): T {
   const parts = payload.split(".");
   if (parts.length !== 4 || parts[0] !== "v1") {
-    throw new Error("Malformed encrypted payload.");
+    throw new Error("Le contenu chiffré est mal formé.");
   }
   const iv = Buffer.from(parts[1]!, "base64url");
   const tag = Buffer.from(parts[2]!, "base64url");

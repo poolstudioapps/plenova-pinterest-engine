@@ -66,25 +66,43 @@ handler or server component.
 
 ---
 
-## Languages (FR / EN)
+## Languages
 
-Two independent language settings:
+The interface and the content are two different things, and only one of them is
+plural.
 
-- **Dashboard language** — a cookie-backed switcher in the sidebar. Every page,
-  label, plant name and angle name is translated.
-- **Pin language** — chosen per generation in the Generate form. It decides the
-  language Gemini writes the Pin in, and therefore which Pinterest audience the
-  content reaches. An English-speaking operator can produce French Pins.
+- **The dashboard is French, and only French.** There is one operator and they
+  are French-speaking, so a second interface language was a dictionary to keep
+  in sync for nobody's benefit. There is no switcher and no locale cookie;
+  `lib/i18n.ts` holds a single FR dictionary, and `TranslationKey` is derived
+  from it, so a key referenced in a component but absent from the dictionary is
+  a compile error rather than a raw `publish.modeDraft` rendered to the screen.
+
+- **Content is written in five languages** — `ContentLocale`, currently
+  `fr`, `en`, `es`, `de`, `it`. A pin picks one; a carousel picks several and
+  is written in each, so one carousel feeds a French, a Spanish and a German
+  TikTok account in their own words. This is the reason the tool exists.
+
+`Locale` no longer exists. If you are tempted to simplify `ContentLocale`
+because it looks like a leftover of the same idea: it is not, and narrowing it
+removes multilingual publishing.
 
 Plant care data stays canonical in English in the catalog and is handed to the
-model as reference; the model composes the Pin directly in the target language.
-That avoids maintaining 50 plants x 6 care fields in two languages, where
+model as reference; the model composes directly in the target language. That
+avoids maintaining 50 plants x 6 care fields in five languages, where
 translation drift would quietly degrade horticultural accuracy.
 
 What *is* translated is the plant **name**, plus its alternative French common
 names (`langue de belle-mère`, `fleur de lune`, `plante araignée`…), because
 those are what people actually type into Pinterest — they are handed to the
 model as usable keyword material.
+
+Every surface that names a plant shows **both** names — the common one you
+think in and the botanical one that says which species it actually is. That
+pair is built once, by `plantIdentity()` in `lib/data/localize.ts`, and
+rendered by the `PlantName` component; a slug the catalog does not carry shows
+the stored name alone and says the species is unconfirmed rather than inventing
+a botanical name.
 
 `locale` is part of the dedupe key, so the same plant + angle in French and in
 English are two legitimate Pins rather than a duplicate.

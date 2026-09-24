@@ -8,7 +8,6 @@ import {
   CONTENT_LOCALE_LABELS,
   translator,
   type ContentLocale,
-  type Locale,
 } from "@/lib/i18n";
 import { formatDate } from "@/lib/utils";
 
@@ -33,15 +32,13 @@ export interface AccountView {
  * never has to be told which account gets which version.
  */
 export function TikTokPanel({
-  uiLocale,
   configured,
   accounts,
 }: {
-  uiLocale: Locale;
   configured: boolean;
   accounts: AccountView[];
 }) {
-  const t = translator(uiLocale);
+  const t = translator();
   const router = useRouter();
   // Separate, so changing a language does not make Disconnect spin as though
   // the account were being removed.

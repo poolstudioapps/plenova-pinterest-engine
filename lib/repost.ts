@@ -29,7 +29,7 @@ let client: GoogleGenAI | null = null;
 
 function ai(): GoogleGenAI {
   if (!config.gemini.apiKey) {
-    throw upstream("GEMINI_API_KEY is missing, so nothing can be read.");
+    throw upstream("Il manque la clé GEMINI_API_KEY, rien ne peut être lu.");
   }
   client ??= new GoogleGenAI({ apiKey: config.gemini.apiKey });
   return client;
@@ -132,13 +132,13 @@ export async function readScreenshot(
   });
 
   const raw = response.text;
-  if (!raw) throw upstream("Nothing came back from reading the screenshot.");
+  if (!raw) throw upstream("Gemini n'a rien renvoyé pour la lecture de la capture. Réessaie.");
 
   let parsed: ReadSlide;
   try {
     parsed = JSON.parse(raw) as ReadSlide;
   } catch {
-    throw upstream("The screenshot reading came back malformed.");
+    throw upstream("La lecture de la capture est revenue illisible. Réessaie.");
   }
 
   const strip = (dict: Partial<Record<ContentLocale, string>> | undefined) => {
@@ -233,7 +233,7 @@ export async function cleanScreenshot(image: {
       };
     }
   }
-  throw upstream("No cleaned image came back.");
+  throw upstream("Gemini n'a renvoyé aucune image nettoyée. Réessaie.");
 }
 
 /**
@@ -297,13 +297,13 @@ export async function writeRepostCaption(
   });
 
   const raw = response.text;
-  if (!raw) throw upstream("No caption came back.");
+  if (!raw) throw upstream("Gemini n'a renvoyé aucune légende. Réessaie.");
   try {
     return JSON.parse(raw) as {
       caption: Partial<Record<ContentLocale, string>>;
       hashtags: Partial<Record<ContentLocale, string[]>>;
     };
   } catch {
-    throw upstream("The caption came back malformed.");
+    throw upstream("La légende est revenue illisible. Réessaie.");
   }
 }

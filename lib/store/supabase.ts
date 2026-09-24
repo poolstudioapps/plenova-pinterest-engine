@@ -39,7 +39,7 @@ function db(): SupabaseClient {
   if (client) return client;
   const { url, serviceKey } = config.supabase;
   if (!url || !serviceKey) {
-    throw new Error("Supabase is not configured.");
+    throw new Error("Supabase n'est pas configuré.");
   }
   client = createClient(url, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -63,7 +63,7 @@ export class SupabaseStore implements EngineStore {
       .from("pins")
       .select("data")
       .order("created_at", { ascending: false });
-    check("listing pins", error);
+    check("lecture de la liste des Pins", error);
     const pins = (data ?? []).map((row) => row.data as PinRecord);
     // Filtering stays in one place so every adapter behaves identically.
     return applyFilter(pins, filter);
@@ -75,7 +75,7 @@ export class SupabaseStore implements EngineStore {
       .select("data")
       .eq("id", id)
       .maybeSingle();
-    check("reading a pin", error);
+    check("lecture d'un Pin", error);
     return (data?.data as PinRecord) ?? null;
   }
 
@@ -85,7 +85,7 @@ export class SupabaseStore implements EngineStore {
       .select("data")
       .eq("dedupe_key", key)
       .maybeSingle();
-    check("looking up a duplicate", error);
+    check("recherche d'un doublon", error);
     return (data?.data as PinRecord) ?? null;
   }
 
@@ -99,7 +99,7 @@ export class SupabaseStore implements EngineStore {
       .eq("plant_slug", plantSlug)
       .eq("locale", locale)
       .order("created_at", { ascending: false });
-    check("reading titles", error);
+    check("lecture des titres", error);
     return (data ?? [])
       .map((row) => row.title as string | null)
       .filter((t): t is string => Boolean(t));
@@ -117,12 +117,12 @@ export class SupabaseStore implements EngineStore {
       data: pin,
       created_at: pin.createdAt,
     });
-    check("saving a pin", error);
+    check("enregistrement d'un Pin", error);
   }
 
   async deletePin(id: string): Promise<void> {
     const { error } = await db().from("pins").delete().eq("id", id);
-    check("deleting a pin", error);
+    check("suppression d'un Pin", error);
   }
 
   // ----------------------------------------------------------- connections
@@ -137,7 +137,7 @@ export class SupabaseStore implements EngineStore {
         .from("connections")
         .delete()
         .eq("provider", "pinterest");
-      check("disconnecting Pinterest", error);
+      check("déconnexion de Pinterest", error);
       return;
     }
     const { error } = await db().from("connections").upsert({
@@ -145,7 +145,7 @@ export class SupabaseStore implements EngineStore {
       secret: encryptJson(connection),
       updated_at: new Date().toISOString(),
     });
-    check("saving the Pinterest connection", error);
+    check("enregistrement de la connexion Pinterest", error);
   }
 
   /**
@@ -158,7 +158,7 @@ export class SupabaseStore implements EngineStore {
       .select("secret")
       .eq("provider", provider)
       .maybeSingle();
-    check("reading a connection", error);
+    check("lecture d'une connexion", error);
     const secret = data?.secret as string | undefined;
     if (!secret) return null;
     if (!hasEncryptionKey()) {
@@ -182,7 +182,7 @@ export class SupabaseStore implements EngineStore {
       .order("created_at", { ascending: false })
       // Bounded, so one page can never try to hold the whole library at once.
       .limit(500);
-    check("listing media", error);
+    check("lecture de la bibliothèque d'images", error);
     return filterMedia(
       (data ?? []).map((row) => row.data as MediaAsset),
       filter,
@@ -195,7 +195,7 @@ export class SupabaseStore implements EngineStore {
       .select("data")
       .eq("id", id)
       .maybeSingle();
-    check("reading media", error);
+    check("lecture d'une image", error);
     return (data?.data as MediaAsset) ?? null;
   }
 
@@ -218,7 +218,7 @@ export class SupabaseStore implements EngineStore {
     const inlined = assets.filter((a) => a.url.startsWith("data:"));
     if (inlined.length > 0) {
       throw new Error(
-        "Images are being inlined rather than hosted, so they cannot be filed. Attach a Blob store.",
+        "Les images sont intégrées au lieu d'être hébergées, elles ne peuvent pas être classées. Attache un store Blob.",
       );
     }
 
@@ -234,12 +234,12 @@ export class SupabaseStore implements EngineStore {
           created_at: asset.createdAt,
         })),
       );
-    check("filing media", error);
+    check("classement des images", error);
   }
 
   async deleteMedia(id: string): Promise<void> {
     const { error } = await db().from("media").delete().eq("id", id);
-    check("deleting media", error);
+    check("suppression d'une image", error);
   }
 
   async markMediaUsed(id: string): Promise<void> {
@@ -259,7 +259,7 @@ export class SupabaseStore implements EngineStore {
       .from("tiktok_accounts")
       .select("open_id, secret")
       .order("username");
-    check("listing TikTok accounts", error);
+    check("lecture de la liste des comptes TikTok", error);
     return (data ?? [])
       .map((row) => this.openAccount(row.secret as string))
       .filter((a): a is TikTokAccount => a !== null);
@@ -271,7 +271,7 @@ export class SupabaseStore implements EngineStore {
       .select("secret")
       .eq("open_id", openId)
       .maybeSingle();
-    check("reading a TikTok account", error);
+    check("lecture d'un compte TikTok", error);
     const secret = data?.secret as string | undefined;
     return secret ? this.openAccount(secret) : null;
   }
@@ -288,7 +288,7 @@ export class SupabaseStore implements EngineStore {
       profile_synced_at: account.profileSyncedAt ?? null,
       connected_at: account.connectedAt,
     });
-    check("saving a TikTok account", error);
+    check("enregistrement d'un compte TikTok", error);
   }
 
   async deleteTikTokAccount(openId: string): Promise<void> {
@@ -296,7 +296,7 @@ export class SupabaseStore implements EngineStore {
       .from("tiktok_accounts")
       .delete()
       .eq("open_id", openId);
-    check("disconnecting a TikTok account", error);
+    check("déconnexion d'un compte TikTok", error);
   }
 
   /** One account out of its envelope, or nothing if it will not open. */
@@ -321,7 +321,7 @@ export class SupabaseStore implements EngineStore {
       .from("carousels")
       .select("*")
       .order("created_at", { ascending: false });
-    check("listing carousels", error);
+    check("lecture de la liste des carrousels", error);
     return (data ?? [])
       .map((row) => normaliseCarousel(fromRow(row)))
       .filter((c): c is CarouselRecord => c !== null);
@@ -333,7 +333,7 @@ export class SupabaseStore implements EngineStore {
       .select("*")
       .eq("id", id)
       .maybeSingle();
-    check("reading a carousel", error);
+    check("lecture d'un carrousel", error);
     return data ? normaliseCarousel(fromRow(data)) : null;
   }
 
@@ -355,12 +355,12 @@ export class SupabaseStore implements EngineStore {
       created_at: carousel.createdAt,
       updated_at: carousel.updatedAt,
     });
-    check("saving a carousel", error);
+    check("enregistrement d'un carrousel", error);
   }
 
   async deleteCarousel(id: string): Promise<void> {
     const { error } = await db().from("carousels").delete().eq("id", id);
-    check("deleting a carousel", error);
+    check("suppression d'un carrousel", error);
   }
 }
 

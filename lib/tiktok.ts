@@ -8,7 +8,7 @@ import {
 import { badRequest, notConfigured, notConnected, rateLimited, upstream } from "@/lib/errors";
 import { getStore } from "@/lib/store";
 import type { TikTokAccount, TikTokCreatorInfo } from "@/lib/types";
-import { DEFAULT_LOCALE, type ContentLocale } from "@/lib/i18n";
+import { DEFAULT_CONTENT_LOCALE, type ContentLocale } from "@/lib/i18n";
 
 /**
  * TikTok Content Posting API.
@@ -43,7 +43,7 @@ export function createPkcePair(): PkcePair {
 export function buildAuthorizeUrl(state: string, challenge: string): string {
   if (!isTikTokConfigured()) {
     throw notConfigured(
-      "TikTok is not configured. Set TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET and the redirect URI.",
+      "TikTok n'est pas configuré. Ajoute TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET et l'URI de redirection.",
     );
   }
   const url = new URL(config.tiktok.authorizeUrl);
@@ -81,12 +81,12 @@ async function requestToken(body: URLSearchParams): Promise<TokenResponse> {
   try {
     parsed = JSON.parse(text) as TokenResponse;
   } catch {
-    throw upstream("TikTok returned a malformed token response.");
+    throw upstream("TikTok a renvoyé une réponse illisible pour le jeton. Relance la connexion.");
   }
 
   // TikTok answers 200 with an error body rather than an HTTP error code.
   if (!res.ok || parsed.error || !parsed.access_token) {
-    throw upstream("TikTok rejected the token request.", {
+    throw upstream("TikTok a refusé la demande de jeton. Reconnecte le compte.", {
       hint: parsed.error_description ?? parsed.error ?? `HTTP ${res.status}`,
     });
   }
@@ -113,7 +113,7 @@ function toAccount(
     displayName: previous?.displayName ?? "",
     avatarUrl: previous?.avatarUrl ?? null,
     // Defaults to the primary language; the operator assigns the real one.
-    language: previous?.language ?? (DEFAULT_LOCALE as ContentLocale),
+    language: previous?.language ?? (DEFAULT_CONTENT_LOCALE),
     connectedAt: previous?.connectedAt ?? new Date().toISOString(),
   };
 }
@@ -123,7 +123,7 @@ export async function exchangeCodeForToken(
   code: string,
   verifier: string,
 ): Promise<TikTokAccount> {
-  if (!isTikTokConfigured()) throw notConfigured("TikTok is not configured.");
+  if (!isTikTokConfigured()) throw notConfigured("TikTok n'est pas configuré.");
 
   const token = await requestToken(
     new URLSearchParams({
@@ -152,7 +152,7 @@ export async function exchangeCodeForToken(
   }
 
   if (!connection.openId) {
-    throw upstream("TikTok returned no open id, so the account cannot be stored.");
+    throw upstream("TikTok n'a pas renvoyé d'open id, le compte ne peut pas être enregistré. Relance la connexion.");
   }
   await getStore().saveTikTokAccount(connection);
   return connection;
@@ -162,7 +162,7 @@ async function refreshAccount(account: TikTokAccount): Promise<TikTokAccount> {
   const connection = account;
   if (!connection.refreshToken) {
     throw notConnected(
-      "The TikTok token expired and no refresh token is stored. Reconnect the account.",
+      "Le jeton TikTok a expiré et aucun jeton de rafraîchissement n'est stocké. Reconnecte le compte.",
     );
   }
   const token = await requestToken(
@@ -185,7 +185,7 @@ async function refreshAccount(account: TikTokAccount): Promise<TikTokAccount> {
  */
 async function activeAccount(openId: string): Promise<TikTokAccount> {
   const account = await getStore().getTikTokAccount(openId);
-  if (!account) throw notConnected(`TikTok account ${openId} is not connected.`);
+  if (!account) throw notConnected(`Le compte TikTok ${openId} n'est pas connecté.`);
 
   if (
     account.expiresAt !== null &&
@@ -206,7 +206,7 @@ export async function setAccountLanguage(
   language: ContentLocale,
 ): Promise<TikTokAccount> {
   const account = await getStore().getTikTokAccount(openId);
-  if (!account) throw notConnected(`TikTok account ${openId} is not connected.`);
+  if (!account) throw notConnected(`Le compte TikTok ${openId} n'est pas connecté.`);
   const updated = { ...account, language };
   await getStore().saveTikTokAccount(updated);
   return updated;
@@ -230,7 +230,7 @@ async function apiCall<T>(
   });
 
   if (res.status === 429) {
-    throw rateLimited("TikTok rate limit reached. Wait before publishing again.");
+    throw rateLimited("Limite de requêtes TikTok atteinte. Attends un moment avant de republier.");
   }
 
   const text = await res.text();
@@ -238,15 +238,15 @@ async function apiCall<T>(
   try {
     parsed = JSON.parse(text) as typeof parsed;
   } catch {
-    throw upstream(`TikTok returned a malformed response (HTTP ${res.status}).`);
+    throw upstream(`TikTok a renvoyé une réponse illisible (HTTP ${res.status}).`);
   }
 
   if (res.status === 401) {
-    throw notConnected("TikTok rejected the access token. Reconnect the account.");
+    throw notConnected("TikTok a refusé le jeton d'accès. Reconnecte le compte.");
   }
   // TikTok signals success with error.code === "ok".
   if (!res.ok || (parsed.error?.code && parsed.error.code !== "ok")) {
-    throw upstream("TikTok API error.", {
+    throw upstream("TikTok a renvoyé une erreur.", {
       code: parsed.error?.code ?? null,
       hint: parsed.error?.message ?? parsed.error?.code ?? `HTTP ${res.status}`,
     });
@@ -366,19 +366,19 @@ export async function publishCarousel(
   input: PublishCarouselInput,
 ): Promise<PublishResult> {
   if (input.imageUrls.length === 0) {
-    throw badRequest("A carousel needs at least one image.");
+    throw badRequest("Un carrousel a besoin d'au moins une image.");
   }
   const inline = input.imageUrls.find((u) => u.startsWith("data:"));
   if (inline) {
     throw badRequest(
-      "One slide is stored inline. TikTok fetches images by URL, so every slide needs a public URL - attach a Blob store and regenerate.",
+      "Une slide est stockée en data URL. TikTok va chercher les images par URL, chaque slide a donc besoin d'une URL publique - branche un Blob store et relance la génération.",
     );
   }
 
   // Input validation first: no point refreshing a token to reject the payload.
   if (input.postMode === "DIRECT_POST" && !input.privacyLevel) {
     throw badRequest(
-      "A privacy level is required for a direct post, and must be one the creator actually offers.",
+      "Une publication directe a besoin d'un niveau de confidentialité, choisi parmi ceux que le compte propose vraiment.",
     );
   }
 
@@ -387,7 +387,7 @@ export async function publishCarousel(
   const needed = input.postMode === "DIRECT_POST" ? "video.publish" : "video.upload";
   if (connection.scopes.length > 0 && !connection.scopes.includes(needed)) {
     throw notConnected(
-      `The connected TikTok account is missing the ${needed} scope. Reconnect and grant it.`,
+      `Le compte TikTok connecté n'a pas le scope ${needed}. Reconnecte-le en accordant ce scope.`,
     );
   }
   const postInfo: Record<string, unknown> = {
@@ -399,7 +399,7 @@ export async function publishCarousel(
     // not be able to emit it either.
     if (input.brandContentToggle && input.privacyLevel === "SELF_ONLY") {
       throw badRequest(
-        "Branded content cannot be posted with the Only me privacy level.",
+        "Un contenu de marque ne peut pas être publié en « Moi uniquement ».",
       );
     }
     postInfo.privacy_level = input.privacyLevel;
@@ -438,7 +438,7 @@ export async function publishCarousel(
 
   const publishId = raw.data?.publish_id;
   if (!publishId) {
-    throw upstream("TikTok accepted the request but returned no publish id.");
+    throw upstream("TikTok a accepté la demande mais n'a renvoyé aucun publish id.");
   }
   return { publishId };
 }

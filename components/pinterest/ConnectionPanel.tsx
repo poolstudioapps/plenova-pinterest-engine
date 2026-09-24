@@ -3,12 +3,11 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Badge, Button, Card, EmptyState, Notice, Spinner } from "@/components/ui";
-import { translator, type Locale } from "@/lib/i18n";
+import { translator, type TranslationKey } from "@/lib/i18n";
 import type { PinterestAccount, PinterestBoard } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
 
 interface Props {
-  uiLocale: Locale;
   mode: "oauth" | "manual" | "none";
   configured: boolean;
   initialConnected: boolean;
@@ -19,8 +18,14 @@ interface Props {
   canPublish: boolean;
 }
 
+/** Pinterest returns these three values verbatim. */
+const BOARD_PRIVACY_KEYS: Record<string, TranslationKey> = {
+  public: "pinterest.privacyPublic",
+  secret: "pinterest.privacySecret",
+  protected: "pinterest.privacyProtected",
+};
+
 export function ConnectionPanel({
-  uiLocale,
   mode,
   configured,
   initialConnected,
@@ -30,7 +35,7 @@ export function ConnectionPanel({
   expiresAt,
   canPublish,
 }: Props) {
-  const t = translator(uiLocale);
+  const t = translator();
   const router = useRouter();
   const [boards, setBoards] = useState<PinterestBoard[] | null>(null);
   const [boardsError, setBoardsError] = useState<string | null>(null);
@@ -49,14 +54,14 @@ export function ConnectionPanel({
         if (cancelled) return;
 
         if (!res.ok) {
-          setBoardsError("error" in data ? data.error.message : "Could not load boards.");
+          setBoardsError("error" in data ? data.error.message : t("pinterest.boardsFailed"));
           setBoards([]);
           return;
         }
         if ("boards" in data) setBoards(data.boards);
       } catch {
         if (!cancelled) {
-          setBoardsError("Could not reach the server.");
+          setBoardsError(t("preview.unreachable"));
           setBoards([]);
         }
       }
@@ -164,8 +169,8 @@ export function ConnectionPanel({
                 <div className="min-w-0">
                   <p className="truncate text-[13.5px] font-medium">{b.name}</p>
                   <p className="text-[12px] text-[var(--color-ink-faint)]">
-                    {b.privacy ?? "public"}
-                    {typeof b.pinCount === "number" ? ` · ${b.pinCount} pins` : ""}
+                    {t(BOARD_PRIVACY_KEYS[b.privacy ?? "public"] ?? "pinterest.privacyPublic")}
+                    {typeof b.pinCount === "number" ? ` · ${t("pinterest.pinCount", { n: b.pinCount })}` : ""}
                   </p>
                 </div>
                 <code className="shrink-0 text-[11px] text-[var(--color-ink-faint)]">

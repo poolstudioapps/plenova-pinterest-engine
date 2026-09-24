@@ -8,6 +8,7 @@ import {
   EmptyState,
   Input,
   Select,
+  PlantName,
   StatusBadge,
 } from "@/components/ui";
 import { PinPreview } from "@/components/generate/PinPreview";
@@ -15,15 +16,16 @@ import {
   CONTENT_LOCALES,
   CONTENT_LOCALE_LABELS,
   translator,
-  type Locale,
+  type TranslationKey,
 } from "@/lib/i18n";
+import { identityForAsset } from "@/lib/media";
+import type { PlantIdentity } from "@/lib/data/localize";
 import type { PinRecord, PinStatus } from "@/lib/types";
 import { relativeTime } from "@/lib/utils";
 
 interface Props {
-  uiLocale: Locale;
   initialPins: PinRecord[];
-  plants: { slug: string; name: string }[];
+  plants: PlantIdentity[];
   angles: { slug: string; label: string }[];
 }
 
@@ -37,8 +39,39 @@ const STATUSES: PinStatus[] = [
   "failed",
 ];
 
-export function LibraryClient({ uiLocale, initialPins, plants, angles }: Props) {
-  const t = translator(uiLocale);
+/**
+ * A pin, named like an image.
+ *
+ * `PinRecord` and `MediaAsset` both carry a slug plus a flat name captured at
+ * generation time, so the same resolver serves both rather than a second rule
+ * drifting away from the first.
+ */
+function identityForPin(
+  pin: { plantSlug: string; plantName: string; variety: string | null },
+  catalog: Map<string, PlantIdentity>,
+): PlantIdentity {
+  return identityForAsset(pin, catalog);
+}
+
+/** The stored status is an English identifier; this is how it reads. */
+const PIN_STATUS_KEYS: Record<PinStatus, TranslationKey> = {
+  draft: "status.draft",
+  generated: "status.generated",
+  queued: "status.queued",
+  scheduled: "status.scheduled",
+  publishing: "status.publishing",
+  published: "status.published",
+  failed: "status.failed",
+};
+
+export function LibraryClient({ initialPins, plants, angles }: Props) {
+  const t = translator();
+  // Built from a prop, not imported: the plant catalog carries every care
+  // field and has no business in a browser bundle.
+  const catalog = useMemo(
+    () => new Map(plants.map((p) => [p.slug, p])),
+    [plants],
+  );
   const [pins, setPins] = useState(initialPins);
   const [pinLocale, setPinLocale] = useState("");
   const [variety, setVariety] = useState("");
@@ -110,7 +143,7 @@ export function LibraryClient({ uiLocale, initialPins, plants, angles }: Props) 
           <option value="">{t("library.allPlants")}</option>
           {plants.map((p) => (
             <option key={p.slug} value={p.slug}>
-              {p.name}
+              {p.label}
             </option>
           ))}
         </Select>
@@ -127,8 +160,8 @@ export function LibraryClient({ uiLocale, initialPins, plants, angles }: Props) 
         <Select value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="">{t("library.allStatuses")}</option>
           {STATUSES.map((s) => (
-            <option key={s} value={s} className="capitalize">
-              {s}
+            <option key={s} value={s}>
+              {t(PIN_STATUS_KEYS[s])}
             </option>
           ))}
         </Select>
@@ -173,7 +206,7 @@ export function LibraryClient({ uiLocale, initialPins, plants, angles }: Props) 
               {t("library.close")}
             </Button>
           </div>
-          <PinPreview pin={selected} uiLocale={uiLocale} onChange={applyChange} />
+          <PinPreview pin={selected} plants={plants} onChange={applyChange} />
         </div>
       ) : null}
 
@@ -215,10 +248,15 @@ export function LibraryClient({ uiLocale, initialPins, plants, angles }: Props) 
                   <StatusBadge status={pin.status} />
                 </div>
 
-                <p className="text-[12px] text-[var(--color-ink-faint)]">
-                  {pin.variety ? `${pin.plantName} '${pin.variety}'` : pin.plantName}{" "}
-                  · {pin.angleLabel}
-                </p>
+                <div className="space-y-0.5">
+                  <PlantName
+                    size="sm"
+                    identity={identityForPin(pin, catalog)}
+                  />
+                  <p className="truncate text-[12px] text-[var(--color-ink-faint)]">
+                    {pin.angleLabel}
+                  </p>
+                </div>
 
                 <div className="flex items-center justify-between pt-1">
                   <div className="flex gap-1.5">

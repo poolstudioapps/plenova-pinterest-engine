@@ -59,7 +59,7 @@ export async function hostImageAt(
     return { url: blob.url, inline: false };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    throw upstream("Could not upload the Pin image to Blob storage.", {
+    throw upstream("Impossible d'envoyer l'image du Pin vers le stockage Blob.", {
       reason: message.slice(0, 200),
     });
   }

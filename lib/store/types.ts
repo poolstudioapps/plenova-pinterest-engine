@@ -6,7 +6,8 @@ import type {
   PinterestConnection,
   TikTokAccount,
 } from "@/lib/types";
-import type { MediaFilter } from "@/lib/media";
+import { normaliseSearch, type MediaFilter } from "@/lib/media";
+import { plantIdentity } from "@/lib/data/localize";
 import { normaliseOverlay } from "@/lib/overlay";
 import type { ContentLocale } from "@/lib/i18n";
 
@@ -136,14 +137,27 @@ export function applyFilter(
   if (filter.status) out = out.filter((p) => p.status === filter.status);
 
   if (filter.search) {
-    const q = filter.search.toLowerCase().trim();
-    out = out.filter(
-      (p) =>
-        p.title.toLowerCase().includes(q) ||
-        p.description.toLowerCase().includes(q) ||
-        p.plantName.toLowerCase().includes(q) ||
-        p.keywords.some((k) => k.includes(q)),
-    );
+    /*
+     * The botanical name and the French aliases are part of the haystack.
+     *
+     * Once both names are printed next to each other, the operator types
+     * either one - and "langue de belle-mere" or "Dracaena trifasciata"
+     * finding nothing, while "Sansevieria" works, reads as a broken search.
+     * Accent-insensitive for the same reason.
+     */
+    const q = normaliseSearch(filter.search);
+    out = out.filter((p) => {
+      const identity = plantIdentity({
+        slug: p.plantSlug,
+        fallbackName: p.plantName,
+        variety: p.variety,
+      });
+      return (
+        normaliseSearch(`${p.title} ${p.description}`).includes(q) ||
+        identity.search.includes(q) ||
+        p.keywords.some((k) => normaliseSearch(k).includes(q))
+      );
+    });
   }
 
   out = [...out].sort((a, b) => b.createdAt.localeCompare(a.createdAt));

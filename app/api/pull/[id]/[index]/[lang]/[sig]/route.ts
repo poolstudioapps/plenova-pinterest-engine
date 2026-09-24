@@ -35,14 +35,14 @@ export async function GET(_request: Request, { params }: Params) {
 
     const position = Number(index);
     if (!Number.isInteger(position) || position < 0 || position > 34) {
-      throw badRequest("index must be a slide position.");
+      throw badRequest("La position de la slide est invalide.");
     }
-    if (!isContentLocale(lang)) throw badRequest("Unsupported language.");
+    if (!isContentLocale(lang)) throw badRequest("Langue non prise en charge.");
 
     // Checked before anything is read, so a wrong signature cannot even
     // confirm whether a carousel exists.
     if (!verifyLabel(`${id}:${position}:${lang}`, token)) {
-      throw notFound("No such slide.");
+      throw notFound("Cette slide n'existe pas.");
     }
 
     const carousel = await getStore().getCarousel(id);
@@ -50,7 +50,7 @@ export async function GET(_request: Request, { params }: Params) {
     // The composite only. The bare photograph is 2K straight out of the model,
     // which is over TikTok's picture size limit and would fail the whole post.
     const source = slide?.composed[lang];
-    if (!source) throw notFound("No such slide.");
+    if (!source) throw notFound("Cette slide n'existe pas.");
 
     if (source.startsWith("data:")) {
       const [header, payload] = source.split(",");
@@ -62,7 +62,7 @@ export async function GET(_request: Request, { params }: Params) {
 
     const upstream = await fetch(source, { cache: "no-store" });
     if (!upstream.ok || !upstream.body) {
-      throw notFound("The slide image could not be fetched.");
+      throw notFound("L'image de la slide n'a pas pu être chargée.");
     }
     return new NextResponse(upstream.body, {
       headers: {

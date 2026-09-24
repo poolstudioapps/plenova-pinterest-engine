@@ -23,26 +23,26 @@ export async function POST(request: Request, { params }: Params) {
     try {
       body = (await request.json()) as typeof body;
     } catch {
-      throw badRequest("Request body must be valid JSON.");
+      throw badRequest("Le corps de la requête n'est pas du JSON valide.");
     }
 
     if (!isContentLocale(body.language)) {
-      throw badRequest("language must be one of the supported content locales.");
+      throw badRequest("Cette langue de rédaction n'est pas prise en charge.");
     }
     if (!Array.isArray(body.slides) || body.slides.length === 0) {
-      throw badRequest("slides must be a non-empty array.");
+      throw badRequest("Il faut au moins une slide à enregistrer.");
     }
 
     const entries = body.slides.map((raw) => {
       const entry = (raw ?? {}) as { index?: unknown; url?: unknown };
       const index = Number(entry.index);
       if (!Number.isInteger(index) || index < 0 || index > 34) {
-        throw badRequest("Each slide needs a valid index.");
+        throw badRequest("Chaque slide a besoin d'une position valide.");
       }
       // http in production, a data URL when running without a Blob store.
       const url = typeof entry.url === "string" ? entry.url : "";
       if (!url.startsWith("http") && !url.startsWith("data:")) {
-        throw badRequest("Each slide needs the URL its image was stored at.");
+        throw badRequest("Chaque slide a besoin de l'URL où son image est stockée.");
       }
       return { index, url };
     });

@@ -1,10 +1,16 @@
 import Link from "next/link";
-import { Badge, Card, Notice, SectionHeader } from "@/components/ui";
+import {
+  Badge,
+  Card,
+  Notice,
+  SectionHeader,
+  StatusBadge,
+} from "@/components/ui";
 import { readiness } from "@/lib/config";
 import { ANGLES } from "@/lib/data/angles";
 import { PLANTS } from "@/lib/data/plants";
+import { plantIdentity } from "@/lib/data/localize";
 import { translator } from "@/lib/i18n";
-import { getUiLocale } from "@/lib/locale-server";
 import { getConnectionStatus } from "@/lib/pinterest";
 import { getStore } from "@/lib/store";
 import { relativeTime } from "@/lib/utils";
@@ -38,8 +44,7 @@ function Stat({
 }
 
 export default async function DashboardPage() {
-  const locale = await getUiLocale();
-  const t = translator(locale);
+  const t = translator();
 
   const store = getStore();
   const [pins, media, connection] = await Promise.all([
@@ -88,7 +93,7 @@ export default async function DashboardPage() {
         />
         <Stat
           label={t("dashboard.possible")}
-          value={capacity.toLocaleString(locale)}
+          value={capacity.toLocaleString("fr-FR")}
           hint={t("dashboard.possibleHint")}
         />
         <Stat
@@ -158,12 +163,17 @@ export default async function DashboardPage() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[13.5px] font-medium">{pin.title}</p>
                     <p className="truncate text-[12px] text-[var(--color-ink-faint)]">
-                      {pin.plantName} · {pin.angleLabel} ·{" "}
+                      {plantIdentity({
+                        slug: pin.plantSlug,
+                        fallbackName: pin.plantName,
+                        variety: pin.variety,
+                      }).label}{" "}
+                      · {pin.angleLabel} ·{" "}
                       {relativeTime(pin.createdAt)}
                     </p>
                   </div>
                   <Badge className="uppercase">{pin.locale}</Badge>
-                  <Badge>{pin.status}</Badge>
+                  <StatusBadge status={pin.status} />
                 </li>
               ))}
             </ul>

@@ -26,7 +26,7 @@ export async function publishRecord(
 ): Promise<PublishOutcome> {
   const store = getStore();
   const pin = await store.getPin(pinIdValue);
-  if (!pin) throw notFound(`No Pin with id ${pinIdValue}.`);
+  if (!pin) throw notFound(`Aucun Pin avec l'identifiant ${pinIdValue}.`);
 
   if (pin.status === "published" && pin.pinterestPinId) {
     // Idempotent: never create a second Pin for the same record.
@@ -35,14 +35,14 @@ export async function publishRecord(
 
   const boardId = options.boardId ?? pin.boardId;
   if (!boardId) {
-    throw badRequest("Select a Pinterest board before publishing.");
+    throw badRequest("Choisis un tableau Pinterest avant de publier.");
   }
   if (!pin.imageUrl) {
-    throw badRequest("This Pin has no image. Regenerate it first.");
+    throw badRequest("Ce Pin n'a pas d'image. Régénère-le d'abord.");
   }
   if (pin.imageIsInline) {
     throw badRequest(
-      "This Pin's image is stored inline and Pinterest cannot fetch it. Attach a Blob store and regenerate.",
+      "L'image de ce Pin est stockée en interne et Pinterest ne peut pas la récupérer. Attache un store Blob, puis régénère le Pin.",
     );
   }
 
@@ -80,7 +80,7 @@ export async function publishRecord(
   } catch (err) {
     const attempts = publishing.attempts + 1;
     const message =
-      err instanceof Error ? err.message : "Publishing failed for an unknown reason.";
+      err instanceof Error ? err.message : "La publication a échoué pour une raison inconnue.";
 
     const failed: PinRecord = {
       ...publishing,

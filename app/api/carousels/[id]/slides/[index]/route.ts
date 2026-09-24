@@ -21,14 +21,14 @@ export async function PATCH(request: Request, { params }: Params) {
 
     const index = Number(rawIndex);
     if (!Number.isInteger(index) || index < 0 || index > 34) {
-      throw badRequest("index must be a slide position.");
+      throw badRequest("La position de la slide est invalide.");
     }
 
     let body: { text?: unknown; overlay?: unknown };
     try {
       body = (await request.json()) as typeof body;
     } catch {
-      throw badRequest("Request body must be valid JSON.");
+      throw badRequest("Le corps de la requête n'est pas du JSON valide.");
     }
 
     const text: Partial<
@@ -36,11 +36,11 @@ export async function PATCH(request: Request, { params }: Params) {
     > = {};
     if (body.text !== undefined) {
       if (!body.text || typeof body.text !== "object") {
-        throw badRequest("text must be an object keyed by language.");
+        throw badRequest("Le texte doit être fourni par langue.");
       }
       for (const [language, value] of Object.entries(body.text)) {
         if (!isContentLocale(language)) {
-          throw badRequest(`${language} is not a supported content locale.`);
+          throw badRequest(`${language} n'est pas une langue de rédaction prise en charge.`);
         }
         const entry = (value ?? {}) as {
           title?: unknown;

@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   return handle(async () => {
     const openId = new URL(request.url).searchParams.get("openId");
-    if (!openId) throw badRequest("openId is required.");
+    if (!openId) throw badRequest("Il manque openId, l'identifiant du compte TikTok.");
     return ok({ creator: await getCreatorInfo(openId) });
   });
 }

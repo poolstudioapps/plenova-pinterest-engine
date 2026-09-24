@@ -9,10 +9,13 @@ import {
   Field,
   Input,
   Notice,
+  RowMenu,
+  RowMenuItem,
   Select,
 } from "@/components/ui";
 import { PublishDialog } from "@/components/tiktok/PublishDialog";
 import { RepostPanel } from "@/components/tiktok/RepostPanel";
+import { WritingOptions } from "@/components/tiktok/WritingOptions";
 import { SlideEditor } from "@/components/tiktok/SlideEditor";
 import { SlidePreview } from "@/components/tiktok/SlidePreview";
 import type { AccountView } from "@/components/tiktok/TikTokPanel";
@@ -25,29 +28,22 @@ import {
 import {
   CONTENT_LOCALES,
   CONTENT_LOCALE_LABELS,
+  DEFAULT_CONTENT_LOCALE,
   translator,
   type ContentLocale,
-  type Locale,
   type TranslationKey,
 } from "@/lib/i18n";
+import type { PlantIdentity } from "@/lib/data/localize";
 import type { CarouselRecord } from "@/lib/types";
 import { cn, relativeTime } from "@/lib/utils";
 
 interface Props {
-  uiLocale: Locale;
   initialCarousels: CarouselRecord[];
-  plants: { slug: string; name: string }[];
+  plants: PlantIdentity[];
   accounts: AccountView[];
   canGenerate: boolean;
   hasPexels: boolean;
 }
-
-const OVERLAY_STYLE_LABELS: Record<OverlayStyle, TranslationKey> = {
-  stroke: "editor.styleStroke",
-  pillWhite: "editor.stylePillWhite",
-  pillBlack: "editor.stylePillBlack",
-  none: "editor.styleNone",
-};
 
 /** Starting points, so the field is never an intimidating blank box. */
 const THEME_EXAMPLES = [
@@ -57,15 +53,34 @@ const THEME_EXAMPLES = [
   "Les plantes increvables pour appart sombre",
 ];
 
+/*
+ * Statuses, in French.
+ *
+ * The badge used to print the raw stored value with a `capitalize` class, so
+ * the one word describing where a carousel stood read "Published" in the
+ * middle of a French interface.
+ */
+const STATUS_LABELS: Record<CarouselRecord["status"], TranslationKey> = {
+  generating: "status.generating",
+  draft: "status.draft",
+  publishing: "status.publishing",
+  published: "status.published",
+  failed: "status.failed",
+};
+
+const TABS = [
+  { key: "new" as const, labelKey: "carousels.build" as TranslationKey },
+  { key: "repost" as const, labelKey: "repost.title" as TranslationKey },
+];
+
 export function CarouselStudio({
-  uiLocale,
   initialCarousels,
   plants,
   accounts,
   canGenerate,
   hasPexels,
 }: Props) {
-  const t = translator(uiLocale);
+  const t = translator();
 
   const [carousels, setCarousels] = useState(initialCarousels);
   const [theme, setTheme] = useState("");
@@ -74,7 +89,7 @@ export function CarouselStudio({
   // point of writing several is feeding those accounts, not filling a matrix.
   const [languages, setLanguages] = useState<ContentLocale[]>(() => {
     const used = Array.from(new Set(accounts.map((a) => a.language)));
-    return used.length > 0 ? used : [uiLocale as ContentLocale];
+    return used.length > 0 ? used : [DEFAULT_CONTENT_LOCALE];
   });
   const [imageSource, setImageSource] = useState<"generate" | "photo" | "library">(
     hasPexels ? "photo" : "generate",
@@ -93,7 +108,7 @@ export function CarouselStudio({
   } | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [previewLang, setPreviewLang] = useState<ContentLocale>(
-    uiLocale as ContentLocale,
+    DEFAULT_CONTENT_LOCALE,
   );
   const [composing, setComposing] = useState<string | null>(null);
   const [checking, setChecking] = useState<string | null>(null);
@@ -112,6 +127,21 @@ export function CarouselStudio({
    */
   const [deleted, setDeleted] = useState<string[]>([]);
   const visible = carousels.filter((c) => !deleted.includes(c.id));
+
+  /*
+   * Why the generate button is dead, computed in one place.
+   *
+   * Three conditions disabled it silently, and a grey button with no
+   * explanation sends the operator hunting through the form for whichever one
+   * it is. Order matters: a missing key outranks an empty field.
+   */
+  const blocked: TranslationKey | null = !canGenerate
+    ? "carousels.blockedNoKey"
+    : theme.trim().length < 3
+      ? "carousels.blockedTheme"
+      : languages.length === 0
+        ? "carousels.blockedLanguages"
+        : null;
 
   function toggleLanguage(lang: ContentLocale) {
     setLanguages((current) =>
@@ -254,8 +284,10 @@ export function CarouselStudio({
     }
     setComposing(carousel.id);
     setError(null);
+    // Twice: once to draw each slide, once to upload it. Reporting the
+    // single count first made the counter read "0/6" and then jump to "1/12".
     const total = carousel.slides.length * carousel.languages.length;
-    setProgress({ done: 0, total });
+    setProgress({ done: 0, total: total * 2 });
 
     try {
       let latest = carousel;
@@ -396,21 +428,16 @@ export function CarouselStudio({
         one is ever being used.
       */}
       <Card className="overflow-hidden">
-        <div
-          role="tablist"
-          className="flex border-b border-[var(--color-line)]"
-        >
-          {(
-            [
-              { key: "new" as const, label: t("carousels.build") },
-              { key: "repost" as const, label: t("repost.title") },
-            ]
-          ).map((tab) => (
+        <div role="tablist" className="flex border-b border-[var(--color-line)]">
+          {TABS.map((tab) => (
             <button
               key={tab.key}
               type="button"
               role="tab"
+              id={`tab-${tab.key}`}
               aria-selected={mode === tab.key}
+              aria-controls={`panel-${tab.key}`}
+              tabIndex={mode === tab.key ? 0 : -1}
               onClick={() => setMode(tab.key)}
               className={cn(
                 "-mb-px border-b-2 px-5 py-3.5 text-[14px] font-medium transition-colors",
@@ -419,178 +446,176 @@ export function CarouselStudio({
                   : "border-transparent text-[var(--color-ink-faint)] hover:text-[var(--color-ink)]",
               )}
             >
-              {tab.label}
+              {t(tab.labelKey)}
             </button>
           ))}
         </div>
 
-        <div className={cn("p-5 md:p-6", mode === "new" ? "" : "hidden")}>
+        {/*
+          Above the panels, not inside one.
 
-        <div className="grid gap-5">
-          <Field label={t("carousels.theme")} htmlFor="theme">
-            <Input
-              id="theme"
-              value={theme}
-              maxLength={200}
-              placeholder={THEME_EXAMPLES[0]}
-              onChange={(e) => setTheme(e.target.value)}
-            />
-          </Field>
-
-          <Field label={t("carousels.plantOptional")} htmlFor="plant">
-            <Select
-              id="plant"
-              value={plantSlug}
-              onChange={(e) => setPlantSlug(e.target.value)}
-            >
-              <option value="">{t("carousels.anyPlant")}</option>
-              {plants.map((p) => (
-                <option key={p.slug} value={p.slug}>
-                  {p.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        </div>
-
-        <div className="mt-4">
-          <p className="mb-1.5 text-[13px] font-medium">
-            {t("carousels.languages")}
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {CONTENT_LOCALES.map((lang) => {
-              const on = languages.includes(lang);
-              return (
+          These used to live in the "new carousel" panel, which is display:none
+          while the other tab is open - and composing, deleting and publishing
+          all report here from the rows BELOW the card. Deleting a carousel
+          from the Reposter tab wrote its failure into a hidden div, so the
+          click looked like it had simply done nothing.
+        */}
+        {!canGenerate || error ? (
+          <div className="space-y-3 border-b border-[var(--color-line)] p-5 pb-4 md:px-6">
+            {!canGenerate ? <Notice tone="warn">{t("generate.needKey")}</Notice> : null}
+            {error ? (
+              <Notice tone="danger">
+                {error}
                 <button
-                  key={lang}
                   type="button"
-                  onClick={() => toggleLanguage(lang)}
-                  aria-pressed={on}
-                  className={cn(
-                    "rounded-full border px-3 py-1 text-[12.5px] font-medium transition-colors",
-                    on
-                      ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent-ink)]"
-                      : "border-[var(--color-line)] text-[var(--color-ink-soft)] hover:border-[var(--color-line-strong)]",
-                  )}
+                  onClick={() => setError(null)}
+                  className="mt-2 block rounded-[8px] border border-[var(--color-line)] px-2.5 py-1 text-[12px] font-medium transition-colors hover:border-[var(--color-danger)]"
                 >
-                  {CONTENT_LOCALE_LABELS[lang]}
+                  {t("common.dismiss")}
                 </button>
-              );
-            })}
-          </div>
-          <p className="mt-1.5 text-[12.5px] text-[var(--color-ink-faint)]">
-            {t("carousels.languagesHint")}
-          </p>
-        </div>
-
-        <div className="mt-4 grid gap-4 border-t border-[var(--color-line)] pt-4 md:grid-cols-2">
-          <Field
-            label={t("carousels.imageSource")}
-            htmlFor="src"
-            hint={hasPexels ? t("carousels.sourceHint") : t("carousels.noPexels")}
-          >
-            <Select
-              id="src"
-              value={imageSource}
-              onChange={(e) =>
-                setImageSource(e.target.value as "generate" | "photo" | "library")
-              }
-            >
-              {hasPexels ? (
-                <option value="photo">{t("carousels.sourcePhoto")}</option>
-              ) : null}
-              <option value="generate">{t("carousels.sourceGenerate")}</option>
-              <option value="library">{t("carousels.sourceLibrary")}</option>
-            </Select>
-          </Field>
-
-          <Field
-            label={t("carousels.overlayStyle")}
-            htmlFor="ov"
-            hint={t("carousels.overlayHint")}
-          >
-            <Select
-              id="ov"
-              value={overlayStyle}
-              onChange={(e) => setOverlayStyle(e.target.value as OverlayStyle)}
-            >
-              {OVERLAY_STYLES.map((style) => (
-                <option key={style} value={style}>
-                  {t(OVERLAY_STYLE_LABELS[style])}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        </div>
-
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {THEME_EXAMPLES.map((example) => (
-            <button
-              key={example}
-              type="button"
-              onClick={() => setTheme(example)}
-              className="rounded-full border border-[var(--color-line)] px-2.5 py-1 text-[12px] text-[var(--color-ink-soft)] transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-ink)]"
-            >
-              {example}
-            </button>
-          ))}
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <Button
-            variant="primary"
-            onClick={generate}
-            loading={busy}
-            disabled={
-              !canGenerate || theme.trim().length < 3 || languages.length === 0
-            }
-          >
-            {busy ? t("carousels.starting") : t("carousels.generate")}
-          </Button>
-          {generating ? (
-            <span className="text-[12.5px] text-[var(--color-ink-faint)]">
-              {t("carousels.generatingHint")}
-            </span>
-          ) : null}
-        </div>
-
-        {!canGenerate ? (
-          <div className="mt-4">
-            <Notice tone="warn">{t("generate.needKey")}</Notice>
+              </Notice>
+            ) : null}
           </div>
         ) : null}
 
-        {error ? (
-          <div className="mt-4">
-            {/*
-              Composing, deleting and publishing all report here, so the
-              heading cannot claim the generation failed - and it has to be
-              dismissible, or one stale message sits above the form for good.
-            */}
-            <Notice tone="danger">
-              {error}
-              <button
-                type="button"
-                onClick={() => setError(null)}
-                className="mt-2 block rounded-[8px] border border-[var(--color-line)] px-2.5 py-1 text-[12px] font-medium transition-colors hover:border-[var(--color-danger)]"
+        <div
+          role="tabpanel"
+          id="panel-new"
+          aria-labelledby="tab-new"
+          hidden={mode !== "new"}
+          className="p-5 md:p-6"
+        >
+          <div className="grid max-w-[760px] gap-5">
+            <Field
+              label={t("carousels.theme")}
+              htmlFor="theme"
+              hint={t("carousels.themeHint")}
+            >
+              <Input
+                id="theme"
+                value={theme}
+                maxLength={200}
+                placeholder={THEME_EXAMPLES[0]}
+                onChange={(e) => setTheme(e.target.value)}
+              />
+              {/*
+                The examples belong here, eight pixels under the field they
+                write into. They used to sit below two more field groups, with
+                no label, where they read as an unexplained row of tags.
+              */}
+              <div className="pt-0.5">
+                <p className="mb-1.5 text-[12px] text-[var(--color-ink-faint)]">
+                  {t("carousels.examples")}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {THEME_EXAMPLES.map((example) => (
+                    <button
+                      key={example}
+                      type="button"
+                      onClick={() => setTheme(example)}
+                      className="rounded-full border border-[var(--color-line)] px-2.5 py-1 text-[12px] text-[var(--color-ink-soft)] transition-colors hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-ink)]"
+                    >
+                      {example}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </Field>
+
+            <div className="grid gap-5 md:grid-cols-2">
+              <Field label={t("carousels.plantOptional")} htmlFor="plant">
+                <Select
+                  id="plant"
+                  value={plantSlug}
+                  onChange={(e) => setPlantSlug(e.target.value)}
+                >
+                  <option value="">{t("carousels.anyPlant")}</option>
+                  {plants.map((p) => (
+                    <option key={p.slug} value={p.slug}>
+                      {p.label}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+
+              <Field
+                label={t("carousels.imageSource")}
+                htmlFor="src"
+                hint={hasPexels ? t("carousels.sourceHint") : t("carousels.noPexels")}
               >
-                {t("common.dismiss")}
-              </button>
-            </Notice>
+                <Select
+                  id="src"
+                  value={imageSource}
+                  onChange={(e) =>
+                    setImageSource(
+                      e.target.value as "generate" | "photo" | "library",
+                    )
+                  }
+                >
+                  {hasPexels ? (
+                    <option value="photo">{t("carousels.sourcePhoto")}</option>
+                  ) : null}
+                  <option value="generate">{t("carousels.sourceGenerate")}</option>
+                  <option value="library">{t("carousels.sourceLibrary")}</option>
+                </Select>
+              </Field>
+            </div>
+
+            <WritingOptions
+              languages={languages}
+              onToggleLanguage={toggleLanguage}
+              overlayStyle={overlayStyle}
+              onOverlayStyle={setOverlayStyle}
+            />
+
+            <div className="border-t border-[var(--color-line)] pt-5">
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  variant="primary"
+                  onClick={generate}
+                  loading={busy}
+                  disabled={busy || blocked !== null}
+                >
+                  {busy ? t("carousels.starting") : t("carousels.generate")}
+                </Button>
+                {generating ? (
+                  <span className="text-[12.5px] text-[var(--color-ink-faint)]">
+                    {t("carousels.generatingHint")}
+                  </span>
+                ) : null}
+              </div>
+              {/*
+                Why the button is dead, in words. A greyed-out control with no
+                explanation makes the operator hunt for the missing piece.
+              */}
+              {blocked && !busy ? (
+                <p className="mt-2 text-[12.5px] text-[var(--color-ink-faint)]">
+                  {t(blocked)}
+                </p>
+              ) : null}
+            </div>
           </div>
-        ) : null}
         </div>
 
-        <div className={cn("p-5 md:p-6", mode === "repost" ? "" : "hidden")}>
+        <div
+          role="tabpanel"
+          id="panel-repost"
+          aria-labelledby="tab-repost"
+          hidden={mode !== "repost"}
+          className="p-5 md:p-6"
+        >
           <RepostPanel
-            uiLocale={uiLocale}
             languages={languages}
+            onToggleLanguage={toggleLanguage}
             overlayStyle={overlayStyle}
+            onOverlayStyle={setOverlayStyle}
             canGenerate={canGenerate}
             onStarted={(carousel) => {
               setCarousels((current) => [carousel, ...current]);
               setPreviewLang(carousel.languages[0] ?? previewLang);
-              setMode("new");
+              // Deliberately staying on this tab: the carousel list sits below
+              // the card and is visible from both, so switching only cost the
+              // operator their place and their file selection.
             }}
           />
         </div>
@@ -615,7 +640,16 @@ export function CarouselStudio({
 
             return (
               <Card key={carousel.id} className="overflow-hidden">
-                <div className="flex flex-wrap items-center gap-4 p-4">
+                {/*
+                  A grid, not a wrapping flex row.
+
+                  The text column used to be flex-1 between the thumbnails and
+                  three same-sized buttons, so on a wide screen it opened a
+                  band of empty space in the middle and none of the three
+                  buttons read as the thing to do. Three columns, fixed at both
+                  ends, and exactly one primary action.
+                */}
+                <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 p-4">
                   <button
                     type="button"
                     onClick={() => setExpanded(open ? null : carousel.id)}
@@ -623,7 +657,7 @@ export function CarouselStudio({
                     aria-expanded={open}
                     aria-label={t("carousels.openLabel")}
                   >
-                    {carousel.slides.slice(0, 4).map((slide, i) => {
+                    {carousel.slides.slice(0, 3).map((slide, i) => {
                       const url = slide.composed[lang] ?? slide.imageUrl;
                       return url ? (
                         // eslint-disable-next-line @next/next/no-img-element
@@ -631,16 +665,26 @@ export function CarouselStudio({
                           key={`${carousel.id}-${i}`}
                           src={url}
                           alt=""
-                          className="size-14 rounded-[9px] border-2 border-[var(--color-surface)] object-cover"
+                          className="size-12 rounded-[9px] border-2 border-[var(--color-surface)] object-cover"
                         />
                       ) : null;
                     })}
+                    {carousel.slides.length > 3 ? (
+                      <span className="grid size-12 place-items-center rounded-[9px] border-2 border-[var(--color-surface)] bg-[var(--color-surface-muted)] text-[11.5px] font-medium text-[var(--color-ink-soft)]">
+                        +{carousel.slides.length - 3}
+                      </span>
+                    ) : null}
                   </button>
 
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0">
                     <p className="truncate text-[14px] font-medium">
                       {carousel.slides[0]?.text[lang]?.title ?? carousel.theme}
                     </p>
+                    {/*
+                      One meta line. The languages and the status used to be a
+                      separate column of badges, which is what pushed the
+                      buttons to the far edge.
+                    */}
                     <p className="mt-0.5 truncate text-[12.5px] text-[var(--color-ink-faint)]">
                       {carousel.theme}
                       {inFlight
@@ -649,74 +693,101 @@ export function CarouselStudio({
                             total: carousel.progress?.total ?? "?",
                           })}`
                         : ` · ${t("carousels.slides", { n: carousel.slides.length })}`}
-                      {" · "}
-                      {relativeTime(carousel.createdAt)}
+                      {` · ${carousel.languages.join(" ").toUpperCase()}`}
+                      {` · ${t(STATUS_LABELS[carousel.status])}`}
+                      {` · ${relativeTime(carousel.createdAt)}`}
                     </p>
-                    {carousel.error ? (
-                      <p className="mt-1 line-clamp-2 text-[12px] text-[var(--color-danger)]">
-                        {carousel.error}
-                      </p>
-                    ) : null}
-                    {missingComposites && !inFlight ? (
-                      <p className="mt-1 text-[12px] text-[var(--color-warn)]">
-                        {t("carousels.notComposed")}
-                      </p>
-                    ) : null}
-                    {carousel.posts.some((p) => p.error) ? (
-                      <p className="mt-1 line-clamp-2 text-[12px] text-[var(--color-danger)]">
-                        {carousel.posts.find((p) => p.error)?.error}
-                      </p>
-                    ) : null}
-                  </div>
-
-                  <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-                    {carousel.languages.map((l) => (
-                      <Badge key={l} className="uppercase">
-                        {l}
-                      </Badge>
-                    ))}
-                    <Badge className="capitalize">{carousel.status}</Badge>
                   </div>
 
                   <div className="flex shrink-0 items-center gap-2">
+                    {/*
+                      Burning the text in is only an action while it is
+                      missing. Once it is done, redoing it belongs in the menu.
+                    */}
+                    {missingComposites && !inFlight ? (
+                      <Button
+                        size="sm"
+                        onClick={() => void compose(carousel)}
+                        loading={composing === carousel.id}
+                        disabled={composing === carousel.id}
+                      >
+                        {t("carousels.compose")}
+                      </Button>
+                    ) : null}
                     <Button
-                      onClick={() => void compose(carousel)}
-                      loading={composing === carousel.id}
-                      disabled={composing === carousel.id || inFlight}
-                    >
-                      {composing === carousel.id
-                        ? `${progress.done}/${progress.total}`
-                        : missingComposites
-                          ? t("carousels.compose")
-                          : t("carousels.recompose")}
-                    </Button>
-                    <Button
+                      variant="primary"
+                      size="sm"
                       onClick={() => setPublishing(carousel)}
                       disabled={
                         accounts.length === 0 || inFlight || missingComposites
                       }
-                      title={
-                        missingComposites ? t("carousels.needsText") : undefined
-                      }
                     >
                       {t("carousels.publish")}
                     </Button>
-                    <Button
-                      variant="ghost"
-                      className="text-[var(--color-danger)]"
-                      onClick={() => {
-                        if (confirming === carousel.id) void remove(carousel.id);
-                        else setConfirming(carousel.id);
-                      }}
-                      onBlur={() =>
-                        setConfirming((c) => (c === carousel.id ? null : c))
-                      }
-                    >
-                      {confirming === carousel.id
-                        ? t("carousels.confirmDelete")
-                        : t("carousels.delete")}
-                    </Button>
+                    <RowMenu label={t("carousels.more")}>
+                      <RowMenuItem
+                        onClick={() => void compose(carousel)}
+                        disabled={composing === carousel.id || inFlight}
+                      >
+                        {t("carousels.recompose")}
+                      </RowMenuItem>
+                      {carousel.posts.some((p) => p.settled === "pending") ? (
+                        <RowMenuItem
+                          onClick={() => void checkStatus(carousel.id)}
+                          disabled={checking === carousel.id}
+                        >
+                          {t("carousels.checkStatus")}
+                        </RowMenuItem>
+                      ) : null}
+                      <RowMenuItem
+                        danger
+                        onClick={() => {
+                          if (confirming === carousel.id) void remove(carousel.id);
+                          else setConfirming(carousel.id);
+                        }}
+                      >
+                        {confirming === carousel.id
+                          ? t("carousels.confirmDelete")
+                          : t("carousels.delete")}
+                      </RowMenuItem>
+                    </RowMenu>
                   </div>
+
+                  {/*
+                    Everything that is wrong with this carousel, on its own
+                    line under the title rather than stretching the row from
+                    inside it.
+                  */}
+                  {composing === carousel.id ||
+                  carousel.error ||
+                  (missingComposites && !inFlight) ||
+                  carousel.posts.some((p) => p.error) ? (
+                    <div className="col-start-2 col-end-4 -mt-1 space-y-1">
+                      {composing === carousel.id ? (
+                        <p className="text-[12px] text-[var(--color-ink-soft)]">
+                          {t("carousels.composingCount", {
+                            done: progress.done,
+                            total: progress.total,
+                          })}
+                        </p>
+                      ) : null}
+                      {missingComposites && !inFlight ? (
+                        <p className="text-[12px] text-[var(--color-warn)]">
+                          {t("carousels.notComposed")}
+                        </p>
+                      ) : null}
+                      {carousel.error ? (
+                        <p className="line-clamp-2 text-[12px] text-[var(--color-danger)]">
+                          {carousel.error}
+                        </p>
+                      ) : null}
+                      {carousel.posts.some((p) => p.error) ? (
+                        <p className="line-clamp-2 text-[12px] text-[var(--color-danger)]">
+                          {carousel.posts.find((p) => p.error)?.error}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
 
                 {open ? (
@@ -806,17 +877,9 @@ export function CarouselStudio({
                           {t("carousels.posts")}
                         </p>
                         {carousel.posts.some((p) => p.settled === "pending") ? (
-                          <div className="mb-2">
-                            <Button
-                              onClick={() => void checkStatus(carousel.id)}
-                              loading={checking === carousel.id}
-                            >
-                              {t("carousels.checkStatus")}
-                            </Button>
-                            <p className="mt-1 text-[11.5px] leading-snug text-[var(--color-ink-faint)]">
-                              {t("carousels.checkStatusHint")}
-                            </p>
-                          </div>
+                          <p className="mb-2 text-[11.5px] leading-snug text-[var(--color-ink-faint)]">
+                            {t("carousels.checkStatusHint")}
+                          </p>
                         ) : null}
                         <ul className="space-y-1 text-[12px]">
                           {carousel.posts.map((post) => (
@@ -871,7 +934,6 @@ export function CarouselStudio({
 
       {editing ? (
         <SlideEditor
-          uiLocale={uiLocale}
           carousel={editing.carousel}
           index={editing.index}
           language={editing.language}
@@ -891,7 +953,6 @@ export function CarouselStudio({
 
       {publishing ? (
         <PublishDialog
-          uiLocale={uiLocale}
           carousel={publishing}
           accounts={accounts}
           onClose={() => setPublishing(null)}

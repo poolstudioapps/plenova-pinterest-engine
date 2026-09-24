@@ -14,10 +14,11 @@ import { PinPreview } from "@/components/generate/PinPreview";
 import {
   CONTENT_LOCALES,
   CONTENT_LOCALE_LABELS,
+  DEFAULT_CONTENT_LOCALE,
   translator,
   type ContentLocale,
-  type Locale,
 } from "@/lib/i18n";
+import type { PlantIdentity } from "@/lib/data/localize";
 import type { MediaAsset, PinRecord } from "@/lib/types";
 
 interface Option {
@@ -26,8 +27,7 @@ interface Option {
 }
 
 interface Props {
-  uiLocale: Locale;
-  plants: { slug: string; name: string }[];
+  plants: PlantIdentity[];
   angles: { slug: string; label: string; category: string }[];
   styles: Option[];
   categories: { key: string; label: string }[];
@@ -35,21 +35,20 @@ interface Props {
 }
 
 export function GenerateClient({
-  uiLocale,
   plants,
   angles,
   styles,
   categories,
   canGenerate,
 }: Props) {
-  const t = translator(uiLocale);
+  const t = translator();
 
   const [plantSlug, setPlantSlug] = useState(plants[0]?.slug ?? "");
   const [angleSlug, setAngleSlug] = useState(angles[0]?.slug ?? "");
   // The Pin language defaults to the dashboard language but is independent:
   // an English-speaking operator may well be producing French Pins.
   const [pinLocale, setPinLocale] = useState<ContentLocale>(
-    uiLocale as ContentLocale,
+    DEFAULT_CONTENT_LOCALE,
   );
   const [visualStyle, setVisualStyle] = useState("");
   const [customAngle, setCustomAngle] = useState("");
@@ -154,7 +153,7 @@ export function GenerateClient({
             >
               {plants.map((p) => (
                 <option key={p.slug} value={p.slug}>
-                  {p.name}
+                  {p.label}
                 </option>
               ))}
             </Select>
@@ -196,6 +195,12 @@ export function GenerateClient({
             </Select>
           </Field>
 
+          {/*
+            Below this line, everything has a working default. Nine fields in
+            one flat column pushed the button under the fold and gave no clue
+            which of them actually had to be answered.
+          */}
+          <div className="space-y-4 border-t border-[var(--color-line)] pt-4">
           <Field
             label={t("generate.variety")}
             htmlFor="variety"
@@ -208,36 +213,6 @@ export function GenerateClient({
               value={variety}
               onChange={(e) => setVariety(e.target.value)}
             />
-          </Field>
-
-          <Field
-            label={t("generate.reuse")}
-            htmlFor="reuse"
-            hint={
-              reusable.length > 0
-                ? t("generate.reuseAvailable", { n: reusable.length })
-                : t("generate.reuseHint")
-            }
-          >
-            <Select
-              id="reuse"
-              value={reuseMediaId}
-              disabled={reusable.length === 0}
-              onChange={(e) => setReuseMediaId(e.target.value)}
-            >
-              <option value="">{t("generate.reuseNone")}</option>
-              {reusable.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {[
-                    a.variety,
-                    styleLabels.get(a.visualStyle) ?? a.visualStyle,
-                    t("media.used", { n: a.usedCount }),
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </option>
-              ))}
-            </Select>
           </Field>
 
           <Field
@@ -274,6 +249,16 @@ export function GenerateClient({
             />
           </Field>
 
+          </div>
+
+          <details className="group border-t border-[var(--color-line)] pt-4">
+            <summary className="cursor-pointer list-none text-[13px] font-medium text-[var(--color-ink-soft)] transition-colors hover:text-[var(--color-ink)]">
+              {t("generate.advanced")}
+              {reusable.length > 0
+                ? ` · ${t("generate.reuseAvailable", { n: reusable.length })}`
+                : ""}
+            </summary>
+            <div className="space-y-4 pt-4">
           <Field
             label={t("generate.variation")}
             htmlFor="variation"
@@ -289,6 +274,36 @@ export function GenerateClient({
             />
           </Field>
 
+          <Field
+            label={t("generate.reuse")}
+            htmlFor="reuse"
+            hint={
+              reusable.length > 0
+                ? t("generate.reuseAvailable", { n: reusable.length })
+                : t("generate.reuseHint")
+            }
+          >
+            <Select
+              id="reuse"
+              value={reuseMediaId}
+              disabled={reusable.length === 0}
+              onChange={(e) => setReuseMediaId(e.target.value)}
+            >
+              <option value="">{t("generate.reuseNone")}</option>
+              {reusable.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {[
+                    a.variety,
+                    styleLabels.get(a.visualStyle) ?? a.visualStyle,
+                    t("media.used", { n: a.usedCount }),
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
           <label className="flex items-start gap-2.5 text-[13px] text-[var(--color-ink-soft)]">
             <input
               type="checkbox"
@@ -298,6 +313,12 @@ export function GenerateClient({
             />
             <span>{t("generate.regenerate")}</span>
           </label>
+            </div>
+          </details>
+
+          {/* The reason above the button, not under it: it is what decides
+              whether pressing it is even possible. */}
+          {!canGenerate ? <Notice tone="warn">{t("generate.needKey")}</Notice> : null}
 
           <Button
             variant="primary"
@@ -306,10 +327,8 @@ export function GenerateClient({
             loading={loading}
             disabled={!canGenerate}
           >
-            {loading ? t("generate.working") : t("generate.cta")}
+            {t("generate.cta")}
           </Button>
-
-          {!canGenerate ? <Notice tone="warn">{t("generate.needKey")}</Notice> : null}
 
           {error ? (
             <Notice tone="danger" title={t("generate.failed")}>
@@ -322,7 +341,7 @@ export function GenerateClient({
         </div>
       </Card>
 
-      <PinPreview pin={pin} loading={loading} uiLocale={uiLocale} />
+      <PinPreview pin={pin} plants={plants} loading={loading} />
     </div>
   );
 }

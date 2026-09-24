@@ -10,7 +10,7 @@ export async function GET(_request: Request, { params }: Params) {
   return handle(async () => {
     const { id } = await params;
     const carousel = await getStore().getCarousel(id);
-    if (!carousel) throw notFound(`No carousel with id ${id}.`);
+    if (!carousel) throw notFound(`Aucun carrousel avec l'identifiant ${id}.`);
     return ok({ carousel });
   });
 }
@@ -19,7 +19,7 @@ export async function DELETE(_request: Request, { params }: Params) {
   return handle(async () => {
     const { id } = await params;
     const store = getStore();
-    if (!(await store.getCarousel(id))) throw notFound(`No carousel with id ${id}.`);
+    if (!(await store.getCarousel(id))) throw notFound(`Aucun carrousel avec l'identifiant ${id}.`);
     await store.deleteCarousel(id);
     return ok({ deleted: id });
   });

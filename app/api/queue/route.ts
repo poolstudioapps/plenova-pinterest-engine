@@ -13,23 +13,23 @@ export async function POST(request: Request) {
     const store = getStore();
 
     const pin = await store.getPin(input.pinId);
-    if (!pin) throw notFound(`No Pin with id ${input.pinId}.`);
+    if (!pin) throw notFound(`Aucun Pin avec l'identifiant ${input.pinId}.`);
 
     const boardId = input.boardId ?? pin.boardId;
     if (!boardId) {
-      throw badRequest("A board must be selected before queueing a Pin.");
+      throw badRequest("Choisis un tableau avant de mettre le Pin en file.");
     }
     if (pin.imageIsInline) {
       throw badRequest(
-        "This Pin's image is inline and cannot be published. Attach a Blob store and regenerate.",
+        "L'image de ce Pin est stockée en inline et n'est pas publiable. Attache un store Blob, puis régénère.",
       );
     }
 
     if (input.scheduledAt) {
       const when = new Date(input.scheduledAt).getTime();
-      if (Number.isNaN(when)) throw badRequest("scheduledAt is not a valid date.");
+      if (Number.isNaN(when)) throw badRequest("La date de programmation n'est pas valide.");
       if (when <= Date.now()) {
-        throw badRequest("scheduledAt must be in the future.");
+        throw badRequest("La date de programmation doit être dans le futur.");
       }
     }
 
