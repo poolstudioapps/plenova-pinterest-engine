@@ -2,6 +2,7 @@ import type {
   ButtonHTMLAttributes,
   InputHTMLAttributes,
   ReactNode,
+  Ref,
   SelectHTMLAttributes,
   TextareaHTMLAttributes,
 } from "react";
@@ -160,9 +161,14 @@ export function Select({
 
 export function Input({
   className,
+  ref,
   ...props
-}: InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} className={cn(CONTROL_CLASS, className)} />;
+}: InputHTMLAttributes<HTMLInputElement> & {
+  /* React 19 passes ref as an ordinary prop; the DOM attribute type does not
+     carry it, so it is declared here. */
+  ref?: Ref<HTMLInputElement>;
+}) {
+  return <input {...props} ref={ref} className={cn(CONTROL_CLASS, className)} />;
 }
 
 export function Textarea({

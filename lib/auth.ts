@@ -1,10 +1,16 @@
 /**
- * Dashboard authentication.
+ * Dashboard authentication: an email on an allowlist, plus a code.
  *
  * The tool triggers paid Gemini generations and, once connected, posts to real
- * social accounts. Leaving it open on a public URL means anyone who finds it
- * can burn quota or publish on your behalf, so everything is protected by
- * default.
+ * social accounts. It sits on a public URL, so anyone who finds it could burn
+ * quota or publish on your behalf. One shared password protected that badly:
+ * it cannot be revoked for one person, it says nothing about who acted, and it
+ * travels by whatever channel it was first shared on.
+ *
+ * Now: you must be on the `allowed_emails` table in Supabase, which only the
+ * owner can edit (RLS on, no policies - only the service role reaches it), and
+ * you must prove you can read that mailbox. Removing a row removes the person,
+ * immediately and everywhere, including any code they are already holding.
  *
  * Vercel's own Deployment Protection would be simpler, but it blocks every
  * request including the ones that MUST stay open: TikTok reading the legal
@@ -79,32 +85,113 @@ function safeEqual(a: string, b: string): boolean {
 }
 
 /**
- * Session value is `<expiry>.<hmac(expiry)>`. The expiry is inside the signed
- * payload, so a client cannot extend its own session by editing the cookie.
+ * The key everything here is signed with.
+ *
+ * `SESSION_SECRET` when it is set. Otherwise derived from
+ * `TOKEN_ENCRYPTION_KEY`, which every deployment already has, through an HMAC
+ * with a fixed label - so the two uses never share a key even though they
+ * share a source, and nobody has to set another variable to get logins.
  */
-export async function createSession(secret: string): Promise<string> {
-  const expiry = String(Date.now() + SESSION_TTL_MS);
-  return `${expiry}.${await hmac(secret, expiry)}`;
+export async function sessionSecret(): Promise<string | null> {
+  const explicit = process.env.SESSION_SECRET;
+  if (explicit) return explicit;
+
+  const root = process.env.TOKEN_ENCRYPTION_KEY;
+  if (!root) return null;
+  return hmac(root, "plenova/session/v1");
 }
 
-export async function verifySession(
+/** base64url, so an address survives a cookie value intact. */
+function encode(value: string): string {
+  return btoa(unescape(encodeURIComponent(value)))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
+function decode(value: string): string | null {
+  try {
+    const padded = value.replace(/-/g, "+").replace(/_/g, "/");
+    return decodeURIComponent(escape(atob(padded)));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Session value is `<expiry>.<email>.<hmac(expiry.email)>`.
+ *
+ * Both the expiry and the identity are inside the signed payload, so a client
+ * can neither extend its own session nor rewrite it into somebody else's by
+ * editing the cookie.
+ */
+export async function createSession(
+  secret: string,
+  email: string,
+): Promise<string> {
+  const expiry = String(Date.now() + SESSION_TTL_MS);
+  const encoded = encode(email);
+  const payload = `${expiry}.${encoded}`;
+  return `${payload}.${await hmac(secret, payload)}`;
+}
+
+/** The signed-in address, or null. Null is the only failure this reports. */
+export async function readSession(
   secret: string,
   value: string | undefined,
-): Promise<boolean> {
-  if (!value) return false;
-  const [expiry, signature] = value.split(".");
-  if (!expiry || !signature) return false;
+): Promise<string | null> {
+  if (!value) return null;
+  const [expiry, encoded, signature] = value.split(".");
+  if (!expiry || !encoded || !signature) return null;
 
   const expiresAt = Number(expiry);
-  if (!Number.isFinite(expiresAt) || expiresAt < Date.now()) return false;
+  if (!Number.isFinite(expiresAt) || expiresAt < Date.now()) return null;
 
-  return safeEqual(signature, await hmac(secret, expiry));
+  const payload = `${expiry}.${encoded}`;
+  if (!safeEqual(signature, await hmac(secret, payload))) return null;
+
+  return decode(encoded);
 }
 
-export async function checkPassword(
+/**
+ * A six digit code, uniformly distributed.
+ *
+ * Rejection sampling rather than a modulo: `value % 1000000` over a 32 bit
+ * draw makes the low codes measurably likelier, and the whole security of a
+ * six digit secret rests on every one of the million being equally likely.
+ */
+export function generateCode(): string {
+  const buf = new Uint32Array(1);
+  const limit = Math.floor(0xffffffff / 1_000_000) * 1_000_000;
+  let draw = 0;
+  do {
+    crypto.getRandomValues(buf);
+    draw = buf[0]!;
+  } while (draw >= limit);
+  return String(draw % 1_000_000).padStart(6, "0");
+}
+
+/** The stored form of a code. Bound to the address, so it cannot be replayed
+ *  against a different one. */
+export async function hashCode(
   secret: string,
-  supplied: string,
-): Promise<boolean> {
-  // Compare hashes rather than raw values so the comparison is fixed-length.
-  return safeEqual(await hmac(secret, "pw"), await hmac(supplied, "pw"));
+  email: string,
+  code: string,
+): Promise<string> {
+  return hmac(secret, `code/${email}/${code}`);
+}
+
+export function codesMatch(a: string, b: string): boolean {
+  return safeEqual(a, b);
+}
+
+/** Lowercased and trimmed, because that is how the allowlist stores them. */
+export function normaliseEmail(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+/** Deliberately loose: the allowlist is the real check, this only rejects
+ *  input that could not be an address at all. */
+export function looksLikeEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) && value.length <= 254;
 }

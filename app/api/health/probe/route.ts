@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { del, get, put } from "@vercel/blob";
-import { AUTH_COOKIE, verifySession } from "@/lib/auth";
+import { AUTH_COOKIE, readSession, sessionSecret } from "@/lib/auth";
 import { blobCredentials } from "@/lib/config";
 import { randomToken } from "@/lib/crypto";
 
@@ -19,12 +19,15 @@ export const dynamic = "force-dynamic";
  * Behind the password, because it reports infrastructure detail and writes.
  */
 export async function GET() {
-  const secret = process.env.ADMIN_PASSWORD;
-  if (secret) {
-    const session = (await cookies()).get(AUTH_COOKIE)?.value;
-    if (!(await verifySession(secret, session))) {
-      return NextResponse.json({ error: "Connecte-toi d'abord." }, { status: 401 });
-    }
+  /*
+   * Belt and braces: the middleware already gates this, but these two routes
+   * touch storage directly, so they check the session themselves rather than
+   * trusting that the matcher will always cover them.
+   */
+  const secret = await sessionSecret();
+  const session = (await cookies()).get(AUTH_COOKIE)?.value;
+  if (!secret || !(await readSession(secret, session))) {
+    return NextResponse.json({ error: "Connecte-toi d'abord." }, { status: 401 });
   }
 
   const path = `engine/probe-${randomToken(8)}.json`;
