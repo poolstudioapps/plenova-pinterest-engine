@@ -356,15 +356,46 @@ export async function generateCarouselConcept(
  * with a brown edge - while the output stays an original image rather than a
  * copy, so nothing from the reference is republished.
  */
+/** The species a slide must show, from the catalog - not from the model. */
+export interface SpeciesAnchor {
+  scientificName: string;
+  commonName: string;
+  /** The catalog's visual description, the single biggest accuracy lever. */
+  visualTraits?: string;
+}
+
 export async function reinterpretImage(
   reference: { data: Buffer; mimeType: string },
   brief: string,
   aspectRatio: string,
+  species?: SpeciesAnchor | null,
 ): Promise<GeneratedImage> {
   const ai = getClient();
 
+  /*
+   * The species is stated before anything else, and the reference is demoted
+   * below it on purpose.
+   *
+   * Pexels answers a search, not a botanical question: a query for a pothos
+   * can come back with a philodendron, and a model handed that photo plus a
+   * one-line brief will happily render the philodendron. The reference is for
+   * how the photograph FEELS - light, grain, realism - and never for what plant
+   * is in it.
+   */
+  const speciesLines = species
+    ? [
+        `THE PLANT MUST BE: ${species.scientificName} (${species.commonName}).`,
+        ...(species.visualTraits
+          ? [`It looks like this: ${species.visualTraits}.`]
+          : []),
+        "If the reference shows a different plant, do NOT copy it - render this species instead.",
+        "",
+      ]
+    : [];
+
   const instruction = [
-    "Use the supplied photograph as a visual reference for lighting, texture and realism.",
+    ...speciesLines,
+    "Use the supplied photograph ONLY as a reference for lighting, texture and realism.",
     "",
     "Produce a NEW, original photograph of this scene:",
     brief,

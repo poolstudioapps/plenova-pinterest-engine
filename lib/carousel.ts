@@ -378,18 +378,40 @@ async function produceSlideImage(input: {
   let referencedFrom: string | null = null;
 
   if (input.source === "photo" && isPexelsConfigured()) {
-    // Broad query first, then the plant alone: a literal scene rarely matches,
-    // but the subject almost always does.
-    const reference = await findReference([
-      input.photoQuery,
-      `${input.plantName} plant indoor`,
-      "houseplant interior",
-    ]);
+    const plant = getPlant(input.plantSlug);
+    const species = plant
+      ? {
+          scientificName: plant.scientificName ?? plant.name,
+          commonName: plant.name,
+          ...(plant.visualTraits ? { visualTraits: plant.visualTraits } : {}),
+        }
+      : null;
+
+    /*
+     * Most specific first, and never a generic last resort.
+     *
+     * The scene the model described, then the species by its botanical name,
+     * then by its English common name. The old final fallback was
+     * "houseplant interior", which returns any plant at all - and a reference
+     * showing the wrong species anchors Gemini on the wrong species. With no
+     * specific match, the slide is generated without a reference, which is
+     * less photographic but never the wrong plant.
+     */
+    const reference = await findReference(
+      [
+        input.photoQuery,
+        species?.scientificName ?? "",
+        species ? `${species.commonName} plant` : `${input.plantName} plant`,
+      ].filter(Boolean),
+    );
     if (reference) {
+      // Only Gemini's output is ever stored or published. The Pexels photo is
+      // held in memory for this one call and never leaves the server.
       image = await reinterpretImage(
         { data: reference.data, mimeType: "image/jpeg" },
         input.imagePrompt,
         SLIDE_ASPECT,
+        species,
       );
       referencedFrom = reference.photo.photographer;
     }
