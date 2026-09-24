@@ -13,6 +13,7 @@ import {
   Picker,
   RowMenu,
   RowMenuItem,
+  SortableGrid,
 } from "@/components/ui";
 import { PublishDialog } from "@/components/tiktok/PublishDialog";
 import { RepostPanel } from "@/components/tiktok/RepostPanel";
@@ -20,6 +21,7 @@ import { SlideEditor } from "@/components/tiktok/SlideEditor";
 import { SlidePreview } from "@/components/tiktok/SlidePreview";
 import type { AccountView } from "@/components/tiktok/TikTokPanel";
 import { captureSlides } from "@/lib/capture";
+import { slideImageSrc } from "@/lib/slide-image";
 import {
   OVERLAY_STYLES,
   defaultOverlay,
@@ -254,6 +256,67 @@ export function CarouselStudio({
     }
   }
 
+  /*
+   * A stable key per slide for the drag grid: its photograph, since position
+   * is exactly what a reorder changes. Duplicates - the same picture used
+   * twice - get a suffix so every key stays unique.
+   */
+  function slideKeys(carousel: CarouselRecord): string[] {
+    const seen = new Map<string, number>();
+    return carousel.slides.map((slide, i) => {
+      const base = slide.mediaId ?? slide.imageUrl ?? `slide-${i}`;
+      const n = seen.get(base) ?? 0;
+      seen.set(base, n + 1);
+      return n === 0 ? base : `${base}#${n}`;
+    });
+  }
+
+  const [reordering, setReordering] = useState<string | null>(null);
+
+  /** Shown moved at once, saved behind it, put back if the save is refused. */
+  async function reorder(carousel: CarouselRecord, ids: string[]) {
+    const keys = slideKeys(carousel);
+    const order = ids.map((id) => keys.indexOf(id));
+    if (order.some((i) => i < 0)) return;
+
+    const optimistic: CarouselRecord = {
+      ...carousel,
+      slides: order.map((i) => carousel.slides[i]!),
+    };
+    setCarousels((current) =>
+      current.map((c) => (c.id === carousel.id ? optimistic : c)),
+    );
+    setReordering(carousel.id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/carousels/${carousel.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order }),
+      });
+      const data = (await res.json()) as {
+        carousel?: CarouselRecord;
+        error?: { message?: string };
+      };
+      if (!res.ok || !data.carousel) {
+        setCarousels((current) =>
+          current.map((c) => (c.id === carousel.id ? carousel : c)),
+        );
+        setError(data.error?.message ?? t("preview.requestFailed"));
+        return;
+      }
+      const saved = data.carousel;
+      setCarousels((current) => current.map((c) => (c.id === saved.id ? saved : c)));
+    } catch {
+      setCarousels((current) =>
+        current.map((c) => (c.id === carousel.id ? carousel : c)),
+      );
+      setError(t("preview.unreachable"));
+    } finally {
+      setReordering(null);
+    }
+  }
+
   async function remove(id: string) {
     setError(null);
     try {
@@ -302,7 +365,7 @@ export function CarouselStudio({
         const slides = carousel.slides.map((s, i) => ({
           // Fetched through the carousel, not the media library: the slide
           // owns its image, and the library entry may be missing.
-          src: `/api/carousels/${carousel.id}/slides/${i}/raw`,
+          src: slideImageSrc(carousel.id, i, s),
           title: s.text[language]?.title ?? "",
           subtitle: s.text[language]?.subtitle ?? "",
           cta: s.text[language]?.cta ?? "",
@@ -825,15 +888,28 @@ export function CarouselStudio({
                       ))}
                     </div>
 
-                    <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
-                      {carousel.slides.map((slide, i) => {
+                    {/*
+                      Drag a slide to move it. Its words, layout, photograph
+                      and composites all travel with it - they are stored on
+                      the slide - and the cover stays the same picture.
+                    */}
+                    <SortableGrid
+                      items={carousel.slides.map((slide, i) => ({ slide, i }))}
+                      getId={({ slide, i }) => slideKeys(carousel)[i] ?? `${i}`}
+                      onReorder={(ids) => void reorder(carousel, ids)}
+                      disabled={inFlight || reordering === carousel.id}
+                      itemLabel={(_, index, total) =>
+                        t("carousels.slideLabel", { i: index + 1, n: total })
+                      }
+                      className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5"
+                      renderItem={({ slide, i }) => {
                         const text = slide.text[lang];
                         return (
-                          <div key={`${carousel.id}-s${i}`} className="space-y-1.5">
+                          <div className="space-y-1.5">
                             {slide.imageUrl ? (
                               <SlidePreview
                                 className="w-full rounded-[9px]"
-                                src={`/api/carousels/${carousel.id}/slides/${i}/raw`}
+                                src={slideImageSrc(carousel.id, i, slide)}
                                 copy={{
                                   title: text?.title ?? "",
                                   subtitle: text?.subtitle ?? "",
@@ -873,8 +949,8 @@ export function CarouselStudio({
                             </button>
                           </div>
                         );
-                      })}
-                    </div>
+                      }}
+                    />
 
                     <div className="mt-4 border-t border-[var(--color-line)] pt-3">
                       <p className="mb-1 text-[12.5px] font-medium">

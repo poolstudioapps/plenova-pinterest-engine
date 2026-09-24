@@ -5,6 +5,7 @@ import {
   Button,
   Card,
   EmptyState,
+  FileDropZone,
   Input,
   Notice,
   Picker,
@@ -334,13 +335,19 @@ function Shelf({
 
       {error ? <Notice tone="danger">{error}</Notice> : null}
 
+      {/* Images dragged in from the desktop land on this shelf directly. */}
+      <FileDropZone
+        onFiles={(files) => void upload(files)}
+        label={t("media.dropHere")}
+        disabled={busy !== null}
+      >
       {assets.length === 0 ? (
         <button
           type="button"
           onClick={() => input.current?.click()}
           className="flex w-full items-center justify-center rounded-[var(--radius-card)] border border-dashed border-[var(--color-line-strong)] px-6 py-10 text-[13.5px] text-[var(--color-ink-faint)] transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-ink)]"
         >
-          {t("media.shelfEmpty")}
+          {t("media.shelfEmptyDrop")}
         </button>
       ) : (
         <div className="grid gap-4 sm:grid-cols-4 lg:grid-cols-6">
@@ -369,6 +376,7 @@ function Shelf({
           ))}
         </div>
       )}
+      </FileDropZone>
     </section>
   );
 }

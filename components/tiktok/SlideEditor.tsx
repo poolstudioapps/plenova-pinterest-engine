@@ -15,6 +15,7 @@ import {
   type SlideOverlay,
 } from "@/lib/overlay";
 import { usePillPaths } from "@/components/tiktok/usePillPaths";
+import { slideImageSrc } from "@/lib/slide-image";
 import {
   CONTENT_LOCALE_LABELS,
   translator,
@@ -384,7 +385,7 @@ export function SlideEditor({
 
   if (!slide) return null;
 
-  const src = `/api/carousels/${carousel.id}/slides/${index}/raw`;
+  const src = slideImageSrc(carousel.id, index, slide);
 
   return (
     <div

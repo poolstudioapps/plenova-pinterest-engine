@@ -228,6 +228,7 @@ const FR = {
   "pinterest.privacySecret": "secret",
   "pinterest.privacyProtected": "protégé",
   "carousels.more": "Autres actions",
+  "carousels.slideLabel": "Slide {i} sur {n}",
   "carousels.composingCount": "Incrustation du texte, {done}/{total}",
   "status.generating": "en cours",
   "status.draft": "brouillon",
@@ -273,6 +274,8 @@ const FR = {
     "Couverture et clôture des carrousels construits depuis la bibliothèque. Les images dont l'espèce n'est pas identifiée arrivent ici d'elles-mêmes.",
   "media.shelfSpecies": "Par espèce",
   "media.shelfEmpty": "Aucune image pour l'instant — clique pour en ajouter.",
+  "media.shelfEmptyDrop": "Glisse tes images ici, ou clique pour les choisir.",
+  "media.dropHere": "Dépose tes images ici",
   "media.upload": "Ajouter des images",
   "media.uploading": "Envoi {done} sur {total}…",
   "media.subtitle":

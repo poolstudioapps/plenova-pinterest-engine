@@ -1092,3 +1092,49 @@ function takeLeastUsed(pool: MediaAsset[]): MediaAsset | undefined {
   if (pick) pool.splice(pool.indexOf(pick), 1);
   return pick;
 }
+
+/**
+ * Puts a carousel's slides in a new order.
+ *
+ * `order` lists the current slide positions in their new sequence: [2, 0, 1]
+ * makes the third slide first. Everything that belongs to a slide travels with
+ * it - its words in every language, its layout, its photograph and the
+ * composites already burned from it - because they are all stored ON the
+ * slide, so a reorder cannot separate an image from its text.
+ *
+ * The cover follows its slide too: the image chosen as cover stays the cover,
+ * wherever it now sits.
+ */
+export async function reorderSlides(
+  id: string,
+  order: number[],
+): Promise<CarouselRecord> {
+  const store = getStore();
+  const carousel = await store.getCarousel(id);
+  if (!carousel) throw notFound(`Aucun carrousel avec l'identifiant ${id}.`);
+  if (carousel.status === "generating") {
+    throw badRequest("Ce carrousel est encore en cours de création : attends qu'il soit terminé.");
+  }
+
+  const n = carousel.slides.length;
+  const isPermutation =
+    order.length === n &&
+    new Set(order).size === n &&
+    order.every((i) => Number.isInteger(i) && i >= 0 && i < n);
+  if (!isPermutation) {
+    throw badRequest("Le nouvel ordre ne correspond pas aux slides de ce carrousel.");
+  }
+
+  const slides = order.map((i) => carousel.slides[i]!);
+  // coverIndex is 1-based: find where the old cover slide went.
+  const coverIndex = order.indexOf(carousel.coverIndex - 1) + 1 || 1;
+
+  const updated: CarouselRecord = {
+    ...carousel,
+    slides,
+    coverIndex,
+    updatedAt: new Date().toISOString(),
+  };
+  await store.saveCarousel(updated);
+  return updated;
+}
