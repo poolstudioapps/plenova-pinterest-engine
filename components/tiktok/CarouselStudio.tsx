@@ -318,6 +318,47 @@ export function CarouselStudio({
     }
   }
 
+  const [retrying, setRetrying] = useState<string | null>(null);
+
+  /**
+   * A failed carousel, started again from the same brief - theme, languages,
+   * plant - with the image source and text style currently chosen in the
+   * form. The failed record goes once the new one is on its way: it holds
+   * nothing but the error.
+   */
+  async function retry(carousel: CarouselRecord) {
+    setRetrying(carousel.id);
+    setError(null);
+    try {
+      const res = await fetch("/api/carousels", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          theme: carousel.theme,
+          languages: carousel.languages,
+          plantSlug: carousel.plantSlug ?? undefined,
+          imageSource,
+          overlayStyle,
+        }),
+      });
+      const data = (await res.json()) as {
+        carousel?: CarouselRecord;
+        error?: { message?: string };
+      };
+      if (!res.ok || !data.carousel) {
+        setError(data.error?.message ?? t("preview.requestFailed"));
+        return;
+      }
+      const started = data.carousel;
+      setCarousels((current) => [started, ...current]);
+      await remove(carousel.id);
+    } catch {
+      setError(t("preview.unreachable"));
+    } finally {
+      setRetrying(null);
+    }
+  }
+
   async function remove(id: string) {
     setError(null);
     try {
@@ -563,7 +604,7 @@ export function CarouselStudio({
               panel. The rest folds away, with its current values written on
               the summary line so nothing is hidden - only quiet.
             */}
-            <Field label={t("carousels.theme")} htmlFor="theme">
+            <Field label={t("carousels.theme")} htmlFor="theme" hint={t("carousels.themeHint")}>
               <Input
                 id="theme"
                 value={theme}
@@ -727,7 +768,7 @@ export function CarouselStudio({
                   buttons read as the thing to do. Three columns, fixed at both
                   ends, and exactly one primary action.
                 */}
-                <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 p-4">
+                <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-3 p-4 sm:grid-cols-[auto_minmax(0,1fr)_auto]">
                   <button
                     type="button"
                     onClick={() => setExpanded(open ? null : carousel.id)}
@@ -767,7 +808,7 @@ export function CarouselStudio({
 
                   <div className="min-w-0">
                     <p className="truncate text-[14px] font-medium">
-                      {carousel.slides[0]?.text[lang]?.title ?? carousel.theme}
+                      {carousel.slides[0]?.text[lang]?.title || carousel.theme}
                     </p>
                     {/*
                       One meta line. The languages and the status used to be a
@@ -775,20 +816,21 @@ export function CarouselStudio({
                       buttons to the far edge.
                     */}
                     <p className="mt-0.5 truncate text-[12.5px] text-[var(--color-ink-faint)]">
-                      {carousel.theme}
+                      {/* The theme is the title until a slide has one; never twice. */}
+                      {carousel.slides[0]?.text[lang]?.title ? `${carousel.theme} · ` : ""}
                       {inFlight
-                        ? ` · ${t("carousels.inFlight", {
+                        ? t("carousels.inFlight", {
                             done: carousel.progress?.done ?? 0,
                             total: carousel.progress?.total ?? "?",
-                          })}`
-                        : ` · ${t("carousels.slides", { n: carousel.slides.length })}`}
+                          })
+                        : t("carousels.slides", { n: carousel.slides.length })}
                       {` · ${carousel.languages.join(" ").toUpperCase()}`}
                       {` · ${t(STATUS_LABELS[carousel.status])}`}
                       {` · ${relativeTime(carousel.createdAt)}`}
                     </p>
                   </div>
 
-                  <div className="flex shrink-0 items-center gap-2">
+                  <div className="col-span-2 flex shrink-0 items-center justify-end gap-2 sm:col-span-1">
                     {/*
                       Burning the text in is only an action while it is
                       missing. Once it is done, redoing it belongs in the menu.
@@ -803,16 +845,33 @@ export function CarouselStudio({
                         {t("carousels.compose")}
                       </Button>
                     ) : null}
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={() => setPublishing(carousel)}
-                      disabled={
-                        accounts.length === 0 || inFlight || missingComposites
-                      }
-                    >
-                      {t("carousels.publish")}
-                    </Button>
+                    {carousel.status === "failed" ? (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => void retry(carousel)}
+                        loading={retrying === carousel.id}
+                        disabled={retrying !== null || !canGenerate}
+                      >
+                        {t("carousels.retry")}
+                      </Button>
+                    ) : carousel.slides.length > 0 ? (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => setPublishing(carousel)}
+                        disabled={accounts.length === 0 || inFlight || missingComposites}
+                        title={
+                          accounts.length === 0
+                            ? t("carousels.publishNeedsAccount")
+                            : missingComposites
+                              ? t("carousels.publishNeedsCompose")
+                              : undefined
+                        }
+                      >
+                        {t("carousels.publish")}
+                      </Button>
+                    ) : null}
                     <RowMenu label={t("carousels.more")} onClose={() => setConfirming(null)}>
                       <RowMenuItem
                         onClick={() => void compose(carousel)}

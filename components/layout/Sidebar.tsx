@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { PlenovaMark } from "@/components/layout/PlenovaMark";
 import { translator, type TranslationKey } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -24,6 +25,15 @@ const GROUPS: {
     key: "top",
     items: [{ href: "/", key: "nav.dashboard" }],
   },
+  // TikTok first: carousels are where most of the work happens now.
+  {
+    key: "tiktok",
+    labelKey: "nav.groupTikTok",
+    items: [
+      { href: "/carousels", key: "nav.carousels" },
+      { href: "/tiktok", key: "nav.accountTikTok" },
+    ],
+  },
   {
     key: "pinterest",
     labelKey: "nav.groupPinterest",
@@ -35,23 +45,26 @@ const GROUPS: {
     ],
   },
   {
-    key: "tiktok",
-    labelKey: "nav.groupTikTok",
-    items: [
-      { href: "/carousels", key: "nav.carousels" },
-      { href: "/tiktok", key: "nav.accountTikTok" },
-    ],
-  },
-  {
     key: "shared",
     labelKey: "nav.groupShared",
     items: [{ href: "/media", key: "nav.media" }],
   },
 ];
 
-export function Sidebar() {
+export function Sidebar({ email }: { email: string | null }) {
   const pathname = usePathname();
   const t = translator();
+  const [leaving, setLeaving] = useState(false);
+
+  async function signOut() {
+    setLeaving(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } finally {
+      // A full load, so nothing of the signed-in screens stays in memory.
+      window.location.href = "/login";
+    }
+  }
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
@@ -106,6 +119,24 @@ export function Sidebar() {
         </div>
       ))}
 
+      <div className="flex shrink-0 items-center gap-2 md:mt-auto md:block md:border-t md:border-[var(--color-line)] md:px-3 md:pt-4">
+        {email ? (
+          <p
+            className="hidden truncate text-[12px] text-[var(--color-ink-faint)] md:block"
+            title={email}
+          >
+            {email}
+          </p>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => void signOut()}
+          disabled={leaving}
+          className="shrink-0 rounded-[9px] px-3 py-2 text-[13.5px] font-medium text-[var(--color-ink-soft)] transition-colors hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-ink)] disabled:opacity-50 md:-mx-3 md:mt-1 md:block md:w-[calc(100%+1.5rem)] md:text-left"
+        >
+          {leaving ? t("nav.signingOut") : t("nav.signOut")}
+        </button>
+      </div>
     </nav>
   );
 }

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { CarouselStudio } from "@/components/tiktok/CarouselStudio";
 import { Notice, SectionHeader } from "@/components/ui";
 import { isGeminiConfigured } from "@/lib/config";
@@ -27,7 +28,12 @@ export default async function CarouselsPage() {
 
       {status.accounts.length === 0 ? (
         <div className="mb-6">
-          <Notice tone="info">{t("tiktok.noAccountsBody")}</Notice>
+          <Notice tone="info">
+            {t("tiktok.noAccountsBody")}{" "}
+            <Link href="/tiktok" className="font-medium text-[var(--color-accent)] hover:underline">
+              {t("carousels.connectAccount")}
+            </Link>
+          </Notice>
         </div>
       ) : null}
 

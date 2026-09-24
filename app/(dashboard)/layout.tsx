@@ -1,4 +1,6 @@
+import { cookies } from "next/headers";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { AUTH_COOKIE, readSession, sessionSecret } from "@/lib/auth";
 
 /**
  * The signed-in shell: navigation, and the column everything is written in.
@@ -11,14 +13,21 @@ import { Sidebar } from "@/components/layout/Sidebar";
  * This is presentation only. What actually keeps people out is the middleware,
  * which redirects to /login before any of this is rendered.
  */
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Who is signed in, for the foot of the sidebar. Null where sessions are off
+  // (local development without a secret).
+  const secret = await sessionSecret();
+  const email = secret
+    ? await readSession(secret, (await cookies()).get(AUTH_COOKIE)?.value)
+    : null;
+
   return (
     <div className="md:flex">
-      <Sidebar />
+      <Sidebar email={email} />
       <main className="min-w-0 flex-1 px-5 py-8 md:px-10 md:py-12">
         {/*
           Narrower than it was. A form field stretched across a wide screen is

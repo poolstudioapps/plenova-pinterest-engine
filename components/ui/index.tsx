@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PottedPlant } from "@/components/plants/PottedPlant";
 import type {
   ButtonHTMLAttributes,
@@ -107,6 +108,39 @@ export function Button({
       {loading ? <Spinner /> : null}
       {children}
     </button>
+  );
+}
+
+/**
+ * A link that looks like a button - for "go somewhere", where a <button>
+ * with `location.href` would reload the whole page and announce itself as an
+ * action rather than a destination.
+ */
+export function ButtonLink({
+  href,
+  variant = "secondary",
+  size = "md",
+  className,
+  children,
+}: {
+  href: string;
+  variant?: ButtonVariant;
+  size?: keyof typeof BUTTON_SIZES;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "inline-flex items-center justify-center gap-2 rounded-[var(--radius-pill)] font-medium transition-[filter,background-color,border-color,box-shadow]",
+        BUTTON_SIZES[size],
+        BUTTON_VARIANTS[variant],
+        className,
+      )}
+    >
+      {children}
+    </Link>
   );
 }
 

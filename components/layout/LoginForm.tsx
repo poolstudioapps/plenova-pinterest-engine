@@ -6,7 +6,8 @@ import { Button, Card, Field, Input, Notice } from "@/components/ui";
 import { translator } from "@/lib/i18n";
 
 /**
- * Two steps: an address, then the code that proves you can read it.
+ * Two steps: an address, then proof you can read its mail - the link in it,
+ * or the code when the mail carries one.
  *
  * The first step never says whether the address is on the allowlist - the
  * server answers the same either way, and so does this screen. Saying "unknown
@@ -23,6 +24,13 @@ export function LoginForm() {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Seconds before another mail may be asked for - Supabase allows one a minute. */
+  const [cooldown, setCooldown] = useState(0);
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = window.setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => window.clearTimeout(timer);
+  }, [cooldown]);
 
   /*
    * Arriving from the link in the mail.
@@ -72,8 +80,8 @@ export function LoginForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function requestCode(event: React.FormEvent) {
-    event.preventDefault();
+  async function requestCode(event?: React.FormEvent) {
+    event?.preventDefault();
     setBusy(true);
     setError(null);
     try {
@@ -90,6 +98,7 @@ export function LoginForm() {
         return;
       }
       setStep("code");
+      setCooldown(60);
       // The field they are about to use, focused for them.
       window.setTimeout(() => codeInput.current?.focus(), 0);
     } catch {
@@ -168,21 +177,24 @@ export function LoginForm() {
         </form>
       ) : (
         <form onSubmit={verify} className="space-y-4">
-          <Field
-            label={t("login.code")}
-            htmlFor="code"
-            hint={t("login.codeHint", { email })}
-          >
+          <div className="rounded-[12px] bg-[var(--color-accent-soft)] px-4 py-3">
+            <p className="text-[14px] font-semibold text-[var(--color-accent-ink)]">
+              {t("login.checkMail")}
+            </p>
+            <p className="mt-1 text-[13px] leading-relaxed text-[var(--color-ink-soft)]">
+              {t("login.checkMailBody", { email })}
+            </p>
+          </div>
+          <Field label={t("login.code")} htmlFor="code" hint={t("login.codeHint")}>
             <Input
               id="code"
               ref={codeInput}
               inputMode="numeric"
               autoComplete="one-time-code"
-              maxLength={6}
-              required
+              maxLength={10}
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-              className="text-center text-[22px] tracking-[0.4em]"
+              className="text-center text-[22px] tracking-[0.3em]"
             />
           </Field>
           <Button
@@ -190,22 +202,32 @@ export function LoginForm() {
             variant="primary"
             className="w-full"
             loading={busy}
-            disabled={code.length !== 6}
+            disabled={code.length < 6}
           >
             {t("login.verify")}
           </Button>
           {error ? <Notice tone="danger">{error}</Notice> : null}
-          <button
-            type="button"
-            onClick={() => {
-              setStep("email");
-              setCode("");
-              setError(null);
-            }}
-            className="block w-full text-center text-[12.5px] text-[var(--color-ink-faint)] transition-colors hover:text-[var(--color-ink)]"
-          >
-            {t("login.changeEmail")}
-          </button>
+          <div className="flex items-center justify-between gap-3 text-[12.5px]">
+            <button
+              type="button"
+              onClick={() => void requestCode()}
+              disabled={cooldown > 0 || busy}
+              className="text-[var(--color-accent)] transition-colors hover:underline disabled:text-[var(--color-ink-faint)] disabled:no-underline"
+            >
+              {cooldown > 0 ? t("login.resendIn", { s: cooldown }) : t("login.resend")}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setStep("email");
+                setCode("");
+                setError(null);
+              }}
+              className="text-[var(--color-ink-faint)] transition-colors hover:text-[var(--color-ink)]"
+            >
+              {t("login.changeEmail")}
+            </button>
+          </div>
         </form>
       )}
     </Card>

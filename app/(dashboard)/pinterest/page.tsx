@@ -43,13 +43,7 @@ export default async function PinterestPage({
         </div>
       ) : null}
 
-      {status.mode === "manual" ? (
-        <div className="mb-6">
-          <Notice tone="warn" title={t("pinterest.trialTitle")}>
-            {t("pinterest.trialBody")}
-          </Notice>
-        </div>
-      ) : null}
+      {/* The trial token's limits are told once, inside the connection panel. */}
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,340px)]">
         <ConnectionPanel

@@ -153,38 +153,6 @@ export async function readSession(
   return decode(encoded);
 }
 
-/**
- * A six digit code, uniformly distributed.
- *
- * Rejection sampling rather than a modulo: `value % 1000000` over a 32 bit
- * draw makes the low codes measurably likelier, and the whole security of a
- * six digit secret rests on every one of the million being equally likely.
- */
-export function generateCode(): string {
-  const buf = new Uint32Array(1);
-  const limit = Math.floor(0xffffffff / 1_000_000) * 1_000_000;
-  let draw = 0;
-  do {
-    crypto.getRandomValues(buf);
-    draw = buf[0]!;
-  } while (draw >= limit);
-  return String(draw % 1_000_000).padStart(6, "0");
-}
-
-/** The stored form of a code. Bound to the address, so it cannot be replayed
- *  against a different one. */
-export async function hashCode(
-  secret: string,
-  email: string,
-  code: string,
-): Promise<string> {
-  return hmac(secret, `code/${email}/${code}`);
-}
-
-export function codesMatch(a: string, b: string): boolean {
-  return safeEqual(a, b);
-}
-
 /** Lowercased and trimmed, because that is how the allowlist stores them. */
 export function normaliseEmail(value: string): string {
   return value.trim().toLowerCase();

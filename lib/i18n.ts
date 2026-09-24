@@ -97,18 +97,17 @@ export const LOCALE_WRITING: Record<
  */
 const FR = {
   "nav.dashboard": "Tableau de bord",
-  "nav.account": "Compte",
   "nav.groupPinterest": "Pinterest",
   "nav.groupTikTok": "TikTok",
   "nav.groupShared": "Partagé",
   "nav.generate": "Générer",
   "nav.library": "Pins",
   "nav.queue": "File d'attente",
-  "nav.pinterest": "Pinterest",
-  "nav.tiktok": "TikTok",
   "nav.accountPinterest": "Compte Pinterest",
   "nav.accountTikTok": "Compte TikTok",
   "nav.carousels": "Carrousels",
+  "nav.signOut": "Se déconnecter",
+  "nav.signingOut": "Déconnexion…",
 
   "tiktok.addAccount": "Ajouter un compte",
   "tiktok.noAccounts": "Aucun compte connecté",
@@ -118,8 +117,6 @@ const FR = {
   "tiktok.language": "Langue de publication",
 
   "carousels.languages": "Langues à rédiger",
-  "carousels.languagesHint":
-    "Chaque compte publie dans la langue qui lui est assignée. Rédiger une langue que personne ne publie coûte une génération pour rien.",
   "carousels.posts": "Publié sur",
   "carousels.mentionHint": "Cette slide porte la mention Plenova",
 
@@ -130,8 +127,10 @@ const FR = {
   "publish.skipped": "Non proposés, langue absente : {names}",
   "publish.multiResult": "{ok} publié(s), {ko} en échec.",
   "publish.someFailed": "Certains comptes ont échoué",
-  "publish.confirmMulti": "Publier sur {n}",
-  "tiktok.title": "TikTok",
+  "tiktok.title": "Compte TikTok",
+  "tiktok.noHostingTitle": "Pas d'hébergement public des images",
+  "tiktok.noHosting":
+    "TikTok télécharge les slides depuis une adresse publique. Tant qu'aucun stockage Blob n'est attaché, les carrousels se génèrent et s'éditent, mais ne peuvent pas être publiés.",
   "tiktok.subtitle":
     "Connecte le compte TikTok de Plenova pour que le moteur publie des carrousels photo.",
   "tiktok.connection": "Connexion",
@@ -146,10 +145,6 @@ const FR = {
   "tiktok.connectedBody":
     "Le compte TikTok est lié et les carrousels peuvent être publiés.",
   "tiktok.failedTitle": "Échec de la connexion",
-  "tiktok.directPost": "Publication directe",
-  "tiktok.draft": "Envoi en brouillon",
-  "tiktok.available": "Disponible",
-  "tiktok.unavailable": "Non accordé",
   "tiktok.config": "Configuration de l'app",
   "tiktok.redirectUri": "URI de redirection",
   "tiktok.redirectHint":
@@ -164,15 +159,16 @@ const FR = {
 
   "carousels.title": "Carrousels",
   "carousels.subtitle":
-    "Un nombre dans le thème fixe le nombre de slides : « Top 5 » en donne 5, plus une couverture.",
+    "Écris un thème : Gemini rédige chaque slide dans tes langues et l'illustre. Tout se retouche ensuite dans l'éditeur.",
+  "carousels.retry": "Relancer",
+  "carousels.connectAccount": "Connecter un compte TikTok",
+  "carousels.publishNeedsAccount": "Connecte d'abord un compte TikTok.",
+  "carousels.publishNeedsCompose": "Les slides doivent d'abord être gravées avec leur texte.",
   "carousels.build": "Nouveau carrousel",
-  "carousels.buildHint":
-    "Décris le thème. Gemini écrit chaque slide — accroche, contenu, appel à l'action — puis peint une image pour chacune. Un thème contenant un nombre fixe le nombre de slides.",
   "carousels.theme": "Thème",
   "carousels.plantOptional": "Plante (optionnel)",
   "carousels.anyPlant": "Aucune plante précise",
   "carousels.generate": "Générer le carrousel",
-  "carousels.generating": "Génération...",
   "carousels.starting": "Lancement...",
   "carousels.inFlight": "rédaction et illustration, {done}/{total} slides",
   "carousels.generatingHint":
@@ -184,16 +180,9 @@ const FR = {
   "carousels.sourcePhoto": "À partir de vraies photos (plus crédible)",
   "carousels.sourceGenerate": "Générées de zéro (plus rapide)",
   "carousels.sourceLibrary": "Réutiliser la bibliothèque (gratuit)",
-  "carousels.sourceHint":
-    "Les vraies photos servent seulement de référence : le modèle en peint une image originale, ce qui évite le rendu « généré ».",
   "carousels.noPexels":
     "PEXELS_API_KEY n'est pas renseignée, les slides seront donc générées de zéro.",
   "carousels.overlayStyle": "Style du texte",
-  "carousels.styleStroke": "Blanc cerné de vert",
-  "carousels.stylePill": "Pastilles blanches (TikTok)",
-  "carousels.styleNone": "Blanc simple",
-  "carousels.overlayHint":
-    "Le texte est incrusté dans les slides par ton navigateur : ce que tu vois est ce qui sera publié.",
   "carousels.notComposed":
     "Les slides n'ont pas encore de texte. Incruste-le avant de publier, sinon le carrousel partira en photos nues.",
   "carousels.empty": "Aucun carrousel",
@@ -204,21 +193,13 @@ const FR = {
   "carousels.slides": "{n} slides",
 
   "publish.title": "Publier sur TikTok",
-  "publish.mode": "Mode de publication",
-  "publish.modeDirect": "Publier maintenant",
-  "publish.modeDirectHint": "Part en ligne sur le profil immédiatement.",
-  "publish.modeDraft": "Envoyer en brouillon",
-  "publish.modeDraftHint": "Arrive dans la boîte TikTok, à finir et publier à la main.",
   "publish.privacy": "Qui peut voir cette publication",
   "publish.privacyHint":
     "Les options viennent de ton compte TikTok et sont respectées telles quelles.",
   "publish.brandContent": "Contenu de marque — promotion d'une autre marque ou d'un tiers",
   "publish.brandOrganic": "Ta marque — promotion de toi-même ou de ta propre activité",
-  "publish.confirm": "Publier",
   "publish.cancel": "Annuler",
   "publish.loading": "Chargement de ton compte TikTok...",
-  "publish.published": "Publié. Identifiant TikTok : {id}",
-  "publish.draftDone": "Envoyé dans tes brouillons TikTok.",
   "publish.needPrivacy": "Choisis d'abord qui peut voir la publication.",
   "nav.media": "Images",
 
@@ -239,12 +220,8 @@ const FR = {
   "status.published": "publié",
   "status.failed": "échec",
   "generate.advanced": "Options avancées",
-  "carousels.options": "Options",
   "carousels.languageCount": "{n} langues",
   "carousels.themePlaceholder": "Top 5 des pothos rares",
-  "carousels.sourcePhotoShort": "Vraies photos",
-  "carousels.sourceGenerateShort": "Images générées",
-  "carousels.sourceLibraryShort": "Bibliothèque",
   "carousels.themeHint":
     "Un nombre dans le thème fixe le nombre de slides : « Top 5 » donne 5 slides plus une couverture.",
   "carousels.blockedNoKey": "Il manque la clé GEMINI_API_KEY.",
@@ -273,13 +250,12 @@ const FR = {
   "media.shelfHookHint":
     "Couverture et clôture des carrousels construits depuis la bibliothèque. Les images dont l'espèce n'est pas identifiée arrivent ici d'elles-mêmes.",
   "media.shelfSpecies": "Par espèce",
-  "media.shelfEmpty": "Aucune image pour l'instant — clique pour en ajouter.",
   "media.shelfEmptyDrop": "Glisse tes images ici, ou clique pour les choisir.",
   "media.dropHere": "Dépose tes images ici",
   "media.upload": "Ajouter des images",
   "media.uploading": "Envoi {done} sur {total}…",
   "media.subtitle":
-    "Toutes les images générées par le moteur, classées par plante et cultivar. Réutilise-en une plutôt que de repayer une génération.",
+    "Tout ce qui se réutilise : slides prêtes, images CTA et Hook, puis les photos de chaque espèce. Réutiliser une image évite de repayer une génération.",
   "media.empty": "Aucune image",
   "media.emptyBody":
     "Génère un Pin et son image atterrit ici automatiquement, classée sous sa plante.",
@@ -287,7 +263,6 @@ const FR = {
   "media.search": "Rechercher une plante, un cultivar ou un prompt",
   "media.count": "{count} images sur {plants} plantes",
   "media.used": "utilisée {n}x",
-  "media.reuse": "Réutiliser cette image",
   "media.delete": "Retirer de la bibliothèque",
   "media.noMatch": "Aucune image ne correspond à ces filtres.",
 
@@ -301,32 +276,40 @@ const FR = {
   "generate.reuseAvailable": "{n} disponible(s) pour cette plante",
 
   "dashboard.title": "Tableau de bord",
-  "dashboard.subtitle":
-    "État de la génération et de la publication pour le canal Pinterest de Plenova.",
-  "dashboard.plants": "Plantes",
-  "dashboard.plantsHint": "au catalogue",
-  "dashboard.angles": "Angles de contenu",
-  "dashboard.anglesHint": "répartis en 5 catégories",
-  "dashboard.possible": "Pins possibles",
-  "dashboard.possibleHint": "par langue, 4 variations par slot",
+  "dashboard.subtitle": "Où en sont TikTok et Pinterest, et par où continuer.",
+  "dashboard.newCarousel": "Nouveau carrousel TikTok",
+  "dashboard.newPins": "Générer des Pins",
+  "dashboard.openLibrary": "Bibliothèque d'images",
+  "dashboard.allCarousels": "Tous les carrousels",
+  "dashboard.allPins": "Tous les Pins",
+  "dashboard.cDraft": "Brouillons",
+  "dashboard.cPublished": "Publiés",
+  "dashboard.cInFlight": "En cours",
+  "dashboard.cFailed": "En échec",
+  "dashboard.noAccounts": "Aucun compte TikTok connecté.",
+  "dashboard.connectAccount": "Connecter un compte",
+  "dashboard.accounts": "Comptes connectés : {list}",
+  "dashboard.noCarousels": "Aucun carrousel pour l'instant.",
+  "dashboard.firstCarousel": "Créer le premier",
+  "dashboard.pinterestConnected": "Compte Pinterest connecté.",
+  "dashboard.pinterestNotConnected": "Aucun compte Pinterest connecté.",
   "dashboard.generated": "Générés",
-  "dashboard.generatedHint": "stockés dans ce moteur",
   "dashboard.published": "Publiés",
   "dashboard.queued": "En file",
-  "dashboard.scheduled": "Programmés",
   "dashboard.failed": "En échec",
-  "dashboard.media": "Images en bibliothèque",
-  "dashboard.mediaHint": "réutilisables entre canaux",
+  "dashboard.library": "Bibliothèque",
+  "dashboard.media": "Images",
+  "dashboard.templates": "Slides prêtes",
   "dashboard.reuses": "Réutilisations",
-  "dashboard.reusesHint": "générations ayant sauté le modèle image",
-  "dashboard.recent": "Pins récents",
-  "dashboard.viewLibrary": "Voir la bibliothèque",
-  "dashboard.empty": "Rien de généré pour l'instant.",
-  "dashboard.emptyCta": "Générer le premier Pin",
+  "dashboard.plants": "Plantes au catalogue",
+  "dashboard.libraryHint":
+    "Les images déjà payées se réutilisent d'un carrousel ou d'un Pin à l'autre ; les slides prêtes (ta CTA, typiquement) s'ajoutent à n'importe quel carrousel depuis l'éditeur.",
+  "dashboard.empty": "Aucun Pin pour l'instant.",
+  "dashboard.emptyCta": "Générer le premier",
   "dashboard.system": "Système",
   "dashboard.gemini": "Gemini",
+  "dashboard.tiktokAccounts": "Comptes TikTok",
   "dashboard.pinterestApp": "App Pinterest",
-  "dashboard.connected": "Compte connecté",
   "dashboard.hosting": "Hébergement public des images",
   "dashboard.encryption": "Chiffrement des jetons",
   "dashboard.storage": "Stockage",
@@ -334,16 +317,16 @@ const FR = {
   "dashboard.notSet": "Non configuré",
   "dashboard.notPersistentTitle": "Le stockage n'est pas persistant",
   "dashboard.notPersistent":
-    "Les Pins ne vivent qu'en mémoire et disparaîtront au recyclage de la fonction serverless. Attache un store Vercel Blob avant de générer en volume.",
+    "Les données ne vivent qu'en mémoire et disparaîtront au recyclage de la fonction serverless. Branche Supabase (ou un store Vercel Blob) avant de générer en volume.",
 
-  "generate.title": "Générer",
+  "generate.title": "Générer des Pins",
   "generate.subtitle":
     "Choisis une plante et un angle. Gemini rédige le texte, puis peint un visuel 2:3 accordé à cet angle.",
   "generate.plant": "Plante",
   "generate.angle": "Angle de contenu",
   "generate.pinLanguage": "Langue du Pin",
   "generate.pinLanguageHint":
-    "La langue de rédaction du Pin. Indépendante de la langue du tableau de bord.",
+    "La langue dans laquelle le Pin est rédigé.",
   "generate.style": "Style visuel",
   "generate.styleHint":
     "Laisse sur Auto pour que le moteur choisisse un format adapté à l'angle.",
@@ -357,7 +340,6 @@ const FR = {
     "Chaque variation utilise une structure de titre et une composition différentes.",
   "generate.regenerate": "Régénérer par-dessus le Pin existant de ce slot",
   "generate.cta": "Générer le Pin",
-  "generate.working": "Génération...",
   "generate.needKey":
     "Renseigne GEMINI_API_KEY dans l'environnement pour activer la génération.",
   "generate.failed": "Échec de la génération",
@@ -391,7 +373,7 @@ const FR = {
   "preview.requestFailed": "La requête a échoué.",
   "preview.unreachable": "Serveur injoignable.",
 
-  "library.title": "Bibliothèque",
+  "library.title": "Pins",
   "library.subtitle":
     "Tous les Pins générés par ce moteur, avec leur statut de publication.",
   "library.allPlants": "Toutes les plantes",
@@ -415,7 +397,8 @@ const FR = {
 
   "queue.title": "File d'attente",
   "queue.subtitle":
-    "Pins en attente de publication. Le worker cron Vercel vide la file toutes les heures, par petits lots.",
+    "Les Pins programmés partent tout seuls, toutes les heures, par petits lots.",
+  "queue.openPins": "Voir les Pins",
   "queue.empty": "File vide",
   "queue.emptyBody":
     "Génère un Pin, choisis un tableau, puis ajoute-le à la file pour programmer sa publication.",
@@ -426,7 +409,7 @@ const FR = {
   "queue.board": "Tableau",
   "queue.attempts": "tentative(s)",
 
-  "pinterest.title": "Pinterest",
+  "pinterest.title": "Compte Pinterest",
   "pinterest.subtitle":
     "Connecte le compte Pinterest de Plenova pour que le moteur lise les tableaux et publie les Pins.",
   "pinterest.connection": "Connexion",
@@ -466,9 +449,13 @@ const FR = {
   "login.email": "Adresse e-mail",
   "login.emailHint":
     "Seules les adresses autorisées reçoivent un code.",
-  "login.sendCode": "Recevoir un code",
-  "login.code": "Code à 6 chiffres",
-  "login.codeHint": "Envoyé à {email}. Saisis le code, ou clique simplement sur le lien du mail.",
+  "login.sendCode": "Recevoir le lien de connexion",
+  "login.code": "Ou saisis le code de l'e-mail",
+  "login.checkMail": "Vérifie ta boîte mail",
+  "login.checkMailBody": "Un e-mail vient de partir vers {email}. Ouvre le lien qu'il contient sur cet appareil : tu seras connecté directement.",
+  "login.resend": "Renvoyer l'e-mail",
+  "login.resendIn": "Renvoyer dans {s} s",
+  "login.codeHint": "Seulement si l'e-mail contient un code chiffré.",
   "login.verify": "Se connecter",
   "login.changeEmail": "Utiliser une autre adresse",
   "login.checkingLink": "Connexion en cours…",
@@ -476,24 +463,17 @@ const FR = {
   "login.failed": "La connexion a échoué.",
   "login.unreachable": "Le serveur est injoignable.",
 
-  "common.language": "Langue",
-  "common.uiLanguage": "Langue du tableau de bord",
   "editor.displayLanguage": "Langue affichée",
   "editor.blockTitle": "Titre",
   "editor.blockSubtitle": "Sous-titre",
   "carousels.slidesMissed": "Les slides {slides} n'ont pas pu être rendues en {lang} : {reason}",
   "repost.title": "Reposter un carrousel existant",
-  "repost.body": "Prends des captures d'écran d'un carrousel qui te plaît, une par slide. Le texte est relu et réécrit dans tes langues, et chaque photo est nettoyée de l'interface de l'app et de son texte d'origine. Tu obtiens un carrousel normal, que tu peux ensuite éditer et publier.",
   "repost.pick": "Choisir des captures",
-  "repost.none": "Aucune capture choisie.",
-  "repost.chosen": "{n} capture(s) choisie(s).",
-  "repost.order": "Elles sont utilisées dans l'ordre où tu les as sélectionnées.",
   "repost.sending": "Envoi {done} sur {total}",
   "repost.start": "Refaire à notre sauce · {n}",
   "carousels.composeBusy": "Attends la fin de la gravure déjà en cours.",
   "carousels.confirmDelete": "Clique encore pour supprimer",
   "carousels.openLabel": "Ouvrir ce carrousel",
-  "carousels.needsText": "Ajoute le texte sur les slides avant de publier.",
   "common.dismiss": "Fermer",
   "carousels.postFailed": "rejeté par TikTok",
   "carousels.checkStatus": "Redemander à TikTok",

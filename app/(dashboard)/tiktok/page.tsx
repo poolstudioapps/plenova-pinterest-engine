@@ -111,8 +111,8 @@ export default async function TikTokPage({
 
       {!canHostPublicly() ? (
         <div className="mt-4">
-          <Notice tone="warn" title={t("pinterest.noHostingTitle")}>
-            {t("pinterest.noHosting")}
+          <Notice tone="warn" title={t("tiktok.noHostingTitle")}>
+            {t("tiktok.noHosting")}
           </Notice>
         </div>
       ) : null}

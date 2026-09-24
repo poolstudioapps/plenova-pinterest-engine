@@ -47,7 +47,8 @@ export async function POST(request: Request) {
     return NextResponse.json(REFUSED, { status: 401 });
   }
 
-  if (!looksLikeEmail(email) || code.length !== 6) {
+  // Supabase sends 6 digits by default and up to 10 when configured so.
+  if (!looksLikeEmail(email) || !/^\d{6,10}$/.test(code)) {
     return NextResponse.json(REFUSED, { status: 401 });
   }
 

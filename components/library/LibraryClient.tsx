@@ -5,6 +5,7 @@ import {
   Badge,
   Button,
   Card,
+  ButtonLink,
   EmptyState,
   Input,
   Picker,
@@ -128,9 +129,9 @@ export function LibraryClient({ initialPins, plants, angles }: Props) {
         title={t("library.empty")}
         description={t("library.emptyBody")}
         action={
-          <Button variant="primary" onClick={() => (location.href = "/generate")}>
+          <ButtonLink href="/generate" variant="primary">
             {t("library.emptyCta")}
-          </Button>
+          </ButtonLink>
         }
       />
     );

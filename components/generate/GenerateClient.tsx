@@ -248,7 +248,20 @@ export function GenerateClient({
           </div>
 
           <details className="group border-t border-[var(--color-line)] pt-4">
-            <summary className="cursor-pointer list-none text-[13px] font-medium text-[var(--color-ink-soft)] transition-colors hover:text-[var(--color-ink)]">
+            {/* A drawn chevron that turns: without one, the line read as static text. */}
+            <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[13px] font-medium text-[var(--color-ink-soft)] transition-colors hover:text-[var(--color-ink)] [&::-webkit-details-marker]:hidden">
+              <svg
+                aria-hidden
+                viewBox="0 0 16 16"
+                className="size-4 shrink-0 transition-transform duration-150 group-open:rotate-90"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.6}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M6 3.5L10.5 8 6 12.5" />
+              </svg>
               {t("generate.advanced")}
               {reusable.length > 0
                 ? ` · ${t("generate.reuseAvailable", { n: reusable.length })}`

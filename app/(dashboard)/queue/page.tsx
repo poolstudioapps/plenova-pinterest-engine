@@ -1,6 +1,7 @@
 import {
   Badge,
   Card,
+  ButtonLink,
   EmptyState,
   Notice,
   SectionHeader,
@@ -35,7 +36,15 @@ export default async function QueuePage() {
       ) : null}
 
       {queued.length === 0 ? (
-        <EmptyState title={t("queue.empty")} description={t("queue.emptyBody")} />
+        <EmptyState
+          title={t("queue.empty")}
+          description={t("queue.emptyBody")}
+          action={
+            <ButtonLink href="/library" size="sm">
+              {t("queue.openPins")}
+            </ButtonLink>
+          }
+        />
       ) : (
         <Card className="divide-y divide-[var(--color-line)]">
           {queued.map((pin) => (
