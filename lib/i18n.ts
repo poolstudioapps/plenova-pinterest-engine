@@ -164,7 +164,7 @@ const FR = {
 
   "carousels.title": "Carrousels",
   "carousels.subtitle":
-    "Construis un carrousel TikTok depuis la bibliothèque d'images, puis publie-le. Les images déjà payées par un Pin ne coûtent rien ici.",
+    "Un nombre dans le thème fixe le nombre de slides : « Top 5 » en donne 5, plus une couverture.",
   "carousels.build": "Nouveau carrousel",
   "carousels.buildHint":
     "Décris le thème. Gemini écrit chaque slide — accroche, contenu, appel à l'action — puis peint une image pour chacune. Un thème contenant un nombre fixe le nombre de slides.",
@@ -238,7 +238,11 @@ const FR = {
   "status.published": "publié",
   "status.failed": "échec",
   "generate.advanced": "Options avancées",
-  "carousels.examples": "Exemples",
+  "carousels.options": "Options",
+  "carousels.themePlaceholder": "Top 5 des pothos rares",
+  "carousels.sourcePhotoShort": "Vraies photos",
+  "carousels.sourceGenerateShort": "Images générées",
+  "carousels.sourceLibraryShort": "Bibliothèque",
   "carousels.themeHint":
     "Un nombre dans le thème fixe le nombre de slides : « Top 5 » donne 5 slides plus une couverture.",
   "carousels.blockedNoKey": "Il manque la clé GEMINI_API_KEY.",

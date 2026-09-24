@@ -15,7 +15,6 @@ import {
 } from "@/components/ui";
 import { PublishDialog } from "@/components/tiktok/PublishDialog";
 import { RepostPanel } from "@/components/tiktok/RepostPanel";
-import { WritingOptions } from "@/components/tiktok/WritingOptions";
 import { SlideEditor } from "@/components/tiktok/SlideEditor";
 import { SlidePreview } from "@/components/tiktok/SlidePreview";
 import type { AccountView } from "@/components/tiktok/TikTokPanel";
@@ -45,13 +44,6 @@ interface Props {
   hasPexels: boolean;
 }
 
-/** Starting points, so the field is never an intimidating blank box. */
-const THEME_EXAMPLES = [
-  "Top 5 des pothos rares",
-  "5 erreurs qui tuent ton monstera",
-  "5 astuces pour ne plus oublier d'arroser",
-  "Les plantes increvables pour appart sombre",
-];
 
 /*
  * Statuses, in French.
@@ -66,6 +58,13 @@ const STATUS_LABELS: Record<CarouselRecord["status"], TranslationKey> = {
   publishing: "status.publishing",
   published: "status.published",
   failed: "status.failed",
+};
+
+const OVERLAY_STYLE_LABELS: Record<OverlayStyle, TranslationKey> = {
+  stroke: "editor.styleStroke",
+  pillWhite: "editor.stylePillWhite",
+  pillBlack: "editor.stylePillBlack",
+  none: "editor.styleNone",
 };
 
 const TABS = [
@@ -142,6 +141,21 @@ export function CarouselStudio({
       : languages.length === 0
         ? "carousels.blockedLanguages"
         : null;
+
+  /*
+   * What the folded options currently say, on the summary line.
+   *
+   * A disclosure that hides its own state makes people open it just to check.
+   */
+  const optionsSummary = [
+    plants.find((p) => p.slug === plantSlug)?.primary ?? t("carousels.anyPlant"),
+    imageSource === "photo"
+      ? t("carousels.sourcePhotoShort")
+      : imageSource === "library"
+        ? t("carousels.sourceLibraryShort")
+        : t("carousels.sourceGenerateShort"),
+    t(OVERLAY_STYLE_LABELS[overlayStyle]),
+  ].join(" · ");
 
   function toggleLanguage(lang: ContentLocale) {
     setLanguages((current) =>
@@ -486,87 +500,112 @@ export function CarouselStudio({
           className="p-5 md:p-6"
         >
           <div className="grid max-w-[760px] gap-5">
-            <Field
-              label={t("carousels.theme")}
-              htmlFor="theme"
-              hint={t("carousels.themeHint")}
-            >
+            {/*
+              Two questions and a button.
+
+              Everything else here has a working default, and having all of it
+              on screen at once turned a two-decision task into a configuration
+              panel. The rest folds away, with its current values written on
+              the summary line so nothing is hidden - only quiet.
+            */}
+            <Field label={t("carousels.theme")} htmlFor="theme">
               <Input
                 id="theme"
                 value={theme}
                 maxLength={200}
-                placeholder={THEME_EXAMPLES[0]}
+                placeholder={t("carousels.themePlaceholder")}
                 onChange={(e) => setTheme(e.target.value)}
               />
-              {/*
-                The examples belong here, eight pixels under the field they
-                write into. They used to sit below two more field groups, with
-                no label, where they read as an unexplained row of tags.
-              */}
-              <div className="pt-0.5">
-                <p className="mb-1.5 text-[12px] text-[var(--color-ink-faint)]">
-                  {t("carousels.examples")}
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {THEME_EXAMPLES.map((example) => (
-                    <button
-                      key={example}
-                      type="button"
-                      onClick={() => setTheme(example)}
-                      className="rounded-full border border-[var(--color-line)] px-2.5 py-1 text-[12px] text-[var(--color-ink-soft)] transition-colors hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-ink)]"
-                    >
-                      {example}
-                    </button>
-                  ))}
-                </div>
-              </div>
             </Field>
 
-            <div className="grid gap-5 md:grid-cols-2">
-              <Field label={t("carousels.plantOptional")} htmlFor="plant">
-                <Select
-                  id="plant"
-                  value={plantSlug}
-                  onChange={(e) => setPlantSlug(e.target.value)}
-                >
-                  <option value="">{t("carousels.anyPlant")}</option>
-                  {plants.map((p) => (
-                    <option key={p.slug} value={p.slug}>
-                      {p.label}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-
-              <Field
-                label={t("carousels.imageSource")}
-                htmlFor="src"
-                hint={hasPexels ? t("carousels.sourceHint") : t("carousels.noPexels")}
-              >
-                <Select
-                  id="src"
-                  value={imageSource}
-                  onChange={(e) =>
-                    setImageSource(
-                      e.target.value as "generate" | "photo" | "library",
-                    )
-                  }
-                >
-                  {hasPexels ? (
-                    <option value="photo">{t("carousels.sourcePhoto")}</option>
-                  ) : null}
-                  <option value="generate">{t("carousels.sourceGenerate")}</option>
-                  <option value="library">{t("carousels.sourceLibrary")}</option>
-                </Select>
-              </Field>
+            <div>
+              <p className="mb-2 text-[13px] font-medium">
+                {t("carousels.languages")}
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {CONTENT_LOCALES.map((lang) => {
+                  const on = languages.includes(lang);
+                  return (
+                    <button
+                      key={lang}
+                      type="button"
+                      onClick={() => toggleLanguage(lang)}
+                      aria-pressed={on}
+                      className={cn(
+                        "rounded-[var(--radius-pill)] border px-3.5 py-1.5 text-[13px] font-medium transition-colors",
+                        on
+                          ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent-ink)]"
+                          : "border-[var(--color-line)] text-[var(--color-ink-soft)] hover:border-[var(--color-line-strong)]",
+                      )}
+                    >
+                      {CONTENT_LOCALE_LABELS[lang]}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
-            <WritingOptions
-              languages={languages}
-              onToggleLanguage={toggleLanguage}
-              overlayStyle={overlayStyle}
-              onOverlayStyle={setOverlayStyle}
-            />
+            <details className="border-t border-[var(--color-line)] pt-4">
+              <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-2 text-[13px] font-medium text-[var(--color-ink-soft)] transition-colors hover:text-[var(--color-ink)]">
+                {t("carousels.options")}
+                <span className="text-[12.5px] font-normal text-[var(--color-ink-faint)]">
+                  {optionsSummary}
+                </span>
+              </summary>
+
+              <div className="grid gap-5 pt-4 md:grid-cols-2">
+                <Field label={t("carousels.plantOptional")} htmlFor="plant">
+                  <Select
+                    id="plant"
+                    value={plantSlug}
+                    onChange={(e) => setPlantSlug(e.target.value)}
+                  >
+                    <option value="">{t("carousels.anyPlant")}</option>
+                    {plants.map((p) => (
+                      <option key={p.slug} value={p.slug}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+
+                <Field
+                  label={t("carousels.imageSource")}
+                  htmlFor="src"
+                  hint={hasPexels ? undefined : t("carousels.noPexels")}
+                >
+                  <Select
+                    id="src"
+                    value={imageSource}
+                    onChange={(e) =>
+                      setImageSource(
+                        e.target.value as "generate" | "photo" | "library",
+                      )
+                    }
+                  >
+                    {hasPexels ? (
+                      <option value="photo">{t("carousels.sourcePhoto")}</option>
+                    ) : null}
+                    <option value="generate">{t("carousels.sourceGenerate")}</option>
+                    <option value="library">{t("carousels.sourceLibrary")}</option>
+                  </Select>
+                </Field>
+
+                <Field label={t("carousels.overlayStyle")} htmlFor="ov">
+                  <Select
+                    id="ov"
+                    value={overlayStyle}
+                    onChange={(e) => setOverlayStyle(e.target.value as OverlayStyle)}
+                  >
+                    {OVERLAY_STYLES.map((style) => (
+                      <option key={style} value={style}>
+                        {t(OVERLAY_STYLE_LABELS[style])}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              </div>
+            </details>
 
             <div className="border-t border-[var(--color-line)] pt-5">
               <div className="flex flex-wrap items-center gap-3">
