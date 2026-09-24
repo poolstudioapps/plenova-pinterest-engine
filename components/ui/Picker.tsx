@@ -36,8 +36,9 @@ interface Box {
   left: number;
   width: number;
   /** Page coordinates, so the panel scrolls with the document by itself. */
-  top?: number;
-  bottom?: number;
+  top: number;
+  /** Opening upwards: `top` is then the panel's BOTTOM edge. */
+  above: boolean;
 }
 
 /** Room to leave against the window edge so the panel never touches it. */
@@ -65,15 +66,30 @@ function anchorFor(el: HTMLElement): Box {
   const below = window.innerHeight - r.bottom - MARGIN;
   const above = r.top - MARGIN;
 
-  // Flip up only when below is genuinely too tight AND above is roomier.
+  /*
+   * Flip up only when below is genuinely too tight AND above is roomier.
+   *
+   * Upwards is expressed as a `top` at the trigger plus translateY(-100%),
+   * never as a `bottom`. An absolutely positioned child of <body> measures
+   * `bottom` from the bottom of the INITIAL viewport, not of the document, so
+   * a `bottom` computed from the document height put the list far above the
+   * screen on any page taller than the window. The transform needs no height
+   * and no containing-block arithmetic.
+   */
   if (below < 160 && above > below) {
     return {
       left: r.left + scrollX,
       width: r.width,
-      bottom: document.documentElement.scrollHeight - (r.top + scrollY) + 6,
+      top: r.top + scrollY - 6,
+      above: true,
     };
   }
-  return { left: r.left + scrollX, width: r.width, top: r.bottom + scrollY + 6 };
+  return {
+    left: r.left + scrollX,
+    width: r.width,
+    top: r.bottom + scrollY + 6,
+    above: false,
+  };
 }
 
 function useDismiss(
@@ -102,19 +118,30 @@ function useDismiss(
 }
 
 const TRIGGER =
-  "flex w-full items-center justify-between gap-2 rounded-[var(--radius-control)] border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-3.5 py-2.5 text-left text-[14px] transition-colors hover:border-[var(--color-accent)] focus-visible:border-[var(--color-accent)]";
+  "flex w-full items-center justify-between gap-2 rounded-[var(--radius-control)] border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-3.5 py-2.5 text-left text-[14px] transition-[border-color,box-shadow] hover:border-[var(--color-accent)] focus-visible:border-[var(--color-accent)] aria-expanded:border-[var(--color-accent)] aria-expanded:shadow-[0_0_0_3px_var(--color-accent-soft)]";
 
+/*
+ * A drawn chevron. The "▾" glyph it replaces rendered at 10px as something
+ * closer to a stray dot at the end of the field - the one detail that made
+ * the control look unfinished.
+ */
 function Chevron({ open }: { open: boolean }) {
   return (
-    <span
+    <svg
       aria-hidden
+      viewBox="0 0 16 16"
       className={cn(
-        "shrink-0 text-[10px] text-[var(--color-ink-faint)] transition-transform",
-        open && "rotate-180",
+        "size-4 shrink-0 text-[var(--color-ink-faint)] transition-transform duration-150",
+        open && "rotate-180 text-[var(--color-accent)]",
       )}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
     >
-      ▾
-    </span>
+      <path d="M4 6l4 4 4-4" />
+    </svg>
   );
 }
 
@@ -197,11 +224,10 @@ function Panel({
       style={{
         position: "absolute",
         left: box.left,
+        top: box.top,
         width: box.width,
-        ...(box.bottom !== undefined
-          ? { bottom: box.bottom }
-          : { top: box.top }),
         maxHeight: MAX_PANEL,
+        ...(box.above ? { transform: "translateY(-100%)" } : {}),
       }}
       className="z-50 overflow-y-auto overscroll-contain rounded-[14px] border border-[var(--color-line)] bg-[var(--color-surface)] p-1 shadow-[var(--shadow-raised)]"
     >

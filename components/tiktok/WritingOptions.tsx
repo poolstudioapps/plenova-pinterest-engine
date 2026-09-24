@@ -1,6 +1,6 @@
 "use client";
 
-import { Field, Picker } from "@/components/ui";
+import { Field, MultiPicker, Picker } from "@/components/ui";
 import {
   CONTENT_LOCALES,
   CONTENT_LOCALE_LABELS,
@@ -9,7 +9,6 @@ import {
   type TranslationKey,
 } from "@/lib/i18n";
 import { OVERLAY_STYLES, type OverlayStyle } from "@/lib/overlay";
-import { cn } from "@/lib/utils";
 
 const OVERLAY_STYLE_LABELS: Record<OverlayStyle, TranslationKey> = {
   stroke: "editor.styleStroke",
@@ -17,6 +16,11 @@ const OVERLAY_STYLE_LABELS: Record<OverlayStyle, TranslationKey> = {
   pillBlack: "editor.stylePillBlack",
   none: "editor.styleNone",
 };
+
+const LANGUAGE_OPTIONS = CONTENT_LOCALES.map((l) => ({
+  value: l,
+  label: CONTENT_LOCALE_LABELS[l],
+}));
 
 /**
  * The choices that apply however the slides were obtained.
@@ -39,42 +43,26 @@ export function WritingOptions({
 }) {
   const t = translator();
   return (
-    <div className="grid gap-5 border-t border-[var(--color-line)] pt-5 md:grid-cols-2">
-      <div>
-        <p className="mb-1.5 text-[13px] font-medium">{t("carousels.languages")}</p>
-        <div className="flex flex-wrap gap-1.5">
-          {CONTENT_LOCALES.map((lang) => {
-            const on = languages.includes(lang);
-            return (
-              <button
-                key={lang}
-                type="button"
-                onClick={() => onToggleLanguage(lang)}
-                aria-pressed={on}
-                className={cn(
-                  "rounded-full border px-3 py-1.5 text-[12.5px] font-medium transition-colors",
-                  on
-                    ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent-ink)]"
-                    : "border-[var(--color-line)] text-[var(--color-ink-soft)] hover:border-[var(--color-line-strong)]",
-                )}
-              >
-                {CONTENT_LOCALE_LABELS[lang]}
-              </button>
-            );
-          })}
-        </div>
-        <p className="mt-1.5 text-[12.5px] leading-relaxed text-[var(--color-ink-faint)]">
-          {t("carousels.languagesHint")}
-        </p>
-      </div>
+    <div className="grid gap-5 md:grid-cols-2">
+      {/*
+        The same controls as the new-carousel panel, not a second design of
+        them: a row of chips here beside dropdowns there made the two tabs look
+        like two different products.
+      */}
+      <Field label={t("carousels.languages")} htmlFor="repost-langs">
+        <MultiPicker
+          id="repost-langs"
+          options={LANGUAGE_OPTIONS}
+          values={languages}
+          onToggle={(v) => onToggleLanguage(v as ContentLocale)}
+          placeholder={t("carousels.blockedLanguages")}
+          summary={(n) => t("carousels.languageCount", { n })}
+        />
+      </Field>
 
-      <Field
-        label={t("carousels.overlayStyle")}
-        htmlFor="ov"
-        hint={t("carousels.overlayHint")}
-      >
+      <Field label={t("carousels.overlayStyle")} htmlFor="repost-ov">
         <Picker
-          id="ov"
+          id="repost-ov"
           options={OVERLAY_STYLES.map((style) => ({
             value: style,
             label: t(OVERLAY_STYLE_LABELS[style]),

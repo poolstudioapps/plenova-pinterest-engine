@@ -13,7 +13,7 @@ export default async function LoginPage() {
     <div className="grid min-h-dvh place-items-center px-5 py-12">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex items-center gap-2.5">
-          <PlenovaMark className="size-9 rounded-[10px]" />
+          <PlenovaMark className="size-9" />
           <div className="leading-tight">
             <p className="text-[15px] font-semibold tracking-[-0.01em]">Plenova</p>
             <p className="text-[12px] text-[var(--color-ink-faint)]">
