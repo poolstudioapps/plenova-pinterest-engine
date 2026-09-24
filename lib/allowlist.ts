@@ -3,38 +3,60 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { config } from "@/lib/config";
 
 /**
- * Who may sign in, and the codes in flight.
+ * Who may sign in, and the code that proves it.
  *
- * Both tables live in Supabase with row level security on and no policies, so
- * the anon and authenticated roles reach nothing at all. Only the service role
- * gets in - this module, and the owner in the Supabase dashboard. That is the
- * whole access-control story: to add or remove someone, edit `allowed_emails`
- * there, and it takes effect on the next request.
+ * TWO DIFFERENT THINGS, kept apart on purpose:
+ *
+ *  1. `allowed_emails` is OURS. It lives in Supabase with row level security
+ *     on and no policies, so the anon and authenticated roles reach nothing at
+ *     all - only the service role, meaning this module and the owner in the
+ *     Supabase dashboard. That table is the access list: add a row and someone
+ *     can sign in, delete one and they cannot, immediately.
+ *
+ *  2. The six-digit code is SUPABASE'S. Its auth service generates it, mails
+ *     it, expires it and rate-limits it. Writing that ourselves meant storing
+ *     hashes, counting attempts and, above all, finding something to send mail
+ *     with - a whole third-party account for one message a week.
+ *
+ * The order matters: the allowlist is checked BEFORE Supabase is asked to send
+ * anything, so an address nobody authorised never receives a code at all.
  */
 
-/** How long a code is good for. Long enough to switch to a mail app. */
-export const CODE_TTL_MS = 10 * 60 * 1000;
+let service: SupabaseClient | null = null;
+let publishable: SupabaseClient | null = null;
 
-/** A second request inside this window resends nothing. */
-export const RESEND_AFTER_MS = 60 * 1000;
-
-/** Guesses allowed before the code is burned. */
-export const MAX_ATTEMPTS = 5;
-
-let client: SupabaseClient | null = null;
-
-function db(): SupabaseClient | null {
-  if (client) return client;
+/** The service role: reads the allowlist, bypasses RLS. Never sent to a client. */
+function admin(): SupabaseClient | null {
+  if (service) return service;
   const { url, serviceKey } = config.supabase;
   if (!url || !serviceKey) return null;
-  client = createClient(url, serviceKey, {
+  service = createClient(url, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  return client;
+  return service;
+}
+
+/**
+ * The publishable role: the only one Supabase's auth endpoints accept for
+ * sending and checking a one-time code. It is a public key by design - the
+ * protection is the allowlist in front of it, not the secrecy of this.
+ */
+function otp(): SupabaseClient | null {
+  if (publishable) return publishable;
+  const { url, publishableKey } = config.supabase;
+  if (!url || !publishableKey) return null;
+  publishable = createClient(url, publishableKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  return publishable;
 }
 
 export function isAllowlistConfigured(): boolean {
-  return db() !== null;
+  return admin() !== null;
+}
+
+export function isOtpConfigured(): boolean {
+  return otp() !== null;
 }
 
 /**
@@ -44,7 +66,7 @@ export function isAllowlistConfigured(): boolean {
  * the right direction to fail for the front door of a tool that can publish.
  */
 export async function isAllowed(email: string): Promise<boolean> {
-  const supabase = db();
+  const supabase = admin();
   if (!supabase) return false;
 
   const { data, error } = await supabase
@@ -60,68 +82,51 @@ export async function isAllowed(email: string): Promise<boolean> {
   return Boolean(data);
 }
 
-export interface PendingCode {
-  codeHash: string;
-  expiresAt: number;
-  attempts: number;
-  sentAt: number;
+export interface OtpResult {
+  ok: boolean;
+  /** "rate_limited" when Supabase is throttling, for a message worth reading. */
+  reason?: string;
 }
 
-export async function getPendingCode(email: string): Promise<PendingCode | null> {
-  const supabase = db();
-  if (!supabase) return null;
+/** Asks Supabase to mail a code. Only ever called for an allowed address. */
+export async function sendCode(email: string): Promise<OtpResult> {
+  const supabase = otp();
+  if (!supabase) return { ok: false, reason: "not_configured" };
 
-  const { data, error } = await supabase
-    .from("login_codes")
-    .select("code_hash, expires_at, attempts, sent_at")
-    .eq("email", email)
-    .maybeSingle();
-
-  if (error || !data) return null;
-  return {
-    codeHash: data.code_hash as string,
-    expiresAt: Date.parse(data.expires_at as string),
-    attempts: (data.attempts as number) ?? 0,
-    sentAt: Date.parse(data.sent_at as string),
-  };
-}
-
-/** Replaces any code already in flight for this address. */
-export async function storeCode(
-  email: string,
-  codeHash: string,
-): Promise<boolean> {
-  const supabase = db();
-  if (!supabase) return false;
-
-  const now = Date.now();
-  const { error } = await supabase.from("login_codes").upsert({
+  const { error } = await supabase.auth.signInWithOtp({
     email,
-    code_hash: codeHash,
-    expires_at: new Date(now + CODE_TTL_MS).toISOString(),
-    attempts: 0,
-    sent_at: new Date(now).toISOString(),
+    options: {
+      // The allowlist already decided who may be here, so a first sign-in is
+      // allowed to create the Supabase user it needs.
+      shouldCreateUser: true,
+    },
   });
 
-  if (error) {
-    console.error("[auth] the code could not be stored:", error.message);
-    return false;
-  }
-  return true;
+  if (!error) return { ok: true };
+
+  console.error("[auth] Supabase a refuse d'envoyer le code:", error.message);
+  const rate = error.status === 429 || /rate/i.test(error.message);
+  return { ok: false, reason: rate ? "rate_limited" : "upstream" };
 }
 
-export async function countAttempt(email: string, attempts: number): Promise<void> {
-  const supabase = db();
-  if (!supabase) return;
-  await supabase
-    .from("login_codes")
-    .update({ attempts: attempts + 1 })
-    .eq("email", email);
-}
+/** Checks the code. Supabase owns expiry and attempt limits. */
+export async function checkCode(email: string, code: string): Promise<boolean> {
+  const supabase = otp();
+  if (!supabase) return false;
 
-/** Single use: a code that worked is gone before the session is issued. */
-export async function consumeCode(email: string): Promise<void> {
-  const supabase = db();
-  if (!supabase) return;
-  await supabase.from("login_codes").delete().eq("email", email);
+  const { data, error } = await supabase.auth.verifyOtp({
+    email,
+    token: code,
+    type: "email",
+  });
+
+  if (error || !data.user) return false;
+
+  /*
+   * Belt and braces: Supabase says the code was right, we say the address is
+   * still allowed. Between asking for a code and using it the owner may have
+   * removed the row, and the front door should honour that now rather than at
+   * the next sign-in.
+   */
+  return isAllowed(email);
 }

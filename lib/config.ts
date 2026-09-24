@@ -109,13 +109,20 @@ export const config = {
     oneLink: env("APPSFLYER_ONELINK") ?? DEFAULT_ONELINK,
   },
   supabase: {
-    /**
-     * The service role key, never the anon key: every table has row level
-     * security on with no policies, so the anon key can reach nothing. This
-     * app has no end users of its own - it is one operator behind a password.
-     */
     url: env("SUPABASE_URL"),
+    /**
+     * Data goes through the service role, never the publishable key: every
+     * table has row level security on with no policies, so the publishable key
+     * can reach none of them. This app has no end users of its own.
+     */
     serviceKey: env("SUPABASE_SERVICE_ROLE_KEY"),
+    /**
+     * Sign-in codes go through the publishable key, because Supabase's auth
+     * endpoints accept no other. It is public by design - what protects the
+     * door is the allowlist in front of it, not this key being secret.
+     */
+    publishableKey:
+      env("SUPABASE_PUBLISHABLE_KEY") ?? env("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
   },
   security: {
     tokenEncryptionKey: env("TOKEN_ENCRYPTION_KEY"),

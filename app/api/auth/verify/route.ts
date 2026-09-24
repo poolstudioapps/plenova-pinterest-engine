@@ -1,20 +1,12 @@
 import { NextResponse } from "next/server";
 import {
   AUTH_COOKIE,
-  codesMatch,
   createSession,
-  hashCode,
   looksLikeEmail,
   normaliseEmail,
   sessionSecret,
 } from "@/lib/auth";
-import {
-  MAX_ATTEMPTS,
-  consumeCode,
-  countAttempt,
-  getPendingCode,
-  isAllowed,
-} from "@/lib/allowlist";
+import { checkCode } from "@/lib/allowlist";
 
 export const dynamic = "force-dynamic";
 
@@ -26,9 +18,10 @@ const REFUSED = {
 /**
  * Step two: hand back the code.
  *
- * The allowlist is checked again here, not just in step one. Between asking
- * for a code and using it, the owner may have removed the address - and the
- * front door should honour that immediately rather than at the next login.
+ * Supabase owns the code - its expiry, its single use, its attempt limit. What
+ * this route owns is the session: once Supabase confirms the person reads that
+ * mailbox AND the address is still on the allowlist, it mints the signed
+ * cookie the rest of the app runs on.
  */
 export async function POST(request: Request) {
   const secret = await sessionSecret();
@@ -57,28 +50,10 @@ export async function POST(request: Request) {
   if (!looksLikeEmail(email) || code.length !== 6) {
     return NextResponse.json(REFUSED, { status: 401 });
   }
-  if (!(await isAllowed(email))) {
+
+  if (!(await checkCode(email, code))) {
     return NextResponse.json(REFUSED, { status: 401 });
   }
-
-  const pending = await getPendingCode(email);
-  if (!pending) return NextResponse.json(REFUSED, { status: 401 });
-
-  if (pending.expiresAt < Date.now() || pending.attempts >= MAX_ATTEMPTS) {
-    // Burned either way; stop it being guessed at leisure.
-    await consumeCode(email);
-    return NextResponse.json(REFUSED, { status: 401 });
-  }
-
-  const supplied = await hashCode(secret, email, code);
-  if (!codesMatch(supplied, pending.codeHash)) {
-    await countAttempt(email, pending.attempts);
-    return NextResponse.json(REFUSED, { status: 401 });
-  }
-
-  // Single use: gone before the session exists, so a replay of the same
-  // request cannot mint a second one.
-  await consumeCode(email);
 
   const response = NextResponse.json({ ok: true, email });
   response.cookies.set(AUTH_COOKIE, await createSession(secret, email), {
