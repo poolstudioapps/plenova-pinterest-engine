@@ -15,6 +15,8 @@
  * happens inside an SVG foreignObject, which cannot fetch external resources.
  */
 
+import { PILL, isPillStyle, pillSpanCss } from "@/lib/pill";
+
 export const SLIDE_WIDTH = 1080;
 export const SLIDE_HEIGHT = 1350;
 
@@ -100,12 +102,24 @@ export const CTA_DEFAULTS: OverlayBlock = {
   strokeWidth: 14,
 };
 
+/*
+ * Typography for the pill styles, which read like TikTok's own text tool
+ * rather than like a poster: a semibold weight instead of the outlined
+ * titles' 800, and enough line height for the background to breathe - at the
+ * outlined style's 1.1 the boxes would sit tight against every ascender.
+ */
+const PILL_TYPE: Pick<OverlayBlock, "fontWeight" | "lineHeight"> = {
+  fontWeight: 600,
+  lineHeight: 1.28,
+};
+
 export function defaultOverlay(style: OverlayStyle = "stroke"): SlideOverlay {
+  const pill = isPillStyle(style) ? PILL_TYPE : {};
   return {
     style,
-    title: { ...TITLE_DEFAULTS },
-    subtitle: { ...SUBTITLE_DEFAULTS },
-    cta: { ...CTA_DEFAULTS },
+    title: { ...TITLE_DEFAULTS, ...pill },
+    subtitle: { ...SUBTITLE_DEFAULTS, ...pill },
+    cta: { ...CTA_DEFAULTS, ...pill },
   };
 }
 
@@ -179,19 +193,33 @@ export function renderBlockInner(
   text: string,
   block: OverlayBlock,
   slideStyle: OverlayStyle,
+  /** The measured TikTok outline, for a pill style. See lib/pill.ts. */
+  pill?: string | null,
 ): string {
   const safe = escapeHtml(text).replace(/\n/g, "<br/>");
   if (!safe) return "";
   const style = block.style ?? slideStyle;
   const size = block.fontSize;
 
-  if (style === "pillWhite" || style === "pillBlack") {
-    const padX = Math.round(size * 0.45);
-    const padY = Math.round(size * 0.1);
-    const radius = Math.round(size * 0.3);
-    const bg = style === "pillWhite" ? "#fff" : "#000";
-    const fg = style === "pillWhite" ? "#000" : "#fff";
-    return `<span style="background:${bg};color:${fg};padding:${padY}px ${padX}px;border-radius:${radius}px;box-decoration-break:clone;-webkit-box-decoration-break:clone;">${safe}</span>`;
+  if (isPillStyle(style)) {
+    const look = style === "pillWhite" ? PILL.white : PILL.black;
+    if (pill) {
+      // One continuous shape behind the words, the way TikTok draws it. The
+      // svg shares the text container's coordinate space, which is the space
+      // the outline was measured in.
+      //
+      // The xmlns is not optional. The capture renders this markup inside an
+      // SVG foreignObject, which is parsed as XML: there, an <svg> with no
+      // namespace inherits the XHTML one from its parent div, becomes an
+      // unknown element, and draws nothing - the published image lost its
+      // background while the on-screen preview, parsed as HTML, looked fine.
+      return `<svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;"><path d="${pill}" fill="${look.fill}"/></svg><span style="${pillSpanCss(size)}color:${look.ink};">${safe}</span>`;
+    }
+    // Not measured yet - first paint, or no browser. Separate boxes per line,
+    // which is the best CSS alone can do, until the outline arrives.
+    const padY = Math.round(size * PILL.padY);
+    const radius = Math.round(size * PILL.radius);
+    return `<span style="${pillSpanCss(size)}padding-top:${padY}px;padding-bottom:${padY}px;background:${look.fill};color:${look.ink};border-radius:${radius}px;">${safe}</span>`;
   }
 
   if (style === "stroke") {
@@ -285,14 +313,16 @@ export interface BuildSlideHtmlInput {
   backgroundDataUrl: string;
   /** Each TikTok Sans subset, as base64 with no data: prefix. */
   fonts: FontPayload;
+  /** Measured outlines for the blocks drawn as pills. */
+  pills?: Partial<Record<"title" | "subtitle" | "cta", string | null>>;
 }
 
 export function buildSlideHtml(input: BuildSlideHtmlInput): string {
   const { overlay, slide } = input;
 
-  const block = (text: string, b: OverlayBlock) =>
+  const block = (text: string, b: OverlayBlock, pill?: string | null) =>
     text.trim()
-      ? `<div style="${blockBoxStyle(b)}"><div style="width:100%;text-align:${b.align};">${renderBlockInner(text, b, overlay.style)}</div></div>`
+      ? `<div style="${blockBoxStyle(b)}"><div style="position:relative;width:100%;text-align:${b.align};">${renderBlockInner(text, b, overlay.style, pill)}</div></div>`
       : "";
 
   return `<div style="
@@ -314,8 +344,8 @@ export function buildSlideHtml(input: BuildSlideHtmlInput): string {
     * { margin:0; padding:0; box-sizing:border-box; }
   </style>
   <img src="${input.backgroundDataUrl}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;" />
-  ${block(slide.title, overlay.title)}
-  ${block(slide.subtitle, overlay.subtitle)}
-  ${block(slide.cta ?? "", overlay.cta)}
+  ${block(slide.title, overlay.title, input.pills?.title)}
+  ${block(slide.subtitle, overlay.subtitle, input.pills?.subtitle)}
+  ${block(slide.cta ?? "", overlay.cta, input.pills?.cta)}
 </div>`;
 }

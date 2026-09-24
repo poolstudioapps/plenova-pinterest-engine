@@ -14,6 +14,7 @@ import {
   type OverlayStyle,
   type SlideOverlay,
 } from "@/lib/overlay";
+import { usePillPaths } from "@/components/tiktok/usePillPaths";
 import {
   CONTENT_LOCALE_LABELS,
   translator,
@@ -173,6 +174,15 @@ export function SlideEditor({
   }, []);
 
   const current = texts[displayLang] ?? { title: "", subtitle: "", cta: "" };
+  // The TikTok outlines for whatever is on screen, re-measured only when the
+  // words or their typography change - never on a drag.
+  const pills = usePillPaths(
+    BLOCKS.map((key) => ({
+      text: current[key] ?? "",
+      block: overlay[key],
+      style: overlay.style,
+    })),
+  );
 
   function setBlock(key: BlockKey, patch: Partial<OverlayBlock>) {
     // Keyed by the field so dragging one slider collapses into a single step.
@@ -500,9 +510,14 @@ export function SlideEditor({
                       }}
                     >
                       <div
-                        style={{ width: "100%", textAlign: block.align }}
+                        style={{ position: "relative", width: "100%", textAlign: block.align }}
                         dangerouslySetInnerHTML={{
-                          __html: renderBlockInner(text, block, overlay.style),
+                          __html: renderBlockInner(
+                            text,
+                            block,
+                            overlay.style,
+                            pills[BLOCKS.indexOf(key)],
+                          ),
                         }}
                       />
                       {isSelected

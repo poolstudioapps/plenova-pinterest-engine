@@ -1,5 +1,6 @@
 "use client";
 
+import { measurePills, pillInput } from "@/lib/pill";
 import {
   FONT_SUBSETS,
   SLIDE_HEIGHT,
@@ -77,16 +78,25 @@ export type CapturableSlide = SlideCopy & {
 
 /** Renders one slide and returns it as a JPEG data URL. */
 export async function captureSlide(slide: CapturableSlide): Promise<string> {
-  const [fonts, backgroundDataUrl] = await Promise.all([
+  const [fonts, backgroundDataUrl, measured] = await Promise.all([
     loadFont(),
     loadBackground(slide.src),
+    // Measured in this very document, with the same font and the same widths
+    // the foreignObject will lay out with - so the outline fits the words.
+    measurePills([
+      pillInput(slide.title, slide.overlay.title, slide.overlay.style),
+      pillInput(slide.subtitle, slide.overlay.subtitle, slide.overlay.style),
+      pillInput(slide.cta ?? "", slide.overlay.cta, slide.overlay.style),
+    ]),
   ]);
+  const [title, subtitle, cta] = measured;
 
   const html = buildSlideHtml({
     slide,
     overlay: slide.overlay,
     backgroundDataUrl,
     fonts,
+    pills: { title, subtitle, cta },
   });
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SLIDE_WIDTH}" height="${SLIDE_HEIGHT}">

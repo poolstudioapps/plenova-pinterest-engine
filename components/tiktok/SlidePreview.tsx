@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { usePillPaths } from "@/components/tiktok/usePillPaths";
 import {
   SLIDE_HEIGHT,
   SLIDE_WIDTH,
@@ -45,6 +46,9 @@ export function SlidePreview({ src, copy, overlay, className }: Props) {
     [copy.subtitle, overlay.subtitle],
     [copy.cta ?? "", overlay.cta],
   ];
+  const pills = usePillPaths(
+    blocks.map(([text, block]) => ({ text, block, style: overlay.style })),
+  );
 
   return (
     <div
@@ -87,9 +91,9 @@ export function SlidePreview({ src, copy, overlay, className }: Props) {
           text.trim() ? (
             <div key={i} style={blockLayout(block) as React.CSSProperties}>
               <div
-                style={{ width: "100%", textAlign: block.align }}
+                style={{ position: "relative", width: "100%", textAlign: block.align }}
                 dangerouslySetInnerHTML={{
-                  __html: renderBlockInner(text, block, overlay.style),
+                  __html: renderBlockInner(text, block, overlay.style, pills[i]),
                 }}
               />
             </div>

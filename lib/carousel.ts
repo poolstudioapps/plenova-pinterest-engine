@@ -556,11 +556,21 @@ function startingOverlay(
   overlay.title.fontSize =
     longest <= 22 ? 104 : longest <= 34 ? 88 : longest <= 50 ? 74 : 62;
 
+  /*
+   * TikTok's text sits smaller in the frame than a poster headline, and a
+   * background box makes the same size read heavier still. Pills start at
+   * three quarters of the outlined sizes.
+   */
+  const scale = style === "pillWhite" || style === "pillBlack" ? 0.75 : 1;
+  overlay.title.fontSize = Math.round(overlay.title.fontSize * scale);
+
   const longestSub = Math.max(
     0,
     ...Object.values(text).map((t) => t?.subtitle.length ?? 0),
   );
-  overlay.subtitle.fontSize = longestSub <= 60 ? 52 : longestSub <= 95 ? 44 : 38;
+  overlay.subtitle.fontSize = Math.round(
+    (longestSub <= 60 ? 52 : longestSub <= 95 ? 44 : 38) * scale,
+  );
 
   return overlay;
 }
