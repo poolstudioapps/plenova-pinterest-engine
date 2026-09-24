@@ -255,6 +255,16 @@ const FR = {
     "Une capture par slide, dans l'ordre. Le texte est relu et réécrit dans tes langues, et chaque photo est nettoyée de l'interface de l'app et de son texte d'origine.",
   "plant.unconfirmed": "espèce non confirmée",
   "media.title": "Bibliothèque d'images",
+  "media.shelfCta": "CTA Plenova",
+  "media.shelfCtaHint":
+    "Tes images préparées pour la slide qui mentionne Plenova. Chaque nouveau carrousel en prend une, la moins utilisée d'abord.",
+  "media.shelfHook": "Hook / Outro",
+  "media.shelfHookHint":
+    "Couverture et clôture des carrousels construits depuis la bibliothèque. Les images dont l'espèce n'est pas identifiée arrivent ici d'elles-mêmes.",
+  "media.shelfSpecies": "Par espèce",
+  "media.shelfEmpty": "Aucune image pour l'instant — clique pour en ajouter.",
+  "media.upload": "Ajouter des images",
+  "media.uploading": "Envoi {done} sur {total}…",
   "media.subtitle":
     "Toutes les images générées par le moteur, classées par plante et cultivar. Réutilise-en une plutôt que de repayer une génération.",
   "media.empty": "Aucune image",

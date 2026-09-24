@@ -1,5 +1,5 @@
 import type { PlantIdentity } from "@/lib/data/localize";
-import type { MediaAsset } from "@/lib/types";
+import type { MediaAsset, MediaRole } from "@/lib/types";
 
 /**
  * Media library helpers. Kept free of server-only imports so the client can
@@ -151,4 +151,41 @@ export function groupByPlant(
   return [...groups.entries()]
     .map(([plantSlug, v]) => ({ plantSlug, ...v }))
     .sort((a, b) => a.fallbackName.localeCompare(b.fallbackName, "fr"));
+}
+
+/**
+ * Which shelf of the library an image sits on.
+ *
+ * An explicit role wins. Otherwise an image filed under a species the catalog
+ * does not know - "unfiled", a genus the model named on its own, a cultivar -
+ * is a hook: a plant nobody can name with confidence is exactly the generic
+ * green shot a cover wants, and exactly the wrong thing to file as a specimen.
+ *
+ * `known` is the set of catalog slugs. It is passed in rather than imported so
+ * this stays usable from the client without shipping the catalog.
+ */
+export type MediaShelf = MediaRole | "species";
+
+export function shelfOf(asset: MediaAsset, known: Set<string>): MediaShelf {
+  if (asset.role) return asset.role;
+  return known.has(asset.plantSlug) ? "species" : "hook";
+}
+
+/**
+ * The least-used image of a pool, so one CTA shot does not end up on every
+ * carousel while the other two are never seen.
+ */
+export function leastUsed(pool: MediaAsset[]): MediaAsset | undefined {
+  let best: MediaAsset | undefined;
+  for (const asset of pool) {
+    if (
+      !best ||
+      asset.usedCount < best.usedCount ||
+      (asset.usedCount === best.usedCount &&
+        (asset.lastUsedAt ?? "") < (best.lastUsedAt ?? ""))
+    ) {
+      best = asset;
+    }
+  }
+  return best;
 }

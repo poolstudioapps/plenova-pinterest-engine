@@ -113,6 +113,8 @@ export interface PinRecord {
  * search - "variegata", "Thai Constellation", "albo" - are not catalog entries
  * and never will be. The catalog stays curated; the media library does not.
  */
+export type MediaRole = "cta" | "hook";
+
 export interface MediaAsset {
   id: string;
   plantSlug: string;
@@ -133,6 +135,20 @@ export interface MediaAsset {
   angleSlug: string | null;
   /** Where it came from, so an uploaded asset is distinguishable. */
   source: "pin" | "carousel" | "upload";
+  /**
+   * What the image is FOR, when that is not "a photograph of this species".
+   *
+   *  - "cta":  a Plenova call-to-action image the operator prepared and
+   *            uploaded. Goes on the slide carrying the Plenova mention.
+   *  - "hook": an opening or closing image - a mood shot rather than a
+   *            specimen. Goes on the first and last slides of a carousel built
+   *            from the library.
+   *
+   * Absent on everything filed before roles existed. An image whose species
+   * the catalog does not know is treated as a hook without needing this set:
+   * a plant nobody can name is exactly the generic green shot a cover wants.
+   */
+  role?: MediaRole | null;
   sourceId: string | null;
   /**
    * Credit for the photograph used as a visual reference, when one was.

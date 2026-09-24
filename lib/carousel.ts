@@ -1,5 +1,5 @@
 import "server-only";
-import { getPlant } from "@/lib/data/plants";
+import { PLANTS, getPlant } from "@/lib/data/plants";
 import {
   matchPlantSlug,
   plantName as localizedPlantName,
@@ -13,7 +13,7 @@ import {
 } from "@/lib/gemini";
 import { DEFAULT_CONTENT_LOCALE, type ContentLocale } from "@/lib/i18n";
 import { extensionFor, hostImageAt } from "@/lib/images";
-import { mediaPath, varietySlug } from "@/lib/media";
+import { leastUsed, mediaPath, shelfOf, varietySlug } from "@/lib/media";
 import { findReference, isPexelsConfigured } from "@/lib/pexels";
 import { config } from "@/lib/config";
 import { signLabel } from "@/lib/crypto";
@@ -204,11 +204,36 @@ async function generateCarousel(
       : [];
   let reuseCursor = 0;
 
+  /*
+   * The operator's own shelves.
+   *
+   * CTA images were prepared by hand for the Plenova slide and are used
+   * whatever the image source: nothing the model generates will show the app
+   * the way the operator's own shots do. Hook/Outro images open and close a
+   * carousel built from the library - generic green shots, including every
+   * image filed under a species nobody could name.
+   *
+   * Each is taken out of its pool once used, so the cover and the closing
+   * slide never end up the same picture.
+   */
+  const shelves = await loadShelves();
+
   // Produced in order so a failure names the slide it belongs to, rather than
   // surfacing as one opaque batch error.
   const slides: CarouselSlide[] = [];
   for (const [index, draft] of concept.slides.entries()) {
-    const recycled = source === "library" ? reusable[reuseCursor++] : undefined;
+    // midCtaIndex is 1-based, as the model was asked for. Decided before the
+    // image, because which image a slide gets depends on what it carries.
+    const isMentionSlide = index + 1 === concept.midCtaIndex;
+    const isBookend = draft.kind === "hook" || draft.kind === "cta";
+
+    const recycled = isMentionSlide
+      ? takeLeastUsed(shelves.cta)
+      : isBookend && source === "library"
+        ? (takeLeastUsed(shelves.hook) ?? reusable[reuseCursor++])
+        : source === "library"
+          ? reusable[reuseCursor++]
+          : undefined;
     const asset =
       recycled ??
       (await produceSlideImage({
@@ -240,8 +265,6 @@ async function generateCarousel(
       });
     }
 
-    // midCtaIndex is 1-based, as the model was asked for.
-    const isMentionSlide = index + 1 === concept.midCtaIndex;
 
     /**
      * A language the model skipped falls back to the first one it did write.
@@ -1014,4 +1037,26 @@ export function normaliseHashtags(raw: string[] | undefined): string[] {
   // #planttok is the one that has to survive.
   const room = Math.max(0, MAX_HASHTAGS - required.length);
   return [...required, ...clean.slice(0, room)];
+}
+
+/**
+ * The CTA and Hook/Outro shelves of the library, read once per carousel.
+ *
+ * Bounded by the store's own listing cap, so this is one read however large
+ * the library grows.
+ */
+async function loadShelves(): Promise<{ cta: MediaAsset[]; hook: MediaAsset[] }> {
+  const known = new Set(PLANTS.map((p) => p.slug));
+  const all = await getStore().listMedia();
+  return {
+    cta: all.filter((a) => shelfOf(a, known) === "cta"),
+    hook: all.filter((a) => shelfOf(a, known) === "hook"),
+  };
+}
+
+/** The least-used image of a pool, removed from it so it is not reused. */
+function takeLeastUsed(pool: MediaAsset[]): MediaAsset | undefined {
+  const pick = leastUsed(pool);
+  if (pick) pool.splice(pool.indexOf(pick), 1);
+  return pick;
 }
