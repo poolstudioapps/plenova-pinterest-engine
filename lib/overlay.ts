@@ -241,6 +241,36 @@ export function blockBoxStyle(block: OverlayBlock): string {
     .join(";");
 }
 
+/**
+ * TikTok Sans, split the way Google Fonts splits it.
+ *
+ * The app used to ship ONE file, and it was the `latin-ext` subset: Polish,
+ * Czech and Vietnamese letters, the currency signs - and not a single a-z, not
+ * one digit, no é, no ç, no ñ, no ü, no curly apostrophe. Every slide ever
+ * composed was therefore drawn in the fallback font, letter by letter, while
+ * the code believed it was TikTok Sans. `latin` is the subset that carries the
+ * five languages this tool writes in; `latin-ext` stays for the rest.
+ *
+ * Each face declares its unicode-range, so the browser takes each character
+ * from whichever file holds it - exactly as it does on fonts.googleapis.com.
+ */
+export const FONT_SUBSETS = [
+  {
+    key: "latin",
+    file: "/fonts/TikTokSans-latin.woff2",
+    range:
+      "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD",
+  },
+  {
+    key: "latinExt",
+    file: "/fonts/TikTokSans-latin-ext.woff2",
+    range:
+      "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF",
+  },
+] as const;
+
+export type FontPayload = Record<(typeof FONT_SUBSETS)[number]["key"], string>;
+
 /** The words to lay over one image, in one language. */
 export interface SlideCopy {
   title: string;
@@ -253,8 +283,8 @@ export interface BuildSlideHtmlInput {
   overlay: SlideOverlay;
   /** The background photograph, as a data URL. */
   backgroundDataUrl: string;
-  /** The font file, as a base64 string with no data: prefix. */
-  fontBase64: string;
+  /** Each TikTok Sans subset, as base64 with no data: prefix. */
+  fonts: FontPayload;
 }
 
 export function buildSlideHtml(input: BuildSlideHtmlInput): string {
@@ -271,13 +301,16 @@ export function buildSlideHtml(input: BuildSlideHtmlInput): string {
   font-family:'TikTok Sans','Segoe UI Emoji',sans-serif;
   -webkit-font-smoothing:antialiased;text-rendering:geometricPrecision;">
   <style>
-    @font-face {
+    ${FONT_SUBSETS.map(
+      (f) => `@font-face {
       font-family:'TikTok Sans';
-      src:url(data:font/woff2;base64,${input.fontBase64}) format('woff2');
+      src:url(data:font/woff2;base64,${input.fonts[f.key]}) format('woff2');
       font-weight:300 900;
       font-style:normal;
       font-display:block;
-    }
+      unicode-range:${f.range};
+    }`,
+    ).join("\n")}
     * { margin:0; padding:0; box-sizing:border-box; }
   </style>
   <img src="${input.backgroundDataUrl}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;" />

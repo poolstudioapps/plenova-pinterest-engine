@@ -1,9 +1,11 @@
 "use client";
 
 import {
+  FONT_SUBSETS,
   SLIDE_HEIGHT,
   SLIDE_WIDTH,
   buildSlideHtml,
+  type FontPayload,
   type SlideCopy,
   type SlideOverlay,
 } from "@/lib/overlay";
@@ -22,14 +24,19 @@ import {
  * is built, or they silently render as nothing.
  */
 
-let fontCache: string | null = null;
+let fontCache: FontPayload | null = null;
 
-/** Fetches the font once per session and keeps the base64 around. */
-export async function loadFont(): Promise<string> {
+/** Fetches every font subset once per session and keeps the base64 around. */
+export async function loadFont(): Promise<FontPayload> {
   if (fontCache) return fontCache;
-  const res = await fetch("/fonts/TikTokSans.woff2");
-  if (!res.ok) throw new Error("Impossible de charger la police TikTok Sans.");
-  fontCache = bufferToBase64(await res.arrayBuffer());
+  const entries = await Promise.all(
+    FONT_SUBSETS.map(async (subset) => {
+      const res = await fetch(subset.file);
+      if (!res.ok) throw new Error("Impossible de charger la police TikTok Sans.");
+      return [subset.key, bufferToBase64(await res.arrayBuffer())] as const;
+    }),
+  );
+  fontCache = Object.fromEntries(entries) as FontPayload;
   return fontCache;
 }
 
@@ -70,7 +77,7 @@ export type CapturableSlide = SlideCopy & {
 
 /** Renders one slide and returns it as a JPEG data URL. */
 export async function captureSlide(slide: CapturableSlide): Promise<string> {
-  const [fontBase64, backgroundDataUrl] = await Promise.all([
+  const [fonts, backgroundDataUrl] = await Promise.all([
     loadFont(),
     loadBackground(slide.src),
   ]);
@@ -79,7 +86,7 @@ export async function captureSlide(slide: CapturableSlide): Promise<string> {
     slide,
     overlay: slide.overlay,
     backgroundDataUrl,
-    fontBase64,
+    fonts,
   });
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SLIDE_WIDTH}" height="${SLIDE_HEIGHT}">
