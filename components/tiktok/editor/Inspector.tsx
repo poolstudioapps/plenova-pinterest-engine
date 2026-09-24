@@ -569,6 +569,11 @@ export function SlideSection({
   hasPexels,
   regen,
   onRegenerate,
+  onDuplicate,
+  onRemove,
+  canRemove,
+  onSaveTemplate,
+  canSaveTemplate,
 }: {
   slideStyle: OverlayStyle;
   onSlideStyle: (style: OverlayStyle) => void;
@@ -584,6 +589,11 @@ export function SlideSection({
   /** This slide's regeneration, or another slide's holding the one slot. */
   regen: { busy: boolean; elsewhere: boolean; error: string | null };
   onRegenerate: (prompt: string, source: "photo" | "generate") => void;
+  onDuplicate: () => void;
+  onRemove: () => void;
+  canRemove: boolean;
+  onSaveTemplate: () => void;
+  canSaveTemplate: boolean;
 }) {
   const t = translator();
   const [open, setOpen] = useState(false);
@@ -603,6 +613,24 @@ export function SlideSection({
 
   return (
     <Section title={t("editor.slideSection")}>
+      <div className="grid grid-cols-2 gap-1.5">
+        <ToolButton wide icon={<Icon.Duplicate />} onClick={onDuplicate}>
+          {t("editor.duplicate")}
+        </ToolButton>
+        <ToolButton wide icon={<Icon.Trash />} onClick={onRemove} disabled={!canRemove}>
+          {t("editor.removeSlide")}
+        </ToolButton>
+      </div>
+      <ToolButton
+        wide
+        icon={<Icon.Bookmark />}
+        onClick={onSaveTemplate}
+        disabled={!canSaveTemplate}
+        title={canSaveTemplate ? t("editor.saveTemplateHint") : t("editor.saveTemplateNoPhoto")}
+      >
+        {t("editor.saveTemplate")}
+      </ToolButton>
+
       <Row label={t("editor.slideStyle")}>
         <Picker
           options={OVERLAY_STYLES.map((style) => ({ value: style, label: t(STYLE_LABELS[style]) }))}

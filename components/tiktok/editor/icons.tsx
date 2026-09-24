@@ -185,3 +185,30 @@ export const Search = () => (
     <path d="M10.5 10.5l3 3" />
   </Svg>
 );
+
+export const Plus = () => (
+  <Svg>
+    <path d="M8 3v10M3 8h10" />
+  </Svg>
+);
+
+export const Trash = () => (
+  <Svg>
+    <path d="M2.5 4.5h11M6.5 4.5V3h3v1.5M4 4.5l.7 8.6a1 1 0 001 .9h4.6a1 1 0 001-.9l.7-8.6" />
+    <path d="M6.8 7v4.5M9.2 7v4.5" />
+  </Svg>
+);
+
+export const Bookmark = () => (
+  <Svg>
+    <path d="M4 2.5h8v11l-4-2.8-4 2.8z" />
+  </Svg>
+);
+
+export const Duplicate = () => (
+  <Svg>
+    <rect x="5" y="5" width="9" height="9" rx="1.5" />
+    <path d="M11 5V3.5A1.5 1.5 0 009.5 2h-6A1.5 1.5 0 002 3.5v6A1.5 1.5 0 003.5 11H5" />
+    <path d="M9.5 7.5v4M7.5 9.5h4" />
+  </Svg>
+);

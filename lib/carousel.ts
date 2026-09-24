@@ -5,7 +5,7 @@ import {
   plantName as localizedPlantName,
 } from "@/lib/data/localize";
 import { getVisualStyle } from "@/lib/data/visual-styles";
-import { AppError, badRequest, notFound } from "@/lib/errors";
+import { AppError, badRequest, conflict, notFound } from "@/lib/errors";
 import {
   generateCarouselConcept,
   generatePinImage,
@@ -17,6 +17,8 @@ import { leastUsed, mediaPath, shelfOf, varietySlug } from "@/lib/media";
 import { findReference, isPexelsConfigured } from "@/lib/pexels";
 import { config } from "@/lib/config";
 import { randomToken, signLabel } from "@/lib/crypto";
+import { slideFingerprint } from "@/lib/slide-image";
+import { MAX_CAROUSEL_SLIDES, cleanSlideText } from "@/lib/slide-text";
 import { getStore } from "@/lib/store";
 import { truncate } from "@/lib/utils";
 import { getPublishStatus, publishCarousel } from "@/lib/tiktok";
@@ -146,6 +148,12 @@ export async function runCarouselGeneration(
     await generateCarousel(id, input);
   } catch (err) {
     const reason = err instanceof Error ? err.message : "La génération a échoué. Réessaie.";
+    // Nobody is waiting on this request, so the log is the only place the
+    // upstream detail can go; the record keeps the readable message.
+    console.error(
+      `[carousel] ${id} generation failed: ${reason}`,
+      err instanceof AppError && err.details ? err.details : "",
+    );
     try {
       const store = getStore();
       const carousel = await store.getCarousel(id);
@@ -576,25 +584,40 @@ function startingOverlay(
   return overlay;
 }
 
+export const MAX_SLIDES = MAX_CAROUSEL_SLIDES;
+
+/** One slide as the editor sends it back: where it came from, and what it is now. */
+export interface SlideInput {
+  /** Its position in the stored carousel when the editor loaded it; null for a new slide. */
+  from: number | null;
+  /** Which picture sat at `from` then - how a carousel changed elsewhere is caught. */
+  fromPhoto: string | null;
+  text: Partial<Record<ContentLocale, SlideText>>;
+  overlay: SlideOverlay;
+  mediaId: string | null;
+  imagePrompt: string;
+  kind: CarouselSlide["kind"];
+  mention: boolean;
+}
+
 /**
- * Saves one slide's words and layout, from the editor.
+ * Saves the editor's whole carousel in one write: words, layouts, pictures,
+ * and which slides there are in which order - added, duplicated, removed,
+ * moved.
  *
- * Any composite that the change invalidates is dropped. Text edits only
- * invalidate the language they were made in; a layout change invalidates every
- * language, because the layout is shared. Leaving a stale composite in place
- * would publish the old wording, which is the worst of the three outcomes.
+ * Each slide says where it came from, so what it keeps is decided per slide:
+ * a composite survives only for a language whose words, layout and picture
+ * are all unchanged. Leaving a stale composite in place would publish the old
+ * wording, the worst outcome of all.
+ *
+ * The editor worked from a carousel of a given shape. If that shape moved
+ * underneath it - slides reordered or deleted in another tab - saving would
+ * put words on the wrong pictures, so it is refused instead, by name.
  */
-export async function updateSlide(
+export async function saveSlides(
   id: string,
-  index: number,
-  patch: {
-    text?: Partial<Record<ContentLocale, SlideText>>;
-    overlay?: SlideOverlay;
-    /** Another photograph from the library, by id. */
-    mediaId?: string;
-    /** The brief the photograph was made from, when it was remade. */
-    imagePrompt?: string;
-  },
+  expectedLength: number,
+  inputs: SlideInput[],
 ): Promise<CarouselRecord> {
   const store = getStore();
   const carousel = await store.getCarousel(id);
@@ -604,68 +627,89 @@ export async function updateSlide(
   if (carousel.status === "generating") {
     throw badRequest("Ce carrousel est encore en cours de génération.");
   }
+  if (inputs.length === 0) throw badRequest("Un carrousel garde au moins une slide.");
+  if (inputs.length > MAX_SLIDES) {
+    throw badRequest(`TikTok accepte ${MAX_SLIDES} slides au plus par carrousel.`);
+  }
+  const changedElsewhere = () =>
+    conflict(
+      "Ce carrousel a été modifié ailleurs pendant que tu l'éditais. Ferme l'éditeur et rouvre-le pour repartir de la dernière version.",
+    );
+  if (carousel.slides.length !== expectedLength) throw changedElsewhere();
 
-  const slide = carousel.slides[index];
-  if (!slide) throw badRequest(`Ce carrousel n'a pas de slide ${index + 1}.`);
-
-  const text = { ...slide.text };
-  const stale = new Set<ContentLocale>();
-
-  for (const [language, value] of Object.entries(patch.text ?? {})) {
-    const locale = language as ContentLocale;
-    const before = slide.text[locale];
-    if (
-      before?.title === value.title &&
-      before?.subtitle === value.subtitle &&
-      (before?.cta ?? "") === (value.cta ?? "")
-    ) {
-      continue;
+  const used = new Set<number>();
+  const slides: CarouselSlide[] = [];
+  for (const input of inputs) {
+    let base: CarouselSlide | null = null;
+    if (input.from !== null) {
+      base = carousel.slides[input.from] ?? null;
+      if (!base || used.has(input.from) || slideFingerprint(base) !== input.fromPhoto) {
+        throw changedElsewhere();
+      }
+      used.add(input.from);
     }
-    text[locale] = value;
-    stale.add(locale);
+
+    const stale = new Set<ContentLocale>(base ? [] : carousel.languages);
+
+    let mediaId = base?.mediaId ?? null;
+    let imageUrl = base?.imageUrl ?? null;
+    if (input.mediaId !== null && input.mediaId !== mediaId) {
+      const asset = await store.getMedia(input.mediaId);
+      if (!asset) throw notFound(`Aucune image avec l'identifiant ${input.mediaId}.`);
+      mediaId = asset.id;
+      imageUrl = asset.url;
+      // Every language burned its words onto the old picture.
+      for (const language of carousel.languages) stale.add(language);
+      // A picture remade for this very carousel was counted when it was made.
+      if (!asset.sourceId?.startsWith(`${id}_`)) await store.markMediaUsed(asset.id);
+    }
+    if (!imageUrl) throw badRequest("Chaque slide a besoin d'une photo.");
+
+    // Compared normalised: an overlay stored before a field existed is the
+    // same design, and reading it as a new one re-composed everything.
+    const overlay = normaliseOverlay(input.overlay);
+    if (base && JSON.stringify(overlay) !== JSON.stringify(normaliseOverlay(base.overlay))) {
+      for (const language of carousel.languages) stale.add(language);
+    }
+
+    const text: CarouselSlide["text"] = {};
+    for (const language of carousel.languages) {
+      const next = cleanSlideText(input.text[language]);
+      const before = base?.text[language];
+      text[language] = next;
+      if (
+        !before ||
+        before.title !== next.title ||
+        before.subtitle !== next.subtitle ||
+        (before.cta ?? "") !== (next.cta ?? "")
+      ) {
+        stale.add(language);
+      }
+    }
+
+    const composed = { ...(base?.composed ?? {}) };
+    for (const language of stale) delete composed[language];
+
+    slides.push({
+      kind: base?.kind ?? input.kind,
+      hasPlenovaMention: base ? Boolean(base.hasPlenovaMention) : input.mention,
+      text,
+      overlay,
+      imagePrompt: input.imagePrompt.slice(0, 2000),
+      photoQuery: base?.photoQuery ?? "",
+      mediaId,
+      imageUrl,
+      composed,
+    });
   }
 
-  const overlay = patch.overlay ?? slide.overlay;
-  // Compared normalised: an overlay stored before a field existed is the same
-  // design, and reading it as a new one re-composed every language for nothing.
-  if (
-    patch.overlay &&
-    JSON.stringify(normaliseOverlay(patch.overlay)) !==
-      JSON.stringify(normaliseOverlay(slide.overlay))
-  ) {
-    for (const language of carousel.languages) stale.add(language);
-  }
-
-  let photo: Pick<CarouselSlide, "mediaId" | "imageUrl"> = {
-    mediaId: slide.mediaId,
-    imageUrl: slide.imageUrl,
-  };
-  if (patch.mediaId !== undefined && patch.mediaId !== slide.mediaId) {
-    const asset = await store.getMedia(patch.mediaId);
-    if (!asset) throw notFound(`Aucune image avec l'identifiant ${patch.mediaId}.`);
-    photo = { mediaId: asset.id, imageUrl: asset.url };
-    // Every language burned its words onto the old picture.
-    for (const language of carousel.languages) stale.add(language);
-    // A picture remade for this very slide was counted when it was made.
-    if (!asset.sourceId?.startsWith(`${id}_`)) await store.markMediaUsed(asset.id);
-  }
-
-  const composed = { ...slide.composed };
-  for (const language of stale) delete composed[language];
-
-  const slides = [...carousel.slides];
-  slides[index] = {
-    ...slide,
-    ...photo,
-    ...(patch.imagePrompt !== undefined ? { imagePrompt: patch.imagePrompt } : {}),
-    text,
-    overlay,
-    composed,
-  };
+  // The cover is a picture, not a position: it follows its slide.
+  const cover = inputs.findIndex((input) => input.from === carousel.coverIndex - 1);
 
   const updated: CarouselRecord = {
     ...carousel,
     slides,
+    coverIndex: cover >= 0 ? cover + 1 : 1,
     updatedAt: new Date().toISOString(),
   };
   await store.saveCarousel(updated);
@@ -682,30 +726,34 @@ export async function updateSlide(
  */
 export async function regenerateSlidePhoto(
   id: string,
-  index: number,
-  options: { prompt?: string; source?: "photo" | "generate" },
+  /** The slide's stored position, or null for one added in the editor and not yet saved. */
+  slide: number | null,
+  options: { prompt?: string; source?: "photo" | "generate"; mediaId?: string },
 ): Promise<MediaAsset> {
   const store = getStore();
   const carousel = await store.getCarousel(id);
   if (!carousel) throw notFound(`Aucun carrousel avec l'identifiant ${id}.`);
-  const slide = carousel.slides[index];
-  if (!slide) throw badRequest(`Ce carrousel n'a pas de slide ${index + 1}.`);
+  const stored = slide !== null ? carousel.slides[slide] : undefined;
+  if (slide !== null && !stored) {
+    throw badRequest(`Ce carrousel n'a pas de slide ${slide + 1}.`);
+  }
 
-  const prompt = options.prompt?.trim() || slide.imagePrompt;
+  const prompt = options.prompt?.trim() || stored?.imagePrompt || "";
   if (!prompt) throw badRequest("Décris la photo à produire.");
 
   // Filed under the species the current picture shows, so a listicle slide
   // about a pothos stays a pothos; a CTA or hook picture, or one nobody could
   // name, falls back to the carousel's own plant.
-  const current = slide.mediaId ? await store.getMedia(slide.mediaId) : null;
+  const currentId = options.mediaId ?? stored?.mediaId ?? null;
+  const current = currentId ? await store.getMedia(currentId) : null;
   const species = current && !current.role && getPlant(current.plantSlug) ? current : null;
   const plant = carousel.plantSlug ? getPlant(carousel.plantSlug) : undefined;
 
   return produceSlideImage({
     // Unique, or the new picture would overwrite the old one's file in place.
-    id: `${id}_${index}_${randomToken(4)}`,
+    id: `${id}_${slide ?? "new"}_${randomToken(4)}`,
     imagePrompt: prompt,
-    photoQuery: slide.photoQuery,
+    photoQuery: stored?.photoQuery ?? "",
     source: options.source ?? "photo",
     plantSlug: species?.plantSlug ?? plant?.slug ?? "unfiled",
     plantName:

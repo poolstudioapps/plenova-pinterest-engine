@@ -2,6 +2,11 @@
 
 import { useMemo, useRef, useState } from "react";
 import {
+  TemplateDialog,
+  TemplateGrid,
+  useSlideTemplates,
+} from "@/components/tiktok/editor/SlideTemplates";
+import {
   Button,
   Card,
   EmptyState,
@@ -10,6 +15,7 @@ import {
   Notice,
   Picker,
   PlantName,
+  Spinner,
 } from "@/components/ui";
 import { shrinkImage } from "@/lib/client-image";
 import {
@@ -20,7 +26,7 @@ import {
 } from "@/lib/media";
 import type { PlantIdentity } from "@/lib/data/localize";
 import { translator, type TranslationKey } from "@/lib/i18n";
-import type { MediaAsset, MediaRole } from "@/lib/types";
+import type { MediaAsset, MediaRole, SlideTemplate } from "@/lib/types";
 import { relativeTime } from "@/lib/utils";
 
 interface Props {
@@ -66,6 +72,8 @@ export function MediaClient({ initialAssets, plants, styles }: Props) {
   const [assets, setAssets] = useState(initialAssets);
   const [plantSlug, setPlantSlug] = useState("");
   const [search, setSearch] = useState("");
+  const templates = useSlideTemplates();
+  const [editingTemplate, setEditingTemplate] = useState<SlideTemplate | null>(null);
 
   const filtered = useMemo(() => {
     const q = normaliseSearch(search);
@@ -132,6 +140,39 @@ export function MediaClient({ initialAssets, plants, styles }: Props) {
           onChange={(e) => setSearch(e.target.value)}
         />
       </Card>
+
+      {showShelves ? (
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-[17px] font-semibold tracking-[-0.01em]">
+              {t("templates.shelfTitle")}{" "}
+              <span className="text-[13px] font-normal text-[var(--color-ink-faint)]">
+                {templates.templates?.length ?? ""}
+              </span>
+            </h2>
+            <p className="mt-0.5 max-w-xl text-[13px] leading-relaxed text-[var(--color-ink-soft)]">
+              {t("templates.shelfHint")}
+            </p>
+          </div>
+          {templates.error ? <Notice tone="danger">{templates.error}</Notice> : null}
+          {templates.templates === null ? (
+            <div className="grid place-items-center py-10 text-[var(--color-ink-faint)]">
+              <Spinner />
+            </div>
+          ) : templates.templates.length === 0 ? (
+            <p className="rounded-[var(--radius-card)] border border-dashed border-[var(--color-line-strong)] px-6 py-8 text-center text-[13px] leading-relaxed text-[var(--color-ink-faint)]">
+              {t("templates.noneBody")}
+            </p>
+          ) : (
+            <TemplateGrid
+              templates={templates.templates}
+              lang="fr"
+              onEdit={setEditingTemplate}
+              onDelete={(template) => templates.remove(template.id)}
+            />
+          )}
+        </section>
+      ) : null}
 
       {showShelves
         ? SHELVES.map((shelf) => (
@@ -230,6 +271,30 @@ export function MediaClient({ initialAssets, plants, styles }: Props) {
           ))
         )}
       </section>
+
+      {editingTemplate ? (
+        <TemplateDialog
+          title={t("templates.editTitle")}
+          initialLang="fr"
+          initial={{
+            name: editingTemplate.name,
+            kind: editingTemplate.kind,
+            mediaId: editingTemplate.mediaId,
+            overlay: editingTemplate.overlay,
+            text: Object.fromEntries(
+              Object.entries(editingTemplate.text).map(([l, w]) => [
+                l,
+                { title: w?.title ?? "", subtitle: w?.subtitle ?? "", cta: w?.cta ?? "" },
+              ]),
+            ),
+          }}
+          onSave={async (draft) => {
+            await templates.save(draft, editingTemplate.id);
+            setEditingTemplate(null);
+          }}
+          onClose={() => setEditingTemplate(null)}
+        />
+      ) : null}
     </div>
   );
 }

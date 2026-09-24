@@ -287,6 +287,26 @@ export interface CarouselSlide {
   composed: Partial<Record<ContentLocale, string>>;
 }
 
+/**
+ * A slide kept ready to drop into any carousel - typically the Plenova CTA: a
+ * photograph from the library, its layout, and its words in every language it
+ * was written in. Inserted into a carousel, it brings that carousel's
+ * languages; one it was never written in comes in empty, and the editor says so.
+ */
+export interface SlideTemplate {
+  id: string;
+  name: string;
+  /** "cta" carries the Plenova mention; "content" is any other slide. */
+  kind: "cta" | "content";
+  mediaId: string;
+  imageUrl: string;
+  overlay: SlideOverlay;
+  /** Only the languages that were written. */
+  text: Partial<Record<ContentLocale, SlideText>>;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** A TikTok photo carousel: ordered slides plus one caption. */
 export interface CarouselRecord {
   id: string;

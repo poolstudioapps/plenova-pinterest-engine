@@ -4,8 +4,10 @@ import type {
   PinRecord,
   PinStatus,
   PinterestConnection,
+  SlideTemplate,
   TikTokAccount,
 } from "@/lib/types";
+import { cleanSlideTexts } from "@/lib/slide-text";
 import { normaliseSearch, type MediaFilter } from "@/lib/media";
 import { plantIdentity } from "@/lib/data/localize";
 import { normaliseOverlay } from "@/lib/overlay";
@@ -75,6 +77,12 @@ export interface EngineStore {
   getCarousel(id: string): Promise<CarouselRecord | null>;
   saveCarousel(carousel: CarouselRecord): Promise<void>;
   deleteCarousel(id: string): Promise<void>;
+
+  /** Slides kept ready for any carousel - the CTA, mostly. Newest edit first. */
+  listSlideTemplates(): Promise<SlideTemplate[]>;
+  getSlideTemplate(id: string): Promise<SlideTemplate | null>;
+  saveSlideTemplate(template: SlideTemplate): Promise<void>;
+  deleteSlideTemplate(id: string): Promise<void>;
 }
 
 /** Shape of the single persisted state document. */
@@ -83,6 +91,8 @@ export interface StateDocument {
   pins: Record<string, PinRecord>;
   media: Record<string, MediaAsset>;
   carousels: Record<string, CarouselRecord>;
+  /** Absent on documents written before saved slides existed. */
+  slideTemplates?: Record<string, SlideTemplate>;
   /** AES-256-GCM envelope produced by lib/crypto.ts, or null when disconnected. */
   connection: string | null;
   /** Same envelope, for the TikTok account. */
@@ -181,6 +191,25 @@ export function applyFilter(
  * after every slide, so a long silence is the signal.
  */
 const STALE_GENERATION_MS = 15 * 60 * 1000;
+
+/** A stored saved slide, whatever shape it was written in, or null. */
+export function normaliseTemplate(raw: unknown): SlideTemplate | null {
+  if (!raw || typeof raw !== "object") return null;
+  const t = raw as Record<string, unknown>;
+  if (typeof t.id !== "string" || typeof t.mediaId !== "string") return null;
+  const created = typeof t.createdAt === "string" ? t.createdAt : new Date(0).toISOString();
+  return {
+    id: t.id,
+    name: typeof t.name === "string" && t.name.trim() ? t.name : "Slide",
+    kind: t.kind === "cta" ? "cta" : "content",
+    mediaId: t.mediaId,
+    imageUrl: typeof t.imageUrl === "string" ? t.imageUrl : "",
+    overlay: normaliseOverlay(t.overlay),
+    text: cleanSlideTexts(t.text),
+    createdAt: created,
+    updatedAt: typeof t.updatedAt === "string" ? t.updatedAt : created,
+  };
+}
 
 export function normaliseCarousel(raw: unknown): CarouselRecord | null {
   if (!raw || typeof raw !== "object") return null;

@@ -2,16 +2,19 @@
 
 import { memo } from "react";
 import { SlidePreview } from "@/components/tiktok/SlidePreview";
+import { SortableGrid } from "@/components/ui";
 import { translator } from "@/lib/i18n";
 import type { SlideOverlay } from "@/lib/overlay";
 import { cn } from "@/lib/utils";
+import * as Icon from "./icons";
 import type { SlideWords } from "./state";
 
 export interface FilmstripItem {
+  uid: string;
   src: string | null;
   overlay: SlideOverlay;
   words: SlideWords;
-  /** Changed since the last save. */
+  /** New, or changed since the last save. */
   dirty: boolean;
   /** No title in the language on screen. */
   missing: boolean;
@@ -19,7 +22,8 @@ export interface FilmstripItem {
 }
 
 /**
- * Every slide of the carousel, drawn live from the draft, to jump between.
+ * Every slide of the carousel, drawn live from the draft: click to open one,
+ * drag to move it, "+" to add one.
  *
  * Each thumbnail is memoised on its own slide: a slide that did not change
  * keeps the same objects, so dragging a block on one slide redraws one
@@ -28,12 +32,20 @@ export interface FilmstripItem {
 export function Filmstrip({
   items,
   active,
+  disabled,
   onGo,
+  onReorder,
+  onAdd,
+  canAdd,
   label,
 }: {
   items: FilmstripItem[];
   active: number;
+  disabled?: boolean;
   onGo: (index: number) => void;
+  onReorder: (uids: string[]) => void;
+  onAdd: () => void;
+  canAdd: boolean;
   label: (index: number) => string;
 }) {
   const t = translator();
@@ -41,17 +53,47 @@ export function Filmstrip({
     <nav
       aria-label={t("editor.slidesNav")}
       className="flex gap-2.5 overflow-x-auto p-3 lg:flex-col lg:overflow-x-visible lg:overflow-y-auto"
+      onKeyDown={(e) => {
+        // The sortable items own the arrow keys (they move the slide);
+        // Enter and Space open it.
+        if (e.key !== "Enter" && e.key !== " ") return;
+        const host = (e.target as HTMLElement).querySelector?.<HTMLElement>("[data-slide-index]");
+        if (!host) return;
+        e.preventDefault();
+        onGo(Number(host.dataset.slideIndex));
+      }}
     >
-      {items.map((item, index) => (
-        <Thumb
-          key={index}
-          index={index}
-          active={index === active}
-          onGo={onGo}
-          label={label(index)}
-          {...item}
-        />
-      ))}
+      <SortableGrid
+        items={items}
+        getId={(item) => item.uid}
+        onReorder={onReorder}
+        disabled={disabled}
+        className="flex gap-2.5 lg:flex-col"
+        itemLabel={(_, index) => label(index)}
+        renderItem={(item, { index }) => (
+          <Thumb
+            index={index}
+            active={index === active}
+            onGo={onGo}
+            src={item.src}
+            overlay={item.overlay}
+            words={item.words}
+            dirty={item.dirty}
+            missing={item.missing}
+            mention={item.mention}
+          />
+        )}
+      />
+      <button
+        type="button"
+        onClick={onAdd}
+        disabled={!canAdd || disabled}
+        title={canAdd ? t("editor.addSlide") : t("editor.addSlideFull")}
+        className="flex aspect-[4/5] w-[78px] shrink-0 flex-col items-center justify-center gap-1 rounded-[11px] border-2 border-dashed border-[var(--color-line-strong)] text-[11px] font-medium text-[var(--color-ink-soft)] transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-50 lg:w-full"
+      >
+        <Icon.Plus />
+        {t("editor.addSlideShort")}
+      </button>
     </nav>
   );
 }
@@ -60,37 +102,31 @@ const Thumb = memo(function Thumb({
   index,
   active,
   onGo,
-  label,
   src,
   overlay,
   words,
   dirty,
   missing,
   mention,
-}: FilmstripItem & {
+}: Omit<FilmstripItem, "uid"> & {
   index: number;
   active: boolean;
   onGo: (index: number) => void;
-  label: string;
 }) {
   const t = translator();
   return (
-    <button
-      type="button"
+    <div
+      data-slide-index={index}
       onClick={() => onGo(index)}
       aria-current={active ? "true" : undefined}
-      aria-label={label}
-      title={label}
       className={cn(
-        "group relative w-[78px] shrink-0 rounded-[11px] p-[3px] text-left transition-colors lg:w-full",
-        active
-          ? "bg-[var(--color-accent)]"
-          : "bg-transparent hover:bg-[var(--color-line-strong)]",
+        "relative w-[78px] rounded-[11px] p-[3px] transition-colors lg:w-full",
+        active ? "bg-[var(--color-accent)]" : "bg-transparent hover:bg-[var(--color-line-strong)]",
       )}
     >
       {src ? (
         <SlidePreview
-          className="w-full rounded-[8px]"
+          className="pointer-events-none w-full rounded-[8px]"
           src={src}
           copy={words}
           overlay={overlay}
@@ -101,9 +137,7 @@ const Thumb = memo(function Thumb({
       <span
         className={cn(
           "absolute top-1.5 left-1.5 grid min-w-5 place-items-center rounded-full px-1 text-[10.5px] font-semibold",
-          active
-            ? "bg-white text-[var(--color-accent-ink)]"
-            : "bg-black/65 text-white",
+          active ? "bg-white text-[var(--color-accent-ink)]" : "bg-black/65 text-white",
         )}
       >
         {index + 1}
@@ -134,6 +168,6 @@ const Thumb = memo(function Thumb({
           {t("editor.thumbDirty")}
         </span>
       ) : null}
-    </button>
+    </div>
   );
 });

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { Button, Notice, Spinner } from "@/components/ui";
+import { Button, Menu, MenuItem, Notice, Spinner } from "@/components/ui";
 import { EditorCanvas, type CanvasIssue } from "@/components/tiktok/editor/EditorCanvas";
 import { Filmstrip, type FilmstripItem } from "@/components/tiktok/editor/Filmstrip";
 import * as Icon from "@/components/tiktok/editor/icons";
@@ -14,12 +14,23 @@ import {
 } from "@/components/tiktok/editor/Inspector";
 import { PhotoPicker, type PickerTab } from "@/components/tiktok/editor/PhotoPicker";
 import {
+  TemplateDialog,
+  TemplateGrid,
+  useSlideTemplates,
+  writtenIn,
+  type TemplateDraft,
+} from "@/components/tiktok/editor/SlideTemplates";
+import {
+  draftFrom,
+  draftFromAsset,
+  draftFromTemplate,
   draftsFrom,
+  duplicateDraft,
   editorReducer,
   frameOf,
   initialEditorState,
   photoChanged,
-  sameDraft,
+  sameContent,
   withLayoutOf,
   withStyleOf,
   wordsOf,
@@ -44,8 +55,9 @@ import {
   type OverlayStyle,
   type PhotoFrame,
 } from "@/lib/overlay";
-import { slideImageSrc } from "@/lib/slide-image";
-import type { CarouselRecord, MediaAsset } from "@/lib/types";
+import { slideFingerprint, slideImageSrc } from "@/lib/slide-image";
+import { MAX_CAROUSEL_SLIDES } from "@/lib/slide-text";
+import type { CarouselRecord, MediaAsset, SlideTemplate } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -76,19 +88,24 @@ const SHORTCUTS: [string, TranslationKey][] = [
   ["Échap", "editor.keyEscape"],
 ];
 
+type TemplateDialogState =
+  | { mode: "create"; draft: TemplateDraft }
+  | { mode: "edit"; template: SlideTemplate };
+
 /**
  * The carousel editor: every slide, one workspace.
  *
- * The filmstrip on the left is the carousel, drawn live from the draft; the
- * slide in the middle is the real 1080x1350 composition, dragged and typed on
+ * The filmstrip on the left is the carousel, drawn live from the draft - drag
+ * to reorder, "+" to add a slide from the library or a saved one; the slide in
+ * the middle is the real 1080x1350 composition, dragged and typed on
  * directly; the inspector on the right holds the words, the selected block's
- * look, the photograph and the carousel-wide actions.
+ * look, the slide itself and the carousel-wide actions.
  *
- * Nothing is written until "Enregistrer": the draft covers the whole carousel,
- * undo covers the whole draft, and one save sends every slide that changed.
- * Words belong to a language; position, size, style and photograph belong to
- * the slide - editing French does not move the English text, which is the
- * only way several translations stay one design.
+ * Nothing is written until "Enregistrer": the draft covers the whole carousel
+ * - its slides and their order included - undo covers the whole draft, and
+ * one save writes it all. Words belong to a language; position, size, style
+ * and photograph belong to the slide - editing French does not move the
+ * English text, which is the only way several translations stay one design.
  */
 export function SlideEditor({
   carousel,
@@ -101,11 +118,14 @@ export function SlideEditor({
 }: Props) {
   const t = translator();
 
+  // One set of drafts for both the working copy and the baseline, so their
+  // keys match from the first render.
+  const [initial] = useState(() => draftsFrom(carousel));
   const [state, dispatch] = useReducer(editorReducer, null, () =>
-    initialEditorState(draftsFrom(carousel), index),
+    initialEditorState(initial, index),
   );
   /** The slides as the server last confirmed them, to tell what changed. */
-  const [baseline, setBaseline] = useState<SlideDraft[]>(() => draftsFrom(carousel));
+  const [baseline, setBaseline] = useState<SlideDraft[]>(initial);
   /** The carousel as the last save returned it. */
   const [saved, setSaved] = useState<CarouselRecord | null>(null);
 
@@ -118,20 +138,26 @@ export function SlideEditor({
   const [showZones, setShowZones] = useStoredFlag("plenova.editor.zones", true);
   const [showGrid, setShowGrid] = useStoredFlag("plenova.editor.grid", false);
   const [issues, setIssues] = useState<CanvasIssue[]>([]);
-  const [picker, setPicker] = useState<PickerTab | null>(null);
+  /** The library, open to replace this slide's photo, or to add a slide. */
+  const [picker, setPicker] = useState<{ purpose: "replace" | "add"; tab: PickerTab } | null>(
+    null,
+  );
+  const [templateDialog, setTemplateDialog] = useState<TemplateDialogState | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
-  const [exportMenu, setExportMenu] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState<{ done: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [broken, setBroken] = useState<Set<string>>(() => new Set());
+  /** One photo is remade at a time; it belongs to a slide by key, not position. */
   const [regen, setRegen] = useState<{
-    index: number;
+    uid: string;
     busy: boolean;
     error: string | null;
   } | null>(null);
+
+  const templates = useSlideTemplates();
 
   // Read by async work and window listeners, which must not act on a stale render.
   const stateRef = useRef(state);
@@ -146,27 +172,42 @@ export function SlideEditor({
   const slide = state.slides[active];
   const total = state.slides.length;
 
-  const dirty = useMemo(
-    () => state.slides.map((s, i) => !sameDraft(s, baseline[i])),
-    [state.slides, baseline],
-  );
-  const dirtyCount = dirty.filter(Boolean).length;
+  // ---------------------------------------------------------- what changed
+
+  const changes = useMemo(() => {
+    const byUid = new Map(baseline.map((b) => [b.uid, b]));
+    const dirty = state.slides.map((s) => !sameContent(s, byUid.get(s.uid)));
+    const kept = new Set(state.slides.map((s) => s.uid));
+    const removed = baseline.filter((b) => !kept.has(b.uid)).length;
+    const survivors = state.slides.filter((s) => byUid.has(s.uid)).map((s) => s.uid);
+    const order = baseline.filter((b) => kept.has(b.uid)).map((b) => b.uid);
+    const reordered = survivors.some((uid, i) => uid !== order[i]);
+    return {
+      dirty,
+      count: dirty.filter(Boolean).length + removed + (reordered ? 1 : 0),
+    };
+  }, [state.slides, baseline]);
 
   // ------------------------------------------------------------- the photos
 
   /*
    * A photograph already on the slide comes through the slide's own route,
-   * keyed by which picture it is; one picked in this session and not yet
-   * saved comes through the library's. Both are same-origin, which is what
-   * lets an export draw them into a canvas.
+   * keyed by which picture it is; one picked in this session and not saved
+   * yet comes through the library's. Both are same-origin, which is what lets
+   * an export draw them into a canvas.
    */
   const photoSrc = useCallback(
     (i: number): string | null => {
       const draft = state.slides[i];
-      const stored = record.slides[i];
       if (!draft) return null;
-      if (stored && draft.mediaId === stored.mediaId && draft.imageUrl === stored.imageUrl) {
-        return stored.imageUrl ? slideImageSrc(record.id, i, stored) : null;
+      const stored = draft.from !== null ? record.slides[draft.from] : undefined;
+      if (
+        stored &&
+        draft.from !== null &&
+        draft.mediaId === stored.mediaId &&
+        draft.imageUrl === stored.imageUrl
+      ) {
+        return stored.imageUrl ? slideImageSrc(record.id, draft.from, stored) : null;
       }
       if (draft.mediaId) return `/api/media/${encodeURIComponent(draft.mediaId)}/raw`;
       return draft.imageUrl;
@@ -178,6 +219,8 @@ export function SlideEditor({
 
   const edit = useCallback(
     (key: string, fn: (s: SlideDraft) => SlideDraft, at?: number) => {
+      // Nothing moves while a save is on its way: it would not be in it.
+      if (savingRef.current) return;
       dispatch({ type: "edit", key, at: Date.now(), index: at, fn });
     },
     [],
@@ -222,11 +265,18 @@ export function SlideEditor({
   const flash = useCallback((message: string) => setToast(message), []);
   useEffect(() => {
     if (!toast) return;
-    const timer = window.setTimeout(() => setToast(null), 3200);
+    const timer = window.setTimeout(() => setToast(null), 3400);
     return () => window.clearTimeout(timer);
   }, [toast]);
 
-  function applyAsset(asset: MediaAsset, at: number, prompt?: string) {
+  /** Where a slide is now, by key - it may have moved since a request left. */
+  function indexOf(uid: string): number {
+    return stateRef.current.slides.findIndex((s) => s.uid === uid);
+  }
+
+  function applyAsset(asset: MediaAsset, uid: string, prompt?: string) {
+    const at = indexOf(uid);
+    if (at < 0) return;
     edit(
       `photo:${asset.id}`,
       (s) =>
@@ -245,38 +295,112 @@ export function SlideEditor({
   }
 
   async function regenerate(prompt: string, source: "photo" | "generate") {
-    if (regen?.busy) return;
-    const at = active;
-    setRegen({ index: at, busy: true, error: null });
+    if (regen?.busy || !slide) return;
+    const uid = slide.uid;
+    setRegen({ uid, busy: true, error: null });
     try {
-      const res = await fetch(`/api/carousels/${carousel.id}/slides/${at}/photo`, {
+      const res = await fetch(`/api/carousels/${carousel.id}/photo`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, source }),
+        body: JSON.stringify({
+          slide: slide.from,
+          mediaId: slide.mediaId ?? undefined,
+          prompt,
+          source,
+        }),
       });
       const data = (await res.json()) as {
         asset?: MediaAsset;
         error?: { message?: string };
       };
       if (!res.ok || !data.asset) {
-        setRegen({
-          index: at,
-          busy: false,
-          error: data.error?.message ?? t("preview.requestFailed"),
-        });
+        setRegen({ uid, busy: false, error: data.error?.message ?? t("preview.requestFailed") });
         return;
       }
-      applyAsset(data.asset, at, prompt);
+      applyAsset(data.asset, uid, prompt);
       setRegen(null);
+      const at = indexOf(uid);
       flash(t("editor.regenDone", { n: at + 1 }));
     } catch {
-      setRegen({ index: at, busy: false, error: t("preview.unreachable") });
+      setRegen({ uid, busy: false, error: t("preview.unreachable") });
     }
+  }
+
+  // ------------------------------------------------------------- the slides
+
+  function insert(draft: SlideDraft, message?: string) {
+    if (savingRef.current) return;
+    if (stateRef.current.slides.length >= MAX_CAROUSEL_SLIDES) {
+      flash(t("editor.addSlideFull"));
+      return;
+    }
+    dispatch({
+      type: "insert",
+      key: `insert:${draft.uid}`,
+      at: Date.now(),
+      index: stateRef.current.active + 1,
+      slide: draft,
+    });
+    setEditing(null);
+    setMode("layout");
+    if (message) flash(message);
+  }
+
+  function addFromLibrary(asset: MediaAsset) {
+    if (!slide) return;
+    setPicker(null);
+    insert(draftFromAsset(asset, slide.overlay, carousel.languages), t("editor.slideAdded"));
+  }
+
+  function addFromTemplate(template: SlideTemplate) {
+    setPicker(null);
+    const missing = carousel.languages.filter((l) => !writtenIn(template.text).includes(l));
+    insert(
+      draftFromTemplate(template, carousel.languages),
+      missing.length > 0
+        ? t("editor.templateMissing", {
+            langs: missing.map((l) => CONTENT_LOCALE_LABELS[l]).join(", "),
+          })
+        : t("editor.slideAdded"),
+    );
+  }
+
+  function duplicate() {
+    if (!slide) return;
+    insert(duplicateDraft(slide), t("editor.slideDuplicated"));
+  }
+
+  function removeSlide() {
+    if (savingRef.current || total <= 1) return;
+    dispatch({ type: "remove", key: `remove:${active}`, at: Date.now(), index: active });
+    setEditing(null);
+    setMode("layout");
+    flash(t("editor.slideRemoved"));
+  }
+
+  function reorder(uids: string[]) {
+    if (savingRef.current) return;
+    dispatch({ type: "order", key: `order:${uids.join()}`, at: Date.now(), uids });
+  }
+
+  function openSaveTemplate() {
+    if (!slide?.mediaId) return;
+    const title = wordsOf(slide, lang).title.split("\n")[0]?.trim() ?? "";
+    setTemplateDialog({
+      mode: "create",
+      draft: {
+        name: slide.mention ? t("editor.templateDefaultCta") : title.slice(0, 60) || t("editor.templateDefault"),
+        kind: slide.mention || slide.kind === "cta" ? "cta" : "content",
+        mediaId: slide.mediaId,
+        overlay: slide.overlay,
+        text: slide.text,
+      },
+    });
   }
 
   function applyToAll(kind: "layout" | "style") {
     const source = stateRef.current.slides[active];
-    if (!source || total < 2) return;
+    if (!source || total < 2 || savingRef.current) return;
     dispatch({
       type: "editAll",
       key: `all:${kind}:${Date.now()}`,
@@ -315,71 +439,68 @@ export function SlideEditor({
   // ----------------------------------------------------------------- saving
 
   /**
-   * Sends every slide that differs from the last confirmed state, one by one.
+   * Writes the whole draft in one request: every slide, in order, each saying
+   * where it came from. The server keeps what it can - a composite survives
+   * for a language whose words, layout and picture are all unchanged - and
+   * refuses outright if the carousel was restructured elsewhere meanwhile.
    *
-   * The baseline of each slide becomes exactly what was sent, so anything
-   * typed while the request was in flight still shows as unsaved. A failure
-   * stops the run and names the slide; the ones before it are saved.
+   * Edits are held while it runs, so what was sent is exactly what is on
+   * screen when the answer arrives - the answer then becomes the baseline.
    */
   async function save(): Promise<boolean> {
     if (savingRef.current) return false;
-    const targets = stateRef.current.slides
-      .map((s, i) => (sameDraft(s, baselineRef.current[i]) ? -1 : i))
-      .filter((i) => i >= 0);
-    if (targets.length === 0) return true;
+    if (changes.count === 0) return true;
 
     savingRef.current = true;
     setSaving(true);
     setError(null);
-    let latest: CarouselRecord | null = null;
+    setEditing(null);
+    const sent = stateRef.current.slides;
     try {
-      for (const i of targets) {
-        const draft = stateRef.current.slides[i];
-        if (!draft) continue;
-        const before = baselineRef.current[i];
-        const body: Record<string, unknown> = {
-          text: draft.text,
-          overlay: normaliseOverlay(draft.overlay),
-        };
-        if (photoChanged(draft, before) && draft.mediaId) body.mediaId = draft.mediaId;
-        if (draft.imagePrompt !== (before?.imagePrompt ?? "")) {
-          body.imagePrompt = draft.imagePrompt;
-        }
-
-        const res = await fetch(`/api/carousels/${carousel.id}/slides/${i}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        const data = (await res.json()) as {
-          carousel?: CarouselRecord;
-          error?: { message?: string };
-        };
-        if (!res.ok || !data.carousel) {
-          setError(
-            t("editor.saveFailed", {
-              n: i + 1,
-              reason: data.error?.message ?? t("preview.requestFailed"),
-            }),
-          );
-          return false;
-        }
-        latest = data.carousel;
-        const next = baselineRef.current.slice();
-        next[i] = draft;
-        baselineRef.current = next;
-        setBaseline(next);
+      const res = await fetch(`/api/carousels/${carousel.id}/slides`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          expectedLength: baselineRef.current.length,
+          slides: sent.map((s) => ({
+            from: s.from,
+            fromPhoto: s.fromPhoto,
+            text: s.text,
+            overlay: normaliseOverlay(s.overlay),
+            mediaId: s.mediaId,
+            imagePrompt: s.imagePrompt,
+            kind: s.kind,
+            mention: s.mention,
+          })),
+        }),
+      });
+      const data = (await res.json()) as {
+        carousel?: CarouselRecord;
+        error?: { message?: string };
+      };
+      if (!res.ok || !data.carousel || data.carousel.slides.length !== sent.length) {
+        setError(t("editor.saveFailed", { reason: data.error?.message ?? t("preview.requestFailed") }));
+        return false;
       }
+
+      const latest = data.carousel;
+      const next = latest.slides.map((stored, i) =>
+        draftFrom(stored, i, latest.languages, sent[i]!.uid),
+      );
+      const origin = new Map(
+        latest.slides.map((stored, i) => [sent[i]!.uid, { from: i, fromPhoto: slideFingerprint(stored) }]),
+      );
+      baselineRef.current = next;
+      setBaseline(next);
+      dispatch({ type: "rebase", origin });
+      savedRef.current = latest;
+      setSaved(latest);
       flash(t("editor.savedFlash"));
       return true;
     } catch {
       setError(t("preview.unreachable"));
       return false;
     } finally {
-      if (latest) {
-        savedRef.current = latest;
-        setSaved(latest);
-      }
       savingRef.current = false;
       setSaving(false);
     }
@@ -394,10 +515,7 @@ export function SlideEditor({
 
   function requestClose() {
     if (savingRef.current) return;
-    const unsaved = stateRef.current.slides.some(
-      (s, i) => !sameDraft(s, baselineRef.current[i]),
-    );
-    if (unsaved) setConfirmClose(true);
+    if (changes.count > 0) setConfirmClose(true);
     else finish();
   }
 
@@ -405,7 +523,6 @@ export function SlideEditor({
 
   /** The slides as JPEGs, in the language on screen, exactly as they would be published. */
   async function exportSlides(which: "one" | "all") {
-    setExportMenu(false);
     const indexes = which === "one" ? [active] : state.slides.map((_, i) => i);
     const stem = fileStem(carousel.theme);
     setExporting({ done: 0, total: indexes.length });
@@ -457,25 +574,14 @@ export function SlideEditor({
   }, []);
 
   useEffect(() => {
-    if (dirtyCount === 0) return;
+    if (changes.count === 0) return;
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = "";
     };
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, [dirtyCount]);
-
-  useEffect(() => {
-    if (!exportMenu) return;
-    const close = (event: PointerEvent) => {
-      if (!(event.target as HTMLElement | null)?.closest("[data-export-menu]")) {
-        setExportMenu(false);
-      }
-    };
-    document.addEventListener("pointerdown", close);
-    return () => document.removeEventListener("pointerdown", close);
-  }, [exportMenu]);
+  }, [changes.count]);
 
   /*
    * The keyboard. Escape backs out one layer at a time - a menu, a dialog,
@@ -496,11 +602,12 @@ export function SlideEditor({
     const mod = event.ctrlKey || event.metaKey;
     const key = event.key;
     const lower = key.toLowerCase();
+    const layer = picker || templateDialog || confirmClose || helpOpen;
 
     if (key === "Escape") {
       event.preventDefault();
-      if (exportMenu) return setExportMenu(false);
       if (helpOpen) return setHelpOpen(false);
+      if (templateDialog) return setTemplateDialog(null);
       if (picker) return setPicker(null);
       if (confirmClose) return setConfirmClose(false);
       if (editing) return setEditing(null);
@@ -509,8 +616,8 @@ export function SlideEditor({
       requestClose();
       return;
     }
-    // The dialogs own the keyboard while they are open.
-    if (picker || confirmClose || helpOpen) return;
+    // The dialogs own the keyboard while they are open; nothing edits mid-save.
+    if (layer || savingRef.current) return;
 
     if (mod && lower === "s") {
       event.preventDefault();
@@ -559,6 +666,8 @@ export function SlideEditor({
     };
     const move = moves[key];
     if (!move || !slide) return;
+    // The filmstrip's own arrows move the slide it has focused.
+    if (target?.closest('[role="listitem"]')) return;
     event.preventDefault();
     if (mode === "crop") {
       const f = frameOf(slide.overlay);
@@ -599,20 +708,21 @@ export function SlideEditor({
     subtitle: t(BLOCK_LABELS.subtitle),
     cta: t(BLOCK_LABELS.cta),
   };
-  const isMention = Boolean(carousel.slides[active]?.hasPlenovaMention);
   const block = selected ? slide.overlay[selected] : null;
-  const photoIsNew = photoChanged(slide, baseline[active]);
+  const stored = baseline.find((b) => b.uid === slide.uid);
+  const photoIsNew = !stored || photoChanged(slide, stored);
   const plant = plants.find((p) => p.slug === carousel.plantSlug) ?? null;
   const missingIn = (l: ContentLocale) =>
     state.slides.filter((s) => !wordsOf(s, l).title.trim()).length;
 
   const items: FilmstripItem[] = state.slides.map((s, i) => ({
+    uid: s.uid,
     src: photoSrc(i),
     overlay: s.overlay,
     words: wordsOf(s, lang),
-    dirty: dirty[i] ?? false,
+    dirty: changes.dirty[i] ?? false,
     missing: !wordsOf(s, lang).title.trim(),
-    mention: Boolean(carousel.slides[i]?.hasPlenovaMention),
+    mention: s.mention,
   }));
 
   const issueText = (issue: CanvasIssue) =>
@@ -625,12 +735,37 @@ export function SlideEditor({
       { block: labels[issue.block] },
     );
 
+  const templateGrid = (search: string) =>
+    templates.templates === null ? (
+      <div className="grid place-items-center py-20 text-[var(--color-ink-faint)]">
+        <Spinner />
+      </div>
+    ) : templates.templates.length === 0 ? (
+      <div className="rounded-[var(--radius-card)] border border-dashed border-[var(--color-line-strong)] px-6 py-12 text-center">
+        <p className="text-[14px] font-medium">{t("templates.none")}</p>
+        <p className="mx-auto mt-1 max-w-md text-[12.5px] leading-relaxed text-[var(--color-ink-faint)]">
+          {t("templates.noneBody")}
+        </p>
+      </div>
+    ) : (
+      <TemplateGrid
+        templates={templates.templates}
+        lang={lang}
+        needed={carousel.languages}
+        search={search}
+        onInsert={addFromTemplate}
+        onEdit={(template) => setTemplateDialog({ mode: "edit", template })}
+        onDelete={(template) => templates.remove(template.id)}
+      />
+    );
+
   return (
     <div
       className="fixed inset-0 z-50 flex flex-col bg-[var(--color-canvas)]"
       role="dialog"
       aria-modal="true"
       aria-label={t("editor.workspace")}
+      aria-busy={saving}
     >
       {/* ------------------------------------------------------ toolbar */}
       <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2">
@@ -647,11 +782,7 @@ export function SlideEditor({
         </div>
 
         <div className="flex items-center gap-0.5">
-          <BarButton
-            label={t("editor.prev")}
-            onClick={() => go(active - 1)}
-            disabled={active === 0}
-          >
+          <BarButton label={t("editor.prev")} onClick={() => go(active - 1)} disabled={active === 0}>
             <Icon.ChevronLeft />
           </BarButton>
           <span className="min-w-[84px] text-center text-[13px] font-semibold tabular-nums">
@@ -732,7 +863,7 @@ export function SlideEditor({
               setEditing(null);
               dispatch({ type: "undo" });
             }}
-            disabled={state.past.length === 0}
+            disabled={state.past.length === 0 || saving}
           >
             <Icon.Undo />
           </BarButton>
@@ -742,53 +873,41 @@ export function SlideEditor({
               setEditing(null);
               dispatch({ type: "redo" });
             }}
-            disabled={state.future.length === 0}
+            disabled={state.future.length === 0 || saving}
           >
             <Icon.Redo />
           </BarButton>
 
           <span className="mx-1 h-5 w-px bg-[var(--color-line-strong)]" aria-hidden />
 
-          <div className="relative" data-export-menu>
-            <BarButton
-              label={t("editor.export")}
-              pressed={exportMenu}
-              disabled={exporting !== null}
-              onClick={() => setExportMenu((v) => !v)}
-            >
-              {exporting ? <Spinner /> : <Icon.Download />}
-              <span className="hidden lg:inline">
-                {exporting
-                  ? t("editor.exporting", { done: exporting.done, total: exporting.total })
-                  : t("editor.export")}
-              </span>
-            </BarButton>
-            {exportMenu ? (
-              <div
-                role="menu"
-                className="absolute top-full right-0 z-10 mt-1.5 w-72 rounded-[14px] border border-[var(--color-line)] bg-[var(--color-surface)] p-1 shadow-[var(--shadow-raised)]"
-              >
-                {(["one", "all"] as const).map((which) => (
-                  <button
-                    key={which}
-                    type="button"
-                    role="menuitem"
-                    onClick={() => void exportSlides(which)}
-                    className="block w-full rounded-[10px] px-3 py-2 text-left transition-colors hover:bg-[var(--color-surface-muted)]"
-                  >
-                    <span className="block text-[13.5px] font-medium">
-                      {which === "one"
-                        ? t("editor.exportOne", { n: active + 1 })
-                        : t("editor.exportAll", { n: total })}
-                    </span>
-                    <span className="block text-[11.5px] text-[var(--color-ink-faint)]">
-                      {t("editor.exportDetail", { lang: CONTENT_LOCALE_LABELS[lang] })}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </div>
+          <Menu
+            label={t("editor.export")}
+            disabled={exporting !== null}
+            triggerClassName={barClass(false)}
+            trigger={
+              <>
+                {exporting ? <Spinner /> : <Icon.Download />}
+                <span className="hidden lg:inline">
+                  {exporting
+                    ? t("editor.exporting", { done: exporting.done, total: exporting.total })
+                    : t("editor.export")}
+                </span>
+              </>
+            }
+          >
+            {(["one", "all"] as const).map((which) => (
+              <MenuItem key={which} onClick={() => void exportSlides(which)}>
+                <span className="block text-[13.5px] font-medium">
+                  {which === "one"
+                    ? t("editor.exportOne", { n: active + 1 })
+                    : t("editor.exportAll", { n: total })}
+                </span>
+                <span className="block text-[11.5px] text-[var(--color-ink-faint)]">
+                  {t("editor.exportDetail", { lang: CONTENT_LOCALE_LABELS[lang] })}
+                </span>
+              </MenuItem>
+            ))}
+          </Menu>
 
           <BarButton label={`${t("editor.shortcuts")} (?)`} onClick={() => setHelpOpen(true)}>
             <Icon.Keyboard />
@@ -796,18 +915,18 @@ export function SlideEditor({
 
           <Button
             size="sm"
-            variant={dirtyCount > 0 ? "primary" : "secondary"}
+            variant={changes.count > 0 ? "primary" : "secondary"}
             onClick={() => void save()}
             loading={saving}
-            disabled={dirtyCount === 0 && !saving}
+            disabled={changes.count === 0 && !saving}
             className="ml-1"
             title="Ctrl+S"
           >
-            {saving ? null : dirtyCount === 0 ? <Icon.Check /> : null}
+            {saving ? null : changes.count === 0 ? <Icon.Check /> : null}
             {saving
               ? t("editor.saving")
-              : dirtyCount > 0
-                ? t("editor.saveCount", { n: dirtyCount })
+              : changes.count > 0
+                ? t("editor.saveCount", { n: changes.count })
                 : t("editor.saved")}
           </Button>
         </div>
@@ -830,12 +949,21 @@ export function SlideEditor({
       ) : null}
 
       {/* ---------------------------------------------------------- body */}
-      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-[118px_minmax(0,1fr)_360px] lg:overflow-hidden xl:grid-cols-[128px_minmax(0,1fr)_380px]">
+      <div
+        className={cn(
+          "grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-[118px_minmax(0,1fr)_360px] lg:overflow-hidden xl:grid-cols-[128px_minmax(0,1fr)_380px]",
+          saving && "pointer-events-none opacity-80",
+        )}
+      >
         <div className="border-b border-[var(--color-line)] bg-[var(--color-surface-muted)]/60 lg:min-h-0 lg:overflow-y-auto lg:border-r lg:border-b-0">
           <Filmstrip
             items={items}
             active={active}
+            disabled={saving}
             onGo={go}
+            onReorder={reorder}
+            onAdd={() => setPicker({ purpose: "add", tab: "templates" })}
+            canAdd={total < MAX_CAROUSEL_SLIDES}
             label={(i) => t("editor.slideOf", { n: i + 1, total })}
           />
         </div>
@@ -886,9 +1014,7 @@ export function SlideEditor({
               }}
             />
 
-            {src && broken.has(src) ? (
-              <Notice tone="danger">{t("editor.imageBroken")}</Notice>
-            ) : null}
+            {src && broken.has(src) ? <Notice tone="danger">{t("editor.imageBroken")}</Notice> : null}
 
             {issues.length > 0 ? (
               <div className="flex flex-wrap items-center gap-1.5">
@@ -925,7 +1051,7 @@ export function SlideEditor({
             words={words}
             lang={lang}
             selected={selected}
-            isMention={isMention}
+            isMention={slide.mention}
             onSelect={setSelected}
             onText={setText}
           />
@@ -951,16 +1077,26 @@ export function SlideEditor({
               setMode(m);
             }}
             onPhoto={setPhoto}
-            onOpenPicker={() => setPicker(isMention ? "cta" : plant ? "plant" : "all")}
+            onOpenPicker={() =>
+              setPicker({
+                purpose: "replace",
+                tab: slide.mention ? "cta" : plant ? "plant" : "all",
+              })
+            }
             photoChanged={photoIsNew}
             imagePrompt={slide.imagePrompt}
             hasPexels={hasPexels}
             regen={{
-              busy: regen?.busy === true && regen.index === active,
-              elsewhere: regen?.busy === true && regen.index !== active,
-              error: regen && regen.index === active ? regen.error : null,
+              busy: regen?.busy === true && regen.uid === slide.uid,
+              elsewhere: regen?.busy === true && regen.uid !== slide.uid,
+              error: regen && regen.uid === slide.uid ? regen.error : null,
             }}
             onRegenerate={(prompt, source) => void regenerate(prompt, source)}
+            onDuplicate={duplicate}
+            onRemove={removeSlide}
+            canRemove={total > 1}
+            onSaveTemplate={openSaveTemplate}
+            canSaveTemplate={Boolean(slide.mediaId)}
           />
           <AllSlidesSection
             count={total}
@@ -976,14 +1112,60 @@ export function SlideEditor({
         <PhotoPicker
           plantSlug={carousel.plantSlug}
           plantLabel={plant?.primary ?? carousel.plantName}
-          currentId={slide.mediaId}
+          currentId={picker.purpose === "replace" ? slide.mediaId : null}
           plants={plants}
-          initialTab={picker}
+          initialTab={picker.tab}
+          title={picker.purpose === "add" ? t("editor.addSlideTitle") : undefined}
+          templates={
+            picker.purpose === "add"
+              ? { count: templates.templates?.length ?? 0, render: templateGrid }
+              : undefined
+          }
           onPick={(asset) => {
-            applyAsset(asset, active);
+            if (picker.purpose === "add") {
+              addFromLibrary(asset);
+              return;
+            }
+            applyAsset(asset, slide.uid);
             setPicker(null);
           }}
           onClose={() => setPicker(null)}
+        />
+      ) : null}
+
+      {templateDialog ? (
+        <TemplateDialog
+          title={
+            templateDialog.mode === "create" ? t("templates.createTitle") : t("templates.editTitle")
+          }
+          initialLang={lang}
+          initial={
+            templateDialog.mode === "create"
+              ? templateDialog.draft
+              : {
+                  name: templateDialog.template.name,
+                  kind: templateDialog.template.kind,
+                  mediaId: templateDialog.template.mediaId,
+                  overlay: templateDialog.template.overlay,
+                  text: Object.fromEntries(
+                    Object.entries(templateDialog.template.text).map(([l, w]) => [
+                      l,
+                      { title: w?.title ?? "", subtitle: w?.subtitle ?? "", cta: w?.cta ?? "" },
+                    ]),
+                  ),
+                }
+          }
+          onSave={async (draft) => {
+            if (templateDialog.mode === "create") {
+              await templates.save(draft);
+              flash(t("templates.saved", { name: draft.name }));
+            } else {
+              await templates.save(draft, templateDialog.template.id);
+              flash(t("templates.updated", { name: draft.name }));
+            }
+            setTemplateDialog(null);
+          }}
+          onClose={() => setTemplateDialog(null)}
         />
       ) : null}
 
@@ -1014,7 +1196,7 @@ export function SlideEditor({
         <Layer onDismiss={() => setConfirmClose(false)} label={t("editor.unsavedTitle")}>
           <h3 className="text-[16px] font-semibold">{t("editor.unsavedTitle")}</h3>
           <p className="mt-1.5 text-[13.5px] leading-relaxed text-[var(--color-ink-soft)]">
-            {t("editor.unsavedBody", { n: dirtyCount })}
+            {t("editor.unsavedBody", { n: changes.count })}
           </p>
           <div className="mt-5 flex flex-wrap justify-end gap-2">
             <Button size="sm" variant="ghost" onClick={() => setConfirmClose(false)}>
@@ -1042,12 +1224,21 @@ export function SlideEditor({
       {toast ? (
         <div
           role="status"
-          className="pointer-events-none fixed bottom-6 left-1/2 z-[80] -translate-x-1/2 rounded-full bg-[var(--color-ink-fill)] px-4 py-2 text-[13px] font-medium text-[var(--color-canvas)] shadow-[var(--shadow-raised)]"
+          className="pointer-events-none fixed bottom-6 left-1/2 z-[80] max-w-[90vw] -translate-x-1/2 rounded-full bg-[var(--color-ink-fill)] px-4 py-2 text-center text-[13px] font-medium text-[var(--color-canvas)] shadow-[var(--shadow-raised)]"
         >
           {toast}
         </div>
       ) : null}
     </div>
+  );
+}
+
+function barClass(pressed: boolean | undefined): string {
+  return cn(
+    "inline-flex h-9 items-center gap-1.5 rounded-[10px] px-2.5 text-[13px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-35",
+    pressed
+      ? "bg-[var(--color-accent-soft)] text-[var(--color-accent-ink)]"
+      : "text-[var(--color-ink-soft)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-ink)] aria-expanded:bg-[var(--color-surface-muted)] aria-expanded:text-[var(--color-ink)]",
   );
 }
 
@@ -1072,12 +1263,7 @@ function BarButton({
       aria-pressed={pressed}
       onClick={onClick}
       disabled={disabled}
-      className={cn(
-        "inline-flex h-9 items-center gap-1.5 rounded-[10px] px-2.5 text-[13px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-35",
-        pressed
-          ? "bg-[var(--color-accent-soft)] text-[var(--color-accent-ink)]"
-          : "text-[var(--color-ink-soft)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-ink)]",
-      )}
+      className={barClass(pressed)}
     >
       {children}
     </button>

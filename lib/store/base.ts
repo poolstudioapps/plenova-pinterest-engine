@@ -5,6 +5,7 @@ import type {
   MediaAsset,
   PinRecord,
   PinterestConnection,
+  SlideTemplate,
   TikTokAccount,
   TikTokAccounts,
 } from "@/lib/types";
@@ -15,6 +16,7 @@ import {
   ConcurrentWrite,
   normaliseAccounts,
   normaliseCarousel,
+  normaliseTemplate,
   type EngineStore,
   type PinFilter,
   type StateDocument,
@@ -325,6 +327,32 @@ export abstract class DocumentStore implements EngineStore {
   async deleteCarousel(id: string): Promise<void> {
     await this.mutate((doc) => {
       delete doc.carousels?.[id];
+    });
+  }
+
+  async listSlideTemplates(): Promise<SlideTemplate[]> {
+    const doc = await this.read();
+    return Object.values(doc.slideTemplates ?? {})
+      .map(normaliseTemplate)
+      .filter((t): t is SlideTemplate => t !== null)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  }
+
+  async getSlideTemplate(id: string): Promise<SlideTemplate | null> {
+    const doc = await this.read();
+    return normaliseTemplate(doc.slideTemplates?.[id]);
+  }
+
+  async saveSlideTemplate(template: SlideTemplate): Promise<void> {
+    await this.mutate((doc) => {
+      doc.slideTemplates ??= {};
+      doc.slideTemplates[template.id] = template;
+    });
+  }
+
+  async deleteSlideTemplate(id: string): Promise<void> {
+    await this.mutate((doc) => {
+      delete doc.slideTemplates?.[id];
     });
   }
 

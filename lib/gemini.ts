@@ -104,6 +104,32 @@ function normaliseCopy(raw: RawCopy): GeneratedCopy {
   };
 }
 
+/**
+ * Trouble that is Gemini's and passes: overload, a 5xx, a dropped connection.
+ *
+ * A carousel concept failed on exactly this - "Gemini a échoué pendant la
+ * conception du carrousel", with nothing to act on - while the same call
+ * worked a minute later. Worth trying again before giving up.
+ */
+function isTransient(err: unknown): boolean {
+  const m = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  return /(500|502|503|504)|overloaded|unavailable|internal error|deadline|timed? ?out|econnreset|fetch failed|socket hang up/.test(
+    m,
+  );
+}
+
+/** Up to three tries, a few seconds apart, for transient failures only. */
+async function withRetry<T>(call: () => Promise<T>, attempts = 3): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await call();
+    } catch (err) {
+      if (attempt >= attempts || !isTransient(err)) throw err;
+      await new Promise((resolve) => setTimeout(resolve, 1500 * 2 ** (attempt - 1)));
+    }
+  }
+}
+
 /** Wraps upstream failures so we never surface a raw SDK error to the client. */
 function wrapUpstream(err: unknown, what: string): never {
   const message = err instanceof Error ? err.message : String(err);
@@ -129,6 +155,12 @@ function wrapUpstream(err: unknown, what: string): never {
       `Gemini a bloqué la demande pendant ${what}. Essaie un autre angle ou une autre direction personnalisée.`,
     );
   }
+  if (isTransient(err)) {
+    throw upstream(
+      `Gemini est momentanément surchargé pendant ${what}. Réessaie dans une minute.`,
+      { reason: message.slice(0, 300) },
+    );
+  }
   throw upstream(`Gemini a échoué pendant ${what}.`, { reason: message.slice(0, 300) });
 }
 
@@ -140,7 +172,7 @@ export async function generatePinCopy(
   const prompt = buildCopyPrompt(input);
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await withRetry(() => ai.models.generateContent({
       model: config.gemini.textModel,
       contents: prompt,
       config: {
@@ -150,7 +182,7 @@ export async function generatePinCopy(
         // High enough that variations genuinely diverge, low enough to stay factual.
         temperature: 1.0,
       },
-    });
+    }));
 
     const text = response.text;
     if (!text) throw upstream("Gemini a renvoyé une réponse vide pour le texte.");
@@ -183,7 +215,7 @@ export async function generatePinImage(
   const prompt = buildImagePrompt(imagePrompt, style);
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await withRetry(() => ai.models.generateContent({
       model: config.gemini.imageModel,
       contents: prompt,
       config: {
@@ -195,7 +227,7 @@ export async function generatePinImage(
           imageSize: "2K",
         },
       },
-    });
+    }));
 
     const parts = response.candidates?.[0]?.content?.parts ?? [];
     for (const part of parts) {
@@ -249,7 +281,7 @@ export async function generateCarouselConcept(
   };
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await withRetry(() => ai.models.generateContent({
       model: config.gemini.textModel,
       contents: buildCarouselPrompt(input),
       config: {
@@ -261,7 +293,7 @@ export async function generateCarouselConcept(
         >,
         temperature: 1.0,
       },
-    });
+    }));
 
     const text = response.text;
     if (!text) throw upstream("Gemini a renvoyé un concept de carrousel vide.");
@@ -410,7 +442,7 @@ export async function reinterpretImage(
   ].join("\n");
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await withRetry(() => ai.models.generateContent({
       model: config.gemini.imageModel,
       contents: [
         {
@@ -430,7 +462,7 @@ export async function reinterpretImage(
         responseModalities: ["IMAGE"],
         imageConfig: { aspectRatio, imageSize: "2K" },
       },
-    });
+    }));
 
     const parts = response.candidates?.[0]?.content?.parts ?? [];
     for (const part of parts) {
@@ -446,5 +478,90 @@ export async function reinterpretImage(
   } catch (err) {
     if (err && typeof err === "object" && "code" in err) throw err;
     wrapUpstream(err, "la réinterprétation de la photo de référence");
+  }
+}
+
+const LANGUAGE_NAMES: Record<ContentLocale, string> = {
+  fr: "French",
+  en: "English",
+  es: "Spanish",
+  de: "German",
+  it: "Italian",
+};
+
+/**
+ * One slide's words, carried into other languages.
+ *
+ * For saved slides - the CTA above all - written once and needed in every
+ * language a carousel may be published in. The words are adapted the way a
+ * native TikTok creator would put them rather than translated word for word,
+ * stay as short as the original, keep their line breaks, and never translate
+ * the brand. An empty field stays empty.
+ */
+export async function translateSlideCopy(input: {
+  from: ContentLocale;
+  text: { title: string; subtitle: string; cta: string };
+  to: ContentLocale[];
+}): Promise<Partial<Record<ContentLocale, { title: string; subtitle: string; cta: string }>>> {
+  const ai = getClient();
+  const targets = input.to.filter((l) => l !== input.from);
+  if (targets.length === 0) return {};
+
+  const field = { type: "string" };
+  const schema = {
+    type: "object",
+    properties: Object.fromEntries(
+      targets.map((l) => [
+        l,
+        {
+          type: "object",
+          properties: { title: field, subtitle: field, cta: field },
+          required: ["title", "subtitle", "cta"],
+        },
+      ]),
+    ),
+    required: targets,
+  };
+
+  const prompt = [
+    `Adapt the words of one TikTok carousel slide from ${LANGUAGE_NAMES[input.from]} into ${targets
+      .map((l) => `${LANGUAGE_NAMES[l]} (key "${l}")`)
+      .join(", ")}.`,
+    "Write each one the way a native TikTok creator in that language would say it: natural, spoken, as short as the original - never longer.",
+    'Keep the brand name "Plenova" exactly as it is. Keep line breaks where the original has them. Keep emoji. A field that is empty in the original stays empty.',
+    "",
+    JSON.stringify(input.text),
+  ].join("\n");
+
+  try {
+    const response = await withRetry(() => ai.models.generateContent({
+      model: config.gemini.textModel,
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: schema as unknown as Record<string, unknown>,
+        temperature: 0.4,
+      },
+    }));
+    const raw = response.text;
+    if (!raw) throw upstream("Gemini a renvoyé une traduction vide.");
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      throw upstream("Gemini a renvoyé une traduction qui n'est pas du JSON valide.");
+    }
+    const out: Partial<Record<ContentLocale, { title: string; subtitle: string; cta: string }>> = {};
+    for (const l of targets) {
+      const t = (parsed[l] ?? {}) as Record<string, unknown>;
+      const pick = (key: "title" | "subtitle" | "cta") =>
+        // An empty original stays empty, whatever came back.
+        input.text[key].trim() && typeof t[key] === "string" ? (t[key] as string).trim() : "";
+      out[l] = { title: pick("title"), subtitle: pick("subtitle"), cta: pick("cta") };
+    }
+    return out;
+  } catch (err) {
+    if (err && typeof err === "object" && "code" in err) throw err;
+    wrapUpstream(err, "la traduction de la slide");
   }
 }

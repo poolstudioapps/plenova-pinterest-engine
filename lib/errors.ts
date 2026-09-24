@@ -12,6 +12,7 @@ export type ErrorCode =
   | "rate_limited"
   | "duplicate"
   | "not_found"
+  | "conflict"
   | "internal";
 
 export class AppError extends Error {
@@ -44,6 +45,8 @@ export const upstream = (m: string, d?: unknown) =>
 export const rateLimited = (m: string) => new AppError("rate_limited", m, 429);
 export const duplicate = (m: string, d?: unknown) =>
   new AppError("duplicate", m, 409, d);
+/** The thing changed elsewhere since the request was prepared. */
+export const conflict = (m: string) => new AppError("conflict", m, 409);
 
 /** Strings that must never reach a log line or an HTTP response body. */
 const SECRET_ENV_KEYS = [

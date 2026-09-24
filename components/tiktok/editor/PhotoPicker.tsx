@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button, FileDropZone, Notice, PlantName, Spinner } from "@/components/ui";
 import { shrinkImage } from "@/lib/client-image";
 import type { PlantIdentity } from "@/lib/data/localize";
@@ -10,9 +10,10 @@ import type { MediaAsset } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import * as Icon from "./icons";
 
-export type PickerTab = "plant" | "hook" | "cta" | "all";
+export type PickerTab = "templates" | "plant" | "hook" | "cta" | "all";
+type LibraryTab = Exclude<PickerTab, "templates">;
 
-const TABS: { id: PickerTab; label: TranslationKey }[] = [
+const TABS: { id: LibraryTab; label: TranslationKey }[] = [
   { id: "plant", label: "editor.pickerPlant" },
   { id: "hook", label: "media.shelfHook" },
   { id: "cta", label: "media.shelfCta" },
@@ -29,6 +30,13 @@ interface Props {
   initialTab: PickerTab;
   onPick: (asset: MediaAsset) => void;
   onClose: () => void;
+  /** Defaults to "choose a photo". */
+  title?: string;
+  /**
+   * Saved slides, offered as a first tab when a slide is being ADDED - a
+   * slide ready with its words is exactly what adding a CTA wants.
+   */
+  templates?: { count: number; render: (search: string) => ReactNode };
 }
 
 /**
@@ -49,6 +57,8 @@ export function PhotoPicker({
   initialTab,
   onPick,
   onClose,
+  title,
+  templates,
 }: Props) {
   const t = translator();
   const catalog = useMemo(() => new Map(plants.map((p) => [p.slug, p])), [plants]);
@@ -57,8 +67,13 @@ export function PhotoPicker({
   const [assets, setAssets] = useState<MediaAsset[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<PickerTab>(
-    !plantSlug && initialTab === "plant" ? "all" : initialTab,
+    !plantSlug && initialTab === "plant"
+      ? "all"
+      : !templates && initialTab === "templates"
+        ? "all"
+        : initialTab,
   );
+  const heading = title ?? t("editor.pickerTitle");
   const [search, setSearch] = useState("");
   const [uploading, setUploading] = useState<{ done: number; total: number } | null>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -98,7 +113,7 @@ export function PhotoPicker({
       identityForAsset(a, catalog).search.includes(q) ||
       normaliseSearch(a.prompt).includes(q) ||
       a.tags.some((tag) => normaliseSearch(tag).includes(q));
-    const by: Record<PickerTab, MediaAsset[]> = { plant: [], hook: [], cta: [], all: [] };
+    const by: Record<LibraryTab, MediaAsset[]> = { plant: [], hook: [], cta: [], all: [] };
     for (const a of assets ?? []) {
       if (!matches(a)) continue;
       by.all.push(a);
@@ -111,7 +126,8 @@ export function PhotoPicker({
   }, [assets, search, catalog, known, plantSlug]);
 
   const tabs = TABS.filter((tb) => tb.id !== "plant" || plantSlug);
-  const list = shelves[tab];
+  const onTemplates = tab === "templates";
+  const list = onTemplates ? [] : shelves[tab];
 
   // Where a picture brought in lands: the shelf on screen, or the carousel's
   // own plant from the whole-library view.
@@ -180,16 +196,35 @@ export function PhotoPicker({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={t("editor.pickerTitle")}
+        aria-label={heading}
         className="flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-line)] bg-[var(--color-surface)] shadow-[var(--shadow-raised)]"
       >
         <header className="flex flex-wrap items-center gap-3 border-b border-[var(--color-line)] px-5 py-3.5">
-          <h3 className="text-[15px] font-semibold">{t("editor.pickerTitle")}</h3>
+          <h3 className="text-[15px] font-semibold">{heading}</h3>
           <div
             role="tablist"
-            aria-label={t("editor.pickerTitle")}
+            aria-label={heading}
             className="flex flex-wrap gap-1 rounded-full bg-[var(--color-surface-muted)] p-1"
           >
+            {templates ? (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={onTemplates}
+                onClick={() => setTab("templates")}
+                className={cn(
+                  "rounded-full px-3 py-1 text-[12.5px] font-medium transition-colors",
+                  onTemplates
+                    ? "bg-[var(--color-surface)] text-[var(--color-ink)] shadow-[var(--shadow-card)]"
+                    : "text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]",
+                )}
+              >
+                {t("editor.pickerTemplates")}
+                <span className="ml-1.5 text-[11px] text-[var(--color-ink-faint)]">
+                  {templates.count}
+                </span>
+              </button>
+            ) : null}
             {tabs.map((tb) => (
               <button
                 key={tb.id}
@@ -238,6 +273,7 @@ export function PhotoPicker({
               size="sm"
               onClick={() => input.current?.click()}
               loading={uploading !== null}
+              className={onTemplates ? "hidden" : undefined}
             >
               {uploading ? null : <Icon.Upload />}
               {uploading
@@ -261,6 +297,9 @@ export function PhotoPicker({
               <Notice tone="danger">{error}</Notice>
             </div>
           ) : null}
+          {onTemplates && templates ? (
+            templates.render(search)
+          ) : (
           <FileDropZone
             onFiles={(files) => void upload(files)}
             label={t("editor.pickerDrop", { shelf: targetLabel })}
@@ -343,10 +382,13 @@ export function PhotoPicker({
               </div>
             )}
           </FileDropZone>
+          )}
         </div>
 
         <footer className="border-t border-[var(--color-line)] px-5 py-2.5 text-[12px] text-[var(--color-ink-faint)]">
-          {t("editor.pickerUploadTo", { shelf: targetLabel })}
+          {onTemplates
+            ? t("editor.pickerTemplatesHint")
+            : t("editor.pickerUploadTo", { shelf: targetLabel })}
         </footer>
       </div>
     </div>

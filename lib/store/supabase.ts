@@ -9,12 +9,14 @@ import type {
   MediaAsset,
   PinRecord,
   PinterestConnection,
+  SlideTemplate,
   TikTokAccount,
 } from "@/lib/types";
 import {
   applyFilter,
   normaliseAccounts,
   normaliseCarousel,
+  normaliseTemplate,
   type EngineStore,
   type PinFilter,
 } from "./types";
@@ -361,6 +363,44 @@ export class SupabaseStore implements EngineStore {
   async deleteCarousel(id: string): Promise<void> {
     const { error } = await db().from("carousels").delete().eq("id", id);
     check("suppression d'un carrousel", error);
+  }
+
+  // ------------------------------------------------------- saved slides
+
+  async listSlideTemplates(): Promise<SlideTemplate[]> {
+    const { data, error } = await db()
+      .from("slide_templates")
+      .select("data")
+      .order("updated_at", { ascending: false });
+    check("lecture des slides prêtes", error);
+    return (data ?? [])
+      .map((row) => normaliseTemplate(row.data))
+      .filter((t): t is SlideTemplate => t !== null);
+  }
+
+  async getSlideTemplate(id: string): Promise<SlideTemplate | null> {
+    const { data, error } = await db()
+      .from("slide_templates")
+      .select("data")
+      .eq("id", id)
+      .maybeSingle();
+    check("lecture d'une slide prête", error);
+    return data ? normaliseTemplate(data.data) : null;
+  }
+
+  async saveSlideTemplate(template: SlideTemplate): Promise<void> {
+    const { error } = await db().from("slide_templates").upsert({
+      id: template.id,
+      data: template,
+      created_at: template.createdAt,
+      updated_at: template.updatedAt,
+    });
+    check("enregistrement d'une slide prête", error);
+  }
+
+  async deleteSlideTemplate(id: string): Promise<void> {
+    const { error } = await db().from("slide_templates").delete().eq("id", id);
+    check("suppression d'une slide prête", error);
   }
 }
 
