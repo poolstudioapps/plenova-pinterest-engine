@@ -99,6 +99,13 @@ export async function sendCode(email: string): Promise<OtpResult> {
       // The allowlist already decided who may be here, so a first sign-in is
       // allowed to create the Supabase user it needs.
       shouldCreateUser: true,
+      /*
+       * Where the link in the mail lands. Supabase only honours this if the
+       * URL is on the project's Redirect URLs list; otherwise it falls back to
+       * the Site URL - which is how a link pointed at localhost and could not
+       * sign anyone into production.
+       */
+      emailRedirectTo: `${config.app.url.replace(/\/+$/, "")}/login`,
     },
   });
 
@@ -129,4 +136,21 @@ export async function checkCode(email: string, code: string): Promise<boolean> {
    * the next sign-in.
    */
   return isAllowed(email);
+}
+
+/**
+ * The address behind a sign-in link.
+ *
+ * Supabase's mail may carry a link rather than a code, depending on its
+ * template. Clicking it verifies the address with Supabase and lands on /login
+ * with an access token in the URL fragment. That token is a JWT Supabase
+ * signed, and `getUser` asks Supabase itself whether it is genuine - it is
+ * never trusted just for being well-formed.
+ */
+export async function emailFromAccessToken(token: string): Promise<string | null> {
+  const supabase = otp();
+  if (!supabase) return null;
+  const { data, error } = await supabase.auth.getUser(token);
+  if (error || !data.user?.email) return null;
+  return data.user.email.trim().toLowerCase();
 }

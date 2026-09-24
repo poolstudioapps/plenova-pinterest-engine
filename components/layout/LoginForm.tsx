@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button, Card, Field, Input, Notice } from "@/components/ui";
 import { translator } from "@/lib/i18n";
@@ -23,6 +23,54 @@ export function LoginForm() {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  /*
+   * Arriving from the link in the mail.
+   *
+   * Supabase puts the access token in the URL fragment, which never reaches
+   * the server, so it is read here and handed over once. The fragment is
+   * wiped from the address bar first: a token left there would sit in the
+   * browser history.
+   */
+  const [fromLink, setFromLink] = useState(false);
+  useEffect(() => {
+    const hash = new URLSearchParams(window.location.hash.slice(1));
+    const accessToken = hash.get("access_token");
+    const failure = hash.get("error_description");
+    if (!accessToken && !failure) return;
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
+
+    if (failure) {
+      setError(failure.replace(/\+/g, " "));
+      return;
+    }
+    setFromLink(true);
+    void (async () => {
+      try {
+        const res = await fetch("/api/auth/link", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ accessToken }),
+        });
+        if (!res.ok) {
+          const data = (await res.json().catch(() => ({}))) as {
+            error?: { message?: string };
+          };
+          setError(data.error?.message ?? t("login.badCode"));
+          setFromLink(false);
+          return;
+        }
+        const next = params.get("next");
+        router.replace(next && next.startsWith("/") ? next : "/");
+        router.refresh();
+      } catch {
+        setError(t("login.unreachable"));
+        setFromLink(false);
+      }
+    })();
+    // Runs once, on arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function requestCode(event: React.FormEvent) {
     event.preventDefault();
@@ -79,6 +127,16 @@ export function LoginForm() {
     } finally {
       setBusy(false);
     }
+  }
+
+  if (fromLink) {
+    return (
+      <Card className="p-6">
+        <p className="text-center text-[14px] text-[var(--color-ink-soft)]">
+          {t("login.checkingLink")}
+        </p>
+      </Card>
+    );
   }
 
   return (
