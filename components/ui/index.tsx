@@ -12,6 +12,7 @@ import type { PlantIdentity } from "@/lib/data/localize";
 import type { PinStatus } from "@/lib/types";
 
 export { Picker, MultiPicker, type PickerOption } from "./Picker";
+export { SortableGrid, FileDropZone } from "./Sortable";
 
 /* --------------------------------------------------------------- layout -- */
 
