@@ -23,12 +23,23 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(request: Request) {
   const secret = await sessionSecret();
-  if (!secret || !isAllowlistConfigured() || !isOtpConfigured()) {
+  /*
+   * Name what is missing. "Not configured" on its own sent the owner to guess
+   * between three variables; naming the one that is absent turns a lockout
+   * into a thirty-second fix. Names only - never a value.
+   */
+  const missing = [
+    ...(secret ? [] : ["SESSION_SECRET (ou TOKEN_ENCRYPTION_KEY)"]),
+    ...(isAllowlistConfigured() ? [] : ["SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY"]),
+    ...(isOtpConfigured() ? [] : ["SUPABASE_PUBLISHABLE_KEY"]),
+  ];
+  if (missing.length > 0) {
     return NextResponse.json(
       {
         error: {
           code: "not_configured",
-          message: "La connexion n'est pas configurée sur ce déploiement.",
+          message: `La connexion n'est pas configurée : il manque ${missing.join(", ")}.`,
+          missing,
         },
       },
       { status: 503 },
