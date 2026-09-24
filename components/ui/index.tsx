@@ -34,7 +34,7 @@ export function SectionHeader({
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
       <div>
-        <h1 className="text-[30px] font-semibold tracking-[-0.025em] text-[var(--color-ink)]">
+        <h1 className="text-[30px] font-extrabold tracking-[-0.03em] text-[var(--color-ink)]">
           {title}
         </h1>
         {description ? (
@@ -50,7 +50,7 @@ export function SectionHeader({
 
 /* --------------------------------------------------------------- button -- */
 
-type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
+type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "ink";
 
 /*
  * A disabled primary used to be the accent at forty per cent, which reads as a
@@ -62,14 +62,17 @@ const DISABLED =
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
   primary: `bg-[var(--color-accent)] text-white border border-transparent shadow-[var(--shadow-card)] hover:brightness-110 active:brightness-95 ${DISABLED}`,
-  secondary: `bg-[var(--color-surface)] text-[var(--color-ink)] border border-[var(--color-line-strong)] hover:border-[var(--color-ink-faint)] hover:bg-[var(--color-surface-muted)] ${DISABLED}`,
+  /* The site's own strongest call to action: near-black green, white text. */
+  ink: `bg-[var(--color-ink-fill)] text-[var(--color-canvas)] border border-transparent shadow-[var(--shadow-card)] hover:brightness-125 active:brightness-100 ${DISABLED}`,
+  secondary: `bg-[var(--color-surface)] text-[var(--color-ink)] border border-[var(--color-line-strong)] hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-muted)] ${DISABLED}`,
   ghost: `text-[var(--color-ink-soft)] border border-transparent hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-ink)] ${DISABLED} disabled:bg-transparent`,
   danger: `bg-[var(--color-danger)] text-white border border-transparent hover:brightness-110 ${DISABLED}`,
 };
 
+/* Generous horizontal padding, because a pill needs it to read as one. */
 const BUTTON_SIZES = {
-  md: "px-4 py-2.5 text-[14px]",
-  sm: "px-3 py-1.5 text-[13px]",
+  md: "px-5 py-2.5 text-[14px]",
+  sm: "px-3.5 py-1.5 text-[13px]",
 } as const;
 
 export function Button({
@@ -89,7 +92,7 @@ export function Button({
       {...props}
       disabled={props.disabled || loading}
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-[var(--radius-control)] font-medium transition-[filter,background-color,border-color,box-shadow] disabled:cursor-not-allowed",
+        "inline-flex items-center justify-center gap-2 rounded-[var(--radius-pill)] font-medium transition-[filter,background-color,border-color,box-shadow] disabled:cursor-not-allowed",
         BUTTON_SIZES[size],
         BUTTON_VARIANTS[variant],
         className,

@@ -1,6 +1,18 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import { Sidebar } from "@/components/layout/Sidebar";
 import "./globals.css";
+
+/*
+ * plenova.fr is set in Inter Variable. Loading it through next/font rather
+ * than a stylesheet link keeps it self-hosted and removes the render-blocking
+ * request, and the CSS variable is what --font-sans points at in globals.css.
+ */
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Plenova Studio",
@@ -15,7 +27,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="fr">
+    <html lang="fr" className={inter.variable}>
       <body className="min-h-dvh">
         <div className="md:flex">
           <Sidebar />

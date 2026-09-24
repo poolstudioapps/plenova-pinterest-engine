@@ -1,56 +1,62 @@
 @import "tailwindcss";
 
 /*
- * Design system (spec §28): minimal, Apple-like, generous whitespace, subtle
- * borders, rounded cards. One accent colour, used sparingly. Light and dark
- * both first-class.
+ * The Plenova design system.
+ *
+ * Every value here is taken from plenova.fr rather than invented: the greens,
+ * the pale canvas, the pill geometry and the green-tinted shadow are measured
+ * from the live site so the studio reads as the same product as the app it
+ * makes content for.
+ *
+ * The scale, in one sentence each:
+ *  - canvas / surface / surface-muted  the three grounds, palest to soft green
+ *  - ink / ink-soft / ink-faint        the three text weights
+ *  - accent / accent-soft / accent-ink the one green, its wash and its text
+ *  - radius-pill                       the site's signature: controls are
+ *                                      pills, containers are 20px
  */
 @theme {
-  --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
+  /* plenova.fr sets Inter Variable; next/font loads it and binds it here. */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 
-  --color-canvas: oklch(99.2% 0.002 106);
-  --color-surface: oklch(100% 0 0);
-  --color-surface-muted: oklch(97.4% 0.003 106);
-  --color-line: oklch(92.4% 0.004 106);
-  --color-line-strong: oklch(86% 0.005 106);
-  --color-ink: oklch(21% 0.008 106);
-  /*
-   * Secondary and tertiary text were set so light that every explanation on
-   * every screen read as noise to be skipped. They are darkened to the point
-   * where a sentence in them is worth reading, which is the only reason to
-   * write one.
-   */
-  --color-ink-soft: oklch(42% 0.008 106);
-  --color-ink-faint: oklch(52% 0.008 106);
+  /* Grounds. #F2F8F0 is the site's page colour, #E8F1E4 its soft panel. */
+  --color-canvas: #f2f8f0;
+  --color-surface: #ffffff;
+  --color-surface-muted: #e8f1e4;
+  --color-line: #dbe7d6;
+  --color-line-strong: #c4d6bd;
 
-  /* Plenova green - the single accent. */
-  --color-accent: oklch(56% 0.106 158);
-  --color-accent-soft: oklch(95.5% 0.028 158);
-  --color-accent-ink: oklch(38% 0.09 158);
+  /* Text. #0E1A0C is the site's near-black green, never pure black. */
+  --color-ink: #0e1a0c;
+  --color-ink-soft: #3a463a;
+  --color-ink-faint: #6b7869;
 
-  --color-danger: oklch(56% 0.19 25);
-  --color-danger-soft: oklch(96% 0.03 25);
-  --color-warn: oklch(64% 0.14 75);
-  /*
-   * Text colour for a notice, not the accent colour. The accent on its own
-   * soft background measured 3.07:1, which is below the 4.5:1 body text needs
-   * - and the notice that explains why connecting fails was the least
-   * readable text on the screen.
-   */
-  --color-warn-ink: oklch(42% 0.11 75);
-  --color-warn-soft: oklch(96.5% 0.04 75);
+  /* The one green: #2D6B5E fills, #174238 writes on its wash. */
+  --color-accent: #2d6b5e;
+  --color-accent-soft: #e3ecdf;
+  --color-accent-ink: #174238;
+  /* The darkest fill on the site, used for its primary download buttons. */
+  --color-ink-fill: #0e1a0c;
 
-  --radius-card: 16px;
-  --radius-control: 10px;
+  --color-danger: #b4402f;
+  --color-danger-soft: #fbeae7;
+  /* The site's warm amber, its only non-green accent. */
+  --color-warn: #b07617;
+  --color-warn-ink: #7a5210;
+  --color-warn-soft: #fdf4e3;
+
+  --radius-card: 20px;
+  --radius-control: 12px;
+  /* 251 elements on plenova.fr use it - it is the brand's geometry. */
+  --radius-pill: 9999px;
 
   /*
-   * Cards were a one pixel border and nothing else, so a page of them read as
-   * one flat grey field. A shadow this quiet is not decoration: it is what
-   * tells the eye where one thing ends and the next begins.
+   * Measured from the site: a hairline plus a wide, soft, GREEN-tinted lift.
+   * A neutral grey shadow on this canvas reads as dirt.
    */
-  --shadow-card: 0 1px 2px oklch(20% 0.01 106 / 0.04), 0 4px 12px oklch(20% 0.01 106 / 0.05);
-  --shadow-raised: 0 1px 2px oklch(20% 0.01 106 / 0.06), 0 8px 24px oklch(20% 0.01 106 / 0.08);
+  --shadow-card: 0 1px 2px rgb(29 47 27 / 0.04), 0 10px 24px -18px rgb(29 47 27 / 0.45);
+  --shadow-raised: 0 1px 2px rgb(23 66 56 / 0.06), 0 14px 32px -16px rgb(23 66 56 / 0.35);
 }
 
 @layer base {
@@ -86,14 +92,16 @@
     :root {
       color-scheme: dark;
 
-      --color-canvas: oklch(16.5% 0.006 106);
-      --color-surface: oklch(20.5% 0.007 106);
-      --color-surface-muted: oklch(24% 0.007 106);
-      --color-line: oklch(28.5% 0.008 106);
-      --color-line-strong: oklch(36% 0.009 106);
-      --color-ink: oklch(96% 0.003 106);
-      --color-ink-soft: oklch(76% 0.006 106);
-      --color-ink-faint: oklch(63% 0.007 106);
+      /* The same greens, grounds inverted - not a neutral grey dark mode. */
+      --color-canvas: #0b140a;
+      --color-surface: #131f11;
+      --color-surface-muted: #1a2818;
+      --color-line: #253522;
+      --color-line-strong: #33472f;
+      --color-ink: #eef5ec;
+      --color-ink-soft: #b3c2af;
+      --color-ink-faint: #8a9a86;
+      --color-ink-fill: #eef5ec;
 
       /*
        * A light-ink shadow is invisible on a dark ground, so the separation
@@ -105,15 +113,15 @@
       --shadow-raised: 0 2px 4px oklch(0% 0 0 / 0.5), 0 10px 30px oklch(0% 0 0 / 0.4),
         inset 0 1px 0 oklch(100% 0 0 / 0.04);
 
-      --color-accent: oklch(72% 0.12 158);
-      --color-accent-soft: oklch(28% 0.05 158);
-      --color-accent-ink: oklch(86% 0.09 158);
+      --color-accent: #5fa693;
+      --color-accent-soft: #1c2f26;
+      --color-accent-ink: #b9ddd1;
 
-      --color-danger: oklch(70% 0.16 25);
-      --color-danger-soft: oklch(28% 0.06 25);
-      --color-warn: oklch(78% 0.12 75);
-      --color-warn-ink: oklch(89% 0.09 75);
-      --color-warn-soft: oklch(29% 0.05 75);
+      --color-danger: #e08a7a;
+      --color-danger-soft: #2e1a17;
+      --color-warn: #dfae62;
+      --color-warn-ink: #f0d9ab;
+      --color-warn-soft: #2b2113;
     }
   }
 }
@@ -166,6 +174,7 @@
   }
 
   .input::file-selector-button {
+    border-radius: var(--radius-pill);
     margin: -0.55rem 0.75rem -0.55rem -0.75rem;
     padding: 0.55rem 0.9rem;
     border: 0;

@@ -443,9 +443,14 @@ export async function uploadComposedSlide(
 }
 
 /**
- * Records every composed slide for one language, in two writes.
+ * Records every composed slide for one language, in one write.
  *
- * One for the carousel, one for the media library, instead of two per slide.
+ * The composite - the photograph with the text burned into it - is what gets
+ * published, and it is kept on the carousel as `slide.composed[lang]`. It is
+ * deliberately NOT filed in the media library: the library is a library of
+ * PLANTS, and an image carrying "Top 5 des pothos rares" across it is not
+ * reusable for anything. Only the bare photograph belongs there, and
+ * `recordSlideImage` already put it there.
  */
 export async function recordComposedSlides(
   id: string,
@@ -465,38 +470,6 @@ export async function recordComposedSlides(
       : slide;
   });
 
-  const now = new Date().toISOString();
-  const assets: MediaAsset[] = [];
-  for (const [index, url] of byIndex) {
-    const slide = carousel.slides[index];
-    if (!slide) continue;
-    // File the composite alongside the bare photograph. It is what actually
-    // gets published, so it belongs in the library where it can be reviewed
-    // and reused - under the same species as the photograph it came from.
-    const bare = slide.mediaId ? await store.getMedia(slide.mediaId) : null;
-    assets.push({
-      id: `${slide.mediaId ?? `med_${id}_${index}`}_${language}`,
-      plantSlug: bare?.plantSlug ?? carousel.plantSlug ?? "unfiled",
-      plantName: bare?.plantName ?? carousel.plantName ?? carousel.theme,
-      variety: bare?.variety ?? null,
-      varietySlug: bare?.varietySlug ?? null,
-      url,
-      mimeType,
-      aspectRatio: bare?.aspectRatio ?? "4:5",
-      prompt: slide.imagePrompt,
-      visualStyle: "carousel-slide",
-      angleSlug: null,
-      source: "carousel",
-      sourceId: `${id}_${index}`,
-      referencePhotographer: bare?.referencePhotographer ?? null,
-      tags: [language, "slide"],
-      usedCount: 1,
-      lastUsedAt: now,
-      createdAt: now,
-    });
-  }
-
-  await store.saveManyMedia(assets);
 
   const updated: CarouselRecord = {
     ...carousel,
