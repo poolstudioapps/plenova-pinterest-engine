@@ -48,5 +48,10 @@ export const config = {
    * gate silently stopped protecting anything. Naming the paths cannot fail
    * that way.
    */
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|fonts/).*)"],
+  // The brand assets (the logo, the favicon) are open too: the login page
+  // shows them to someone who is by definition not signed in yet, and they
+  // are the product's public face rather than anything to protect.
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|brand/|fonts/).*)",
+  ],
 };

@@ -62,7 +62,7 @@ export function Sidebar() {
       className="flex gap-1 overflow-x-auto border-b border-[var(--color-line)] bg-[var(--color-surface)] px-4 py-3 md:sticky md:top-0 md:h-dvh md:w-64 md:shrink-0 md:flex-col md:gap-0 md:overflow-y-auto md:border-r md:border-b-0 md:px-3 md:py-6"
     >
       <div className="mb-0 hidden items-center gap-2.5 px-3 md:mb-7 md:flex">
-        <PlenovaMark className="size-8" />
+        <PlenovaMark size={32} />
         <div className="leading-tight">
           <p className="text-[14px] font-semibold tracking-[-0.01em]">Plenova</p>
           <p className="text-[11.5px] text-[var(--color-ink-faint)]">Studio</p>
