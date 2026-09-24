@@ -62,12 +62,21 @@ export default function PrivacyPage() {
       <p>The tool sends data to these services, and no others:</p>
       <ul>
         <li>
-          <strong>Google Gemini</strong> — receives the text prompts used to
-          generate content.
+          <strong>Google Gemini</strong> — receives the text prompts and the
+          reference images (stock photographs, screenshots supplied by the
+          operator) used to generate content.
+        </li>
+        <li>
+          <strong>Pexels</strong> — searched for reference photographs of a
+          plant; nothing is sent to it but the search terms.
+        </li>
+        <li>
+          <strong>Supabase</strong> — stores the tool&apos;s records and sends
+          the one-time sign-in emails to allow-listed staff.
         </li>
         <li>
           <strong>Vercel</strong> — hosts the application and stores generated
-          images and records.
+          images.
         </li>
         <li>
           <strong>Pinterest and TikTok</strong> — receive the content the

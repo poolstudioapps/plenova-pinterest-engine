@@ -471,6 +471,7 @@ const FR = {
   "repost.pick": "Choisir des captures",
   "repost.sending": "Envoi {done} sur {total}",
   "repost.start": "Refaire à notre sauce · {n}",
+  "repost.startEmpty": "Refaire à notre sauce",
   "carousels.composeBusy": "Attends la fin de la gravure déjà en cours.",
   "carousels.confirmDelete": "Clique encore pour supprimer",
   "carousels.openLabel": "Ouvrir ce carrousel",

@@ -234,7 +234,9 @@ export function RepostPanel({
    * spinning under a label that said it had not begun.
    */
   const label = !busy
-    ? t("repost.start", { n: files.length })
+    ? files.length > 0
+      ? t("repost.start", { n: files.length })
+      : t("repost.startEmpty")
     : sent < files.length
       ? t("repost.sending", { done: sent, total: files.length })
       : t("repost.reading");

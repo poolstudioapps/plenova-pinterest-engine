@@ -19,40 +19,29 @@ photo TikTok sur les plantes d'intérieur, via Gemini. Prod :
 de travail de la session) ni à l'ancien projet Plenova. Seul
 `plenova-pinterest-engine` est modifiable.
 
-## 2. État en ce moment
+## 2. État en ce moment (24/09)
 
 - **Serveur local** sur <http://localhost:3000> (`npm run dev:offline`). Il doit
-  rester allumé, l'utilisateur suit en direct.
-- **Un workflow tourne** : `wdeutpfdm` — 7 agents remplacent les `<Select>`
-  natifs restants par `<Picker>`, un fichier chacun. Lancés, aucun rendu au
-  moment d'écrire. Journal :
-  `…/subagents/workflows/wf_fcd037dd-8c9/journal.jsonl`.
-  Il finit par une relecture qui lance `npm run build` et vérifie le dialogue
-  de publication TikTok. **Lis son résultat avant de toucher à
-  `components/generate|library|media|tiktok/*`.**
+  rester allumé, l'utilisateur suit en direct. Données locales dans
+  `.data/state.json` : les 3 images CTA de l'utilisateur et un carrousel en
+  échec qu'il a lancé lui-même (« Top 4 des plus belles Monstera ») — ne pas
+  les supprimer.
+- Tout ce qui était dans la file ci-dessous est livré, testé, poussé et en
+  production (studio.latelierugc.com).
 
-## 3. La file d'attente, dans l'ordre convenu
+## 3. Ce qui reste
 
-1. ~~Remplacer les `<select>` restants~~ → workflow en cours
-2. **Logo SVG** — `components/layout/PlenovaMark.tsx`. L'utilisateur dit que
-   « ça crop un morceau ». Refait à la main d'après son PNG, les courbes de la
-   feuille sont approximatives. Il y a une page de comparaison prête :
-   `…/scratchpad/mark.html` avec trois variantes (A actuelle, B pli en coin,
-   C pli au trait). **Rendre les variantes et regarder avant de choisir.**
-3. **Espèces inconnues → catégorie Hook/Outro** dans la bibliothèque d'images,
-   pour servir de première image aux carrousels repostés. **Plus** un upload
-   d'images CTA par l'opérateur (il en a 3 prêtes).
-4. **Repost** : trier les captures par date (plus ancienne → plus récente),
-   afficher les vignettes dessous, réordonner en drag and drop. Et « le drag
-   and drop doit globalement fonctionner partout où il est nécessaire ».
-5. **Éditeur de slide avancé** — le gros morceau, explicitement demandé
-   « hyper fonctionnel et avancé ». `components/tiktok/SlideEditor.tsx`.
-6. **Animations** — l'utilisateur veut du 3D réactif à la souris, gratuit, sur
-   le thème végétal. **Une question lui a été posée et il n'a pas répondu** :
-   Three.js pèse des centaines de Ko sur un outil interne, et les Lottie
-   botaniques vraiment libres sont rares et médiocres ; proposition de SVG
-   animés maison à la place. **Ne pas engager de travail lourd sans sa
-   réponse.**
+- **Côté utilisateur, pas côté code** : dans Supabase > Authentication > URL
+  Configuration, mettre le Site URL sur `https://studio.latelierugc.com` et
+  ajouter les Redirect URLs `https://studio.latelierugc.com/**` et
+  `http://localhost:3000/**`. Tant que ce n'est pas fait, le lien du mail de
+  connexion renvoie vers localhost (Supabase retombe sur son Site URL par
+  défaut). Le code applicatif envoie déjà la bonne adresse.
+- Régénérer les secrets passés dans le chat (TikTok client secret, PAT
+  Supabase). Supprimer éventuellement le projet Vercel en double
+  `plenova-pinterest-engine` (le vrai est `-9htq`).
+- Idée non faite : choisir une slide prête (CTA) dès la génération d'un
+  carrousel, au lieu de l'insérer ensuite dans l'éditeur.
 
 ## 4. Décisions déjà prises — ne pas les défaire par inadvertance
 
@@ -89,9 +78,32 @@ du studio est en `overflow-hidden` — mesuré, pas supposé. Une version en
 **Les hashtags sont plafonnés en code**, pas seulement dans le prompt :
 `normaliseHashtags` dans `lib/carousel.ts`, 5 max, `#planttok` garanti.
 
+**L'éditeur tient le carrousel entier en brouillon.** Chaque slide a un `uid`
+stable et un `from` (sa position enregistrée, `null` si nouvelle). Ajouter,
+dupliquer, retirer, réordonner sont des éditions comme les autres (Ctrl+Z), et
+un seul `PUT /api/carousels/[id]/slides` écrit tout. Le serveur garde un
+composite par langue si texte, mise en page et photo sont inchangés, fait
+suivre la couverture, et **refuse (409)** si le carrousel a changé ailleurs
+(`expectedLength` + empreinte de la photo à `from`). L'historique survit à
+l'enregistrement grâce à l'action `rebase`.
+
+**Slides prêtes** (`SlideTemplate`, table Supabase `slide_templates`, clé
+`slideTemplates` en local) : photo de la bibliothèque + mise en page + textes
+par langue (les 5). Traduction Gemini des langues vides seulement.
+
+**Les menus flottants passent par un portal** (`components/ui/Menu.tsx`, comme
+`Picker`) : un menu dans une carte `overflow-hidden` se faisait couper.
+
+**Le glisser-déposer mesure la mise en page, jamais un rectangle animé**
+(`components/ui/Sortable.tsx`, `restBox` = offsetLeft/Top). Mesurer
+`getBoundingClientRect` pendant une transition faisait fuir la vignette.
+
+**La plante 3D** (`components/plants/monstera-scene.ts`, three.js en chunk
+chargé à la demande) : aucun fichier téléchargé, tout est modélisé en code.
+
 ## 5. Connexion — comment ça marche
 
-Adresse e-mail sur allowlist + code à 6 chiffres.
+Adresse e-mail sur allowlist, puis le lien du mail (ou le code, 6 à 10 chiffres, s'il y en a un). « Se déconnecter » en bas de la barre latérale (POST `/api/auth/logout`).
 
 - `allowed_emails` dans Supabase (projet `snlehcwteclikxhqgvqs`), **RLS activé
   sans aucune policy** : seul le rôle service y accède, donc le serveur et le

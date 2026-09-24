@@ -30,7 +30,9 @@ export default function TermsPage() {
 
       <h2>2. Who may use it</h2>
       <p>
-        Only staff authorised by {LEGAL.operator}. Access is password protected.
+        Only staff authorised by {LEGAL.operator}. Signing in requires an
+        allow-listed email address, confirmed each time by a one-time link or
+        code sent to it.
         Anyone using the tool must comply with the platform policies of every
         connected service, including the TikTok Community Guidelines, the TikTok
         Developer Terms of Service, and the Pinterest Community Guidelines.
