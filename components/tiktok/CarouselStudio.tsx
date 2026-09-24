@@ -1027,6 +1027,8 @@ export function CarouselStudio({
           carousel={editing.carousel}
           index={editing.index}
           language={editing.language}
+          plants={plants}
+          hasPexels={hasPexels}
           onClose={() => setEditing(null)}
           onSaved={(updated) => {
             setCarousels((current) =>

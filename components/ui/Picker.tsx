@@ -105,13 +105,30 @@ function useDismiss(
       close();
     }
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") close();
+      if (event.key !== "Escape") return;
+      // Claimed, so the dialog the picker sits in does not close on the same
+      // key press - Escape backs out one layer at a time.
+      event.preventDefault();
+      close();
+    }
+    /*
+     * The panel is positioned against the page, so it follows the page as it
+     * scrolls. A scrolling PANE is another matter - the field slides away and
+     * the list would float where it was - so that closes it instead.
+     */
+    function onScroll(event: Event) {
+      const target = event.target;
+      if (target === document || !(target instanceof Node)) return;
+      if (refs.some((r) => r.current?.contains(target))) return;
+      close();
     }
     document.addEventListener("pointerdown", onPointer);
     document.addEventListener("keydown", onKey);
+    document.addEventListener("scroll", onScroll, true);
     return () => {
       document.removeEventListener("pointerdown", onPointer);
       document.removeEventListener("keydown", onKey);
+      document.removeEventListener("scroll", onScroll, true);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, close]);

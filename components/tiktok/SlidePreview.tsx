@@ -6,6 +6,7 @@ import {
   SLIDE_HEIGHT,
   SLIDE_WIDTH,
   blockLayout,
+  photoLayout,
   renderBlockInner,
   type SlideOverlay,
 } from "@/lib/overlay";
@@ -79,13 +80,7 @@ export function SlidePreview({ src, copy, overlay, className }: Props) {
           src={src}
           alt=""
           draggable={false}
-          style={{
-            position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-          }}
+          style={photoLayout(overlay.photo) as React.CSSProperties}
         />
         {blocks.map(([text, block], i) =>
           text.trim() ? (

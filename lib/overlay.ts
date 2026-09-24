@@ -50,7 +50,32 @@ export interface OverlayBlock {
   strokeColor: string;
   /** Outline thickness as a percentage of the font size. */
   strokeWidth: number;
+  /**
+   * The colour TikTok's palette would set: the letters for the outlined and
+   * plain styles, the background for a pill - whose letters then turn white
+   * or black, whichever reads on it. Null keeps the style's own colours.
+   * Optional because every overlay stored before colours existed lacks it.
+   */
+  color?: string | null;
 }
+
+/**
+ * How the photograph sits in the frame.
+ *
+ * `zoom` 1 fills the frame exactly as `object-fit: cover` does; above that the
+ * picture is cropped in. `x` and `y` are the focal point, in percent of the
+ * frame: the spot that stays put while zooming, and the one panning moves.
+ * Keeping both in percent means 0 and 100 are always the picture's own edges
+ * whatever its size, so no framing can ever show an empty strip.
+ */
+export interface PhotoFrame {
+  zoom: number;
+  x: number;
+  y: number;
+}
+
+export const PHOTO_DEFAULTS: PhotoFrame = { zoom: 1, x: 50, y: 50 };
+export const PHOTO_MAX_ZOOM = 4;
 
 export interface SlideOverlay {
   style: OverlayStyle;
@@ -58,6 +83,8 @@ export interface SlideOverlay {
   subtitle: OverlayBlock;
   /** Renders only when the slide has CTA text, so every slide can carry one. */
   cta: OverlayBlock;
+  /** Absent on overlays stored before framing existed: centred, uncropped. */
+  photo?: PhotoFrame;
 }
 
 export const TITLE_DEFAULTS: OverlayBlock = {
@@ -72,6 +99,7 @@ export const TITLE_DEFAULTS: OverlayBlock = {
   style: null,
   strokeColor: "#11481D",
   strokeWidth: 18,
+  color: null,
 };
 
 export const SUBTITLE_DEFAULTS: OverlayBlock = {
@@ -86,6 +114,7 @@ export const SUBTITLE_DEFAULTS: OverlayBlock = {
   style: null,
   strokeColor: "#11481D",
   strokeWidth: 15,
+  color: null,
 };
 
 export const CTA_DEFAULTS: OverlayBlock = {
@@ -100,6 +129,7 @@ export const CTA_DEFAULTS: OverlayBlock = {
   style: null,
   strokeColor: "#11481D",
   strokeWidth: 14,
+  color: null,
 };
 
 /*
@@ -120,6 +150,7 @@ export function defaultOverlay(style: OverlayStyle = "stroke"): SlideOverlay {
     title: { ...TITLE_DEFAULTS, ...pill },
     subtitle: { ...SUBTITLE_DEFAULTS, ...pill },
     cta: { ...CTA_DEFAULTS, ...pill },
+    photo: { ...PHOTO_DEFAULTS },
   };
 }
 
@@ -137,8 +168,24 @@ export function normaliseOverlay(
     title: normaliseBlock(o.title, TITLE_DEFAULTS),
     subtitle: normaliseBlock(o.subtitle, SUBTITLE_DEFAULTS),
     cta: normaliseBlock(o.cta, CTA_DEFAULTS),
+    photo: normalisePhoto(o.photo),
   };
 }
+
+function normalisePhoto(raw: unknown): PhotoFrame {
+  const p = (raw ?? {}) as Record<string, unknown>;
+  const num = (value: unknown, fallback: number, min: number, max: number) => {
+    const n = typeof value === "number" && Number.isFinite(value) ? value : fallback;
+    return Math.min(max, Math.max(min, n));
+  };
+  return {
+    zoom: num(p.zoom, PHOTO_DEFAULTS.zoom, 1, PHOTO_MAX_ZOOM),
+    x: num(p.x, PHOTO_DEFAULTS.x, 0, 100),
+    y: num(p.y, PHOTO_DEFAULTS.y, 0, 100),
+  };
+}
+
+const HEX = /^#[0-9a-f]{6}$/i;
 
 function normaliseBlock(raw: unknown, defaults: OverlayBlock): OverlayBlock {
   const b = (raw ?? {}) as Record<string, unknown>;
@@ -162,11 +209,45 @@ function normaliseBlock(raw: unknown, defaults: OverlayBlock): OverlayBlock {
       ? (b.style as OverlayStyle)
       : null,
     strokeColor:
-      typeof b.strokeColor === "string" && /^#[0-9a-f]{6}$/i.test(b.strokeColor)
+      typeof b.strokeColor === "string" && HEX.test(b.strokeColor)
         ? b.strokeColor
         : defaults.strokeColor,
     strokeWidth: num(b.strokeWidth, defaults.strokeWidth, 0, 50),
+    color: typeof b.color === "string" && HEX.test(b.color) ? b.color.toLowerCase() : null,
   };
+}
+
+/**
+ * The text palette, after TikTok's own row of swatches, plus the Plenova
+ * green. Any other colour stays possible through the custom picker; these are
+ * the ones a TikTok viewer is used to seeing.
+ */
+export const TEXT_COLORS: { value: string; label: string }[] = [
+  { value: "#ffffff", label: "Blanc" },
+  { value: "#000000", label: "Noir" },
+  { value: "#ea4040", label: "Rouge" },
+  { value: "#ff933d", label: "Orange" },
+  { value: "#f2cd46", label: "Jaune" },
+  { value: "#78c25e", label: "Vert" },
+  { value: "#77c8a6", label: "Menthe" },
+  { value: "#3496f0", label: "Bleu" },
+  { value: "#5856d5", label: "Violet" },
+  { value: "#f5a3c7", label: "Rose" },
+  { value: "#a3895b", label: "Brun" },
+  { value: "#11481d", label: "Vert Plenova" },
+];
+
+/**
+ * Black or white letters for a coloured pill, the way TikTok picks them: dark
+ * on the pale swatches (white, yellow, pink), white on everything else.
+ */
+export function inkOn(hex: string): string {
+  const channel = (i: number) => {
+    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
+  return luminance > 0.5 ? "#000000" : "#ffffff";
 }
 
 function escapeHtml(value: string): string {
@@ -201,8 +282,16 @@ export function renderBlockInner(
   const style = block.style ?? slideStyle;
   const size = block.fontSize;
 
+  const color = block.color ?? null;
+
   if (isPillStyle(style)) {
-    const look = style === "pillWhite" ? PILL.white : PILL.black;
+    // A chosen colour replaces the preset outright, opaque like TikTok's own
+    // coloured backgrounds; the letters follow whatever reads on it.
+    const look = color
+      ? { fill: color, ink: inkOn(color) }
+      : style === "pillWhite"
+        ? PILL.white
+        : PILL.black;
     if (pill) {
       // One continuous shape behind the words, the way TikTok draws it. The
       // svg shares the text container's coordinate space, which is the space
@@ -224,10 +313,10 @@ export function renderBlockInner(
 
   if (style === "stroke") {
     const stroke = Math.max(0, Math.round(size * (block.strokeWidth / 100)));
-    return `<span style="color:#fff;-webkit-text-stroke:${stroke}px ${block.strokeColor};paint-order:stroke fill;text-shadow:0 4px 12px rgba(0,0,0,0.35);">${safe}</span>`;
+    return `<span style="color:${color ?? "#fff"};-webkit-text-stroke:${stroke}px ${block.strokeColor};paint-order:stroke fill;text-shadow:0 4px 12px rgba(0,0,0,0.35);">${safe}</span>`;
   }
 
-  return `<span style="color:#fff;text-shadow:0 2px 8px rgba(0,0,0,0.6);">${safe}</span>`;
+  return `<span style="color:${color ?? "#fff"};text-shadow:0 2px 8px rgba(0,0,0,0.6);">${safe}</span>`;
 }
 
 /**
@@ -264,9 +353,42 @@ export function blockLayout(block: OverlayBlock): Record<string, string | number
 
 /** The same geometry as a CSS declaration string, for the captured markup. */
 export function blockBoxStyle(block: OverlayBlock): string {
-  return Object.entries(blockLayout(block))
+  return toCss(blockLayout(block));
+}
+
+function toCss(style: Record<string, string | number>): string {
+  return Object.entries(style)
     .map(([key, value]) => `${key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}:${value}`)
     .join(";");
+}
+
+/**
+ * How the photograph is drawn, for the editor, the previews and the capture
+ * alike - the same rule as the blocks, one implementation.
+ *
+ * `object-position` pans across whatever `cover` cropped away, and the scale
+ * zooms around the same point. Because both use the focal point, every value
+ * from 0 to 100 keeps the picture filling the frame: 0 puts its left edge
+ * flush with the frame's, 100 its right edge.
+ */
+export function photoLayout(frame: PhotoFrame | undefined): Record<string, string | number> {
+  const f = frame ?? PHOTO_DEFAULTS;
+  const origin = `${f.x}% ${f.y}%`;
+  return {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    objectPosition: origin,
+    transformOrigin: origin,
+    transform: f.zoom === 1 ? "none" : `scale(${f.zoom})`,
+  };
+}
+
+export function photoCss(frame: PhotoFrame | undefined): string {
+  return toCss(photoLayout(frame));
 }
 
 /**
@@ -343,7 +465,7 @@ export function buildSlideHtml(input: BuildSlideHtmlInput): string {
     ).join("\n")}
     * { margin:0; padding:0; box-sizing:border-box; }
   </style>
-  <img src="${input.backgroundDataUrl}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;" />
+  <img src="${input.backgroundDataUrl}" style="${photoCss(overlay.photo)}" />
   ${block(slide.title, overlay.title, input.pills?.title)}
   ${block(slide.subtitle, overlay.subtitle, input.pills?.subtitle)}
   ${block(slide.cta ?? "", overlay.cta, input.pills?.cta)}

@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
 import { handle } from "@/lib/api";
 import { badRequest, notFound } from "@/lib/errors";
+import { imageResponse } from "@/lib/image-proxy";
 import { slideFingerprint } from "@/lib/slide-image";
 import { getStore } from "@/lib/store";
 
@@ -46,24 +46,6 @@ export async function GET(request: Request, { params }: Params) {
       throw notFound(`La slide ${position} n'a pas d'image.`);
     }
 
-    // Local development stores images inline; decode rather than re-fetch.
-    if (slide.imageUrl.startsWith("data:")) {
-      const [header, payload] = slide.imageUrl.split(",");
-      const mime = header?.match(/^data:([^;]+)/)?.[1] ?? "image/jpeg";
-      return new NextResponse(Buffer.from(payload ?? "", "base64"), {
-        headers: { "Content-Type": mime, "Cache-Control": "private, max-age=300" },
-      });
-    }
-
-    const upstream = await fetch(slide.imageUrl, { cache: "no-store" });
-    if (!upstream.ok || !upstream.body) {
-      throw notFound(`L'image de la slide ${position} n'a pas pu être chargée.`);
-    }
-    return new NextResponse(upstream.body, {
-      headers: {
-        "Content-Type": upstream.headers.get("content-type") ?? "image/jpeg",
-        "Cache-Control": "private, max-age=300",
-      },
-    });
+    return imageResponse(slide.imageUrl, `L'image de la slide ${position}`);
   });
 }

@@ -1,920 +1,1174 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Button, Card, Notice, Picker } from "@/components/ui";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { Button, Notice, Spinner } from "@/components/ui";
+import { EditorCanvas, type CanvasIssue } from "@/components/tiktok/editor/EditorCanvas";
+import { Filmstrip, type FilmstripItem } from "@/components/tiktok/editor/Filmstrip";
+import * as Icon from "@/components/tiktok/editor/icons";
 import {
-  OVERLAY_STYLES,
-  SLIDE_HEIGHT,
-  SLIDE_WIDTH,
-  blockLayout,
-  defaultOverlay,
-  normaliseOverlay,
-  renderBlockInner,
-  type OverlayBlock,
-  type OverlayStyle,
-  type SlideOverlay,
-} from "@/lib/overlay";
-import { usePillPaths } from "@/components/tiktok/usePillPaths";
-import { slideImageSrc } from "@/lib/slide-image";
+  AllSlidesSection,
+  BLOCK_LABELS,
+  BlockSection,
+  SlideSection,
+  TextSection,
+} from "@/components/tiktok/editor/Inspector";
+import { PhotoPicker, type PickerTab } from "@/components/tiktok/editor/PhotoPicker";
+import {
+  draftsFrom,
+  editorReducer,
+  frameOf,
+  initialEditorState,
+  photoChanged,
+  sameDraft,
+  withLayoutOf,
+  withStyleOf,
+  wordsOf,
+  type BlockKey,
+  type SlideDraft,
+} from "@/components/tiktok/editor/state";
+import { captureSlide } from "@/lib/capture";
+import type { PlantIdentity } from "@/lib/data/localize";
 import {
   CONTENT_LOCALE_LABELS,
   translator,
   type ContentLocale,
   type TranslationKey,
 } from "@/lib/i18n";
-import type { CarouselRecord } from "@/lib/types";
+import {
+  PHOTO_DEFAULTS,
+  SLIDE_HEIGHT,
+  SLIDE_WIDTH,
+  defaultOverlay,
+  normaliseOverlay,
+  type OverlayBlock,
+  type OverlayStyle,
+  type PhotoFrame,
+} from "@/lib/overlay";
+import { slideImageSrc } from "@/lib/slide-image";
+import type { CarouselRecord, MediaAsset } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface Props {
   carousel: CarouselRecord;
+  /** The slide to open on. */
   index: number;
   language: ContentLocale;
+  /** The catalog, so library pictures carry both of their plant's names. */
+  plants?: PlantIdentity[];
+  hasPexels?: boolean;
+  /** Closed with nothing saved. */
   onClose: () => void;
+  /** Closed after at least one save, with the carousel as the server has it. */
   onSaved: (carousel: CarouselRecord) => void;
 }
 
-type BlockKey = "title" | "subtitle" | "cta";
-
-const BLOCKS: BlockKey[] = ["title", "subtitle", "cta"];
-
-const STYLE_LABELS: Record<OverlayStyle, TranslationKey> = {
-  stroke: "editor.styleStroke",
-  pillWhite: "editor.stylePillWhite",
-  pillBlack: "editor.stylePillBlack",
-  none: "editor.styleNone",
-};
-
-const WEIGHTS = [400, 500, 600, 700, 800, 900];
-
-/** Corner handles, in the order they are drawn. */
-const CORNERS = ["nw", "ne", "sw", "se"] as const;
-type Corner = (typeof CORNERS)[number];
+const SHORTCUTS: [string, TranslationKey][] = [
+  ["Glisser", "editor.keyMove"],
+  ["Coins", "editor.keyCorner"],
+  ["Côtés", "editor.keySide"],
+  ["Double-clic · Entrée", "editor.keyWrite"],
+  ["← ↑ → ↓ · Maj", "editor.keyNudge"],
+  ["Page préc. / suiv. · Alt ← →", "editor.keySlides"],
+  ["Ctrl Z · Ctrl Maj Z", "editor.keyUndo"],
+  ["Ctrl S", "editor.keySave"],
+  ["R", "editor.keyCrop"],
+  ["T · G", "editor.keyGuides"],
+  ["Échap", "editor.keyEscape"],
+];
 
 /**
- * Direct-manipulation editor for one slide.
+ * The carousel editor: every slide, one workspace.
  *
- * The preview is the slide at full 1080x1350, scaled down by a CSS transform
- * rather than re-laid-out at a smaller size. That is what makes it honest: the
- * same markup and the same geometry the capture uses, so nothing shifts
- * between what is dragged here and what ends up in the JPEG.
+ * The filmstrip on the left is the carousel, drawn live from the draft; the
+ * slide in the middle is the real 1080x1350 composition, dragged and typed on
+ * directly; the inspector on the right holds the words, the selected block's
+ * look, the photograph and the carousel-wide actions.
  *
- * Words belong to a language; position, size and style belong to the slide.
- * Editing French does not move the English text, which is the only way seven
- * translations stay one design.
+ * Nothing is written until "Enregistrer": the draft covers the whole carousel,
+ * undo covers the whole draft, and one save sends every slide that changed.
+ * Words belong to a language; position, size, style and photograph belong to
+ * the slide - editing French does not move the English text, which is the
+ * only way several translations stay one design.
  */
-/** The buttons show only an arrow, so this is their whole description. */
-const ALIGN_LABELS: Record<"left" | "center" | "right", string> = {
-  left: "gauche",
-  center: "centré",
-  right: "droite",
-};
-
 export function SlideEditor({
   carousel,
   index,
   language,
+  plants = [],
+  hasPexels = false,
   onClose,
   onSaved,
 }: Props) {
   const t = translator();
-  const slide = carousel.slides[index];
 
-  const [overlay, setOverlay] = useState<SlideOverlay>(() =>
-    slide?.overlay ? normaliseOverlay(slide.overlay) : defaultOverlay(),
+  const [state, dispatch] = useReducer(editorReducer, null, () =>
+    initialEditorState(draftsFrom(carousel), index),
   );
-  const [texts, setTexts] = useState<
-    Record<string, { title: string; subtitle: string; cta: string }>
-  >(() => {
-    const out: Record<string, { title: string; subtitle: string; cta: string }> =
-      {};
-    for (const lang of carousel.languages) {
-      out[lang] = {
-        title: slide?.text[lang]?.title ?? "",
-        subtitle: slide?.text[lang]?.subtitle ?? "",
-        cta: slide?.text[lang]?.cta ?? "",
-      };
-    }
-    return out;
-  });
-  const [displayLang, setDisplayLang] = useState<ContentLocale>(language);
-  const [selected, setSelected] = useState<BlockKey>("title");
+  /** The slides as the server last confirmed them, to tell what changed. */
+  const [baseline, setBaseline] = useState<SlideDraft[]>(() => draftsFrom(carousel));
+  /** The carousel as the last save returned it. */
+  const [saved, setSaved] = useState<CarouselRecord | null>(null);
+
+  const [lang, setLang] = useState<ContentLocale>(
+    carousel.languages.includes(language) ? language : (carousel.languages[0] ?? language),
+  );
+  const [selected, setSelected] = useState<BlockKey | null>("title");
+  const [editing, setEditing] = useState<BlockKey | null>(null);
+  const [mode, setMode] = useState<"layout" | "crop">("layout");
+  const [showZones, setShowZones] = useStoredFlag("plenova.editor.zones", true);
+  const [showGrid, setShowGrid] = useStoredFlag("plenova.editor.grid", false);
+  const [issues, setIssues] = useState<CanvasIssue[]>([]);
+  const [picker, setPicker] = useState<PickerTab | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [exportMenu, setExportMenu] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState<{ done: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [broken, setBroken] = useState<Set<string>>(() => new Set());
+  const [regen, setRegen] = useState<{
+    index: number;
+    busy: boolean;
+    error: string | null;
+  } | null>(null);
 
-  const canvasRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(0.33);
-  const [imageBroken, setImageBroken] = useState(false);
+  // Read by async work and window listeners, which must not act on a stale render.
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const baselineRef = useRef(baseline);
+  baselineRef.current = baseline;
+  const savedRef = useRef<CarouselRecord | null>(null);
+  const savingRef = useRef(false);
 
-  /**
-   * Undo and redo over the layout.
-   *
-   * Consecutive touches of the same control inside a second collapse into one
-   * step, so dragging a slider leaves one entry rather than forty and undo
-   * moves by something the eye can see.
+  const record = saved ?? carousel;
+  const active = state.active;
+  const slide = state.slides[active];
+  const total = state.slides.length;
+
+  const dirty = useMemo(
+    () => state.slides.map((s, i) => !sameDraft(s, baseline[i])),
+    [state.slides, baseline],
+  );
+  const dirtyCount = dirty.filter(Boolean).length;
+
+  // ------------------------------------------------------------- the photos
+
+  /*
+   * A photograph already on the slide comes through the slide's own route,
+   * keyed by which picture it is; one picked in this session and not yet
+   * saved comes through the library's. Both are same-origin, which is what
+   * lets an export draw them into a canvas.
    */
-  const [past, setPast] = useState<SlideOverlay[]>([]);
-  const [future, setFuture] = useState<SlideOverlay[]>([]);
-  const lastCommit = useRef<{ key: string; at: number } | null>(null);
+  const photoSrc = useCallback(
+    (i: number): string | null => {
+      const draft = state.slides[i];
+      const stored = record.slides[i];
+      if (!draft) return null;
+      if (stored && draft.mediaId === stored.mediaId && draft.imageUrl === stored.imageUrl) {
+        return stored.imageUrl ? slideImageSrc(record.id, i, stored) : null;
+      }
+      if (draft.mediaId) return `/api/media/${encodeURIComponent(draft.mediaId)}/raw`;
+      return draft.imageUrl;
+    },
+    [state.slides, record],
+  );
 
-  const commit = useCallback(
-    (key: string) => {
-      const now = Date.now();
-      const last = lastCommit.current;
-      lastCommit.current = { key, at: now };
-      if (last && last.key === key && now - last.at < 900) return;
-      setOverlay((current) => {
-        setPast((p) => [...p.slice(-49), current]);
-        setFuture([]);
-        return current;
-      });
+  // ------------------------------------------------------------------ edits
+
+  const edit = useCallback(
+    (key: string, fn: (s: SlideDraft) => SlideDraft, at?: number) => {
+      dispatch({ type: "edit", key, at: Date.now(), index: at, fn });
     },
     [],
   );
 
-  const undo = useCallback(() => {
-    setPast((p) => {
-      if (p.length === 0) return p;
-      const previous = p[p.length - 1]!;
-      setOverlay((current) => {
-        setFuture((f) => [current, ...f.slice(0, 49)]);
-        return previous;
-      });
-      lastCommit.current = null;
-      return p.slice(0, -1);
-    });
-  }, []);
-
-  const redo = useCallback(() => {
-    setFuture((f) => {
-      if (f.length === 0) return f;
-      const next = f[0]!;
-      setOverlay((current) => {
-        setPast((p) => [...p, current]);
-        return next;
-      });
-      lastCommit.current = null;
-      return f.slice(1);
-    });
-  }, []);
-
-  /** Guides shown while a block is being dragged onto an alignment. */
-  const [guides, setGuides] = useState<{ x: number[]; y: number[] }>({
-    x: [],
-    y: [],
-  });
-
-  // The preview is the real 1080x1350 slide scaled to whatever room it has.
-  useEffect(() => {
-    const el = canvasRef.current;
-    if (!el) return;
-    const measure = () => setScale(el.clientWidth / SLIDE_WIDTH);
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
-  const current = texts[displayLang] ?? { title: "", subtitle: "", cta: "" };
-  // The TikTok outlines for whatever is on screen, re-measured only when the
-  // words or their typography change - never on a drag.
-  const pills = usePillPaths(
-    BLOCKS.map((key) => ({
-      text: current[key] ?? "",
-      block: overlay[key],
-      style: overlay.style,
-    })),
+  const setText = useCallback(
+    (key: BlockKey, value: string) => {
+      edit(`text:${lang}:${key}`, (s) => ({
+        ...s,
+        text: { ...s.text, [lang]: { ...wordsOf(s, lang), [key]: value } },
+      }));
+    },
+    [edit, lang],
   );
 
-  function setBlock(key: BlockKey, patch: Partial<OverlayBlock>) {
-    // Keyed by the field so dragging one slider collapses into a single step.
-    commit(`${key}:${Object.keys(patch).join(",")}`);
-    setOverlay((o) => ({ ...o, [key]: { ...o[key], ...patch } }));
+  const setBlock = useCallback(
+    (key: BlockKey, patch: Partial<OverlayBlock>, history: string) => {
+      edit(history, (s) => ({
+        ...s,
+        overlay: { ...s.overlay, [key]: { ...s.overlay[key], ...patch } },
+      }));
+    },
+    [edit],
+  );
+
+  const setPhoto = useCallback(
+    (patch: Partial<PhotoFrame>, history: string) => {
+      edit(history, (s) => ({
+        ...s,
+        overlay: { ...s.overlay, photo: { ...frameOf(s.overlay), ...patch } },
+      }));
+    },
+    [edit],
+  );
+
+  const go = useCallback((i: number) => {
+    setEditing(null);
+    setMode("layout");
+    dispatch({ type: "go", index: i });
+  }, []);
+
+  const flash = useCallback((message: string) => setToast(message), []);
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(null), 3200);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  function applyAsset(asset: MediaAsset, at: number, prompt?: string) {
+    edit(
+      `photo:${asset.id}`,
+      (s) =>
+        s.mediaId === asset.id
+          ? s
+          : {
+              ...s,
+              mediaId: asset.id,
+              imageUrl: asset.url,
+              ...(prompt !== undefined ? { imagePrompt: prompt } : {}),
+              // A new picture starts centred: the old framing was for the old one.
+              overlay: { ...s.overlay, photo: { ...PHOTO_DEFAULTS } },
+            },
+      at,
+    );
   }
 
-  function setText(key: BlockKey, value: string) {
-    setTexts((all) => ({
-      ...all,
-      [displayLang]: {
-        ...(all[displayLang] ?? { title: "", subtitle: "", cta: "" }),
-        [key]: value,
-      },
+  async function regenerate(prompt: string, source: "photo" | "generate") {
+    if (regen?.busy) return;
+    const at = active;
+    setRegen({ index: at, busy: true, error: null });
+    try {
+      const res = await fetch(`/api/carousels/${carousel.id}/slides/${at}/photo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, source }),
+      });
+      const data = (await res.json()) as {
+        asset?: MediaAsset;
+        error?: { message?: string };
+      };
+      if (!res.ok || !data.asset) {
+        setRegen({
+          index: at,
+          busy: false,
+          error: data.error?.message ?? t("preview.requestFailed"),
+        });
+        return;
+      }
+      applyAsset(data.asset, at, prompt);
+      setRegen(null);
+      flash(t("editor.regenDone", { n: at + 1 }));
+    } catch {
+      setRegen({ index: at, busy: false, error: t("preview.unreachable") });
+    }
+  }
+
+  function applyToAll(kind: "layout" | "style") {
+    const source = stateRef.current.slides[active];
+    if (!source || total < 2) return;
+    dispatch({
+      type: "editAll",
+      key: `all:${kind}:${Date.now()}`,
+      at: Date.now(),
+      fn: (s, i) =>
+        i === active ? s : kind === "layout" ? withLayoutOf(s, source) : withStyleOf(s, source),
+    });
+    flash(t(kind === "layout" ? "editor.appliedLayout" : "editor.appliedStyle", { n: total - 1 }));
+  }
+
+  function centre(axis: "x" | "y") {
+    if (!selected) return;
+    setBlock(
+      selected,
+      axis === "x" ? { x: SLIDE_WIDTH / 2 } : { y: SLIDE_HEIGHT / 2 },
+      `${selected}:centre:${axis}`,
+    );
+  }
+
+  function resetBlock() {
+    if (!selected || !slide) return;
+    setBlock(selected, { ...defaultOverlay(slide.overlay.style)[selected] }, `${selected}:reset`);
+  }
+
+  function resetSlide() {
+    edit("slide:reset", (s) => ({
+      ...s,
+      overlay: { ...defaultOverlay(s.overlay.style), photo: s.overlay.photo },
     }));
   }
 
-  // ---------------------------------------------------------------- dragging
-
-  const drag = useRef<{
-    key: BlockKey;
-    corner: Corner | null;
-    startX: number;
-    startY: number;
-    block: OverlayBlock;
-    /** The other blocks' anchors, for alignment. */
-    others: { x: number; y: number }[];
-  } | null>(null);
-
-  const onPointerMove = useCallback((event: PointerEvent) => {
-    const state = drag.current;
-    if (!state) return;
-    const el = canvasRef.current;
-    if (!el) return;
-
-    // Pointer pixels are canvas pixels; the block lives in source pixels.
-    const factor = SLIDE_WIDTH / el.clientWidth;
-    const dx = (event.clientX - state.startX) * factor;
-    const dy = (event.clientY - state.startY) * factor;
-    const b = state.block;
-
-    if (!state.corner) {
-      const wanted = {
-        x: clamp(Math.round(b.x + dx), 40, SLIDE_WIDTH - 40),
-        y: clamp(Math.round(b.y + dy), 40, SLIDE_HEIGHT - 40),
-      };
-      // Snap to the canvas centre and to whatever the other blocks are
-      // aligned on, and show the line that was caught.
-      const snapped = snapTo(wanted, state.key, state.others);
-      setGuides(snapped.guides);
-      setBlockDirect(state.key, { x: snapped.x, y: snapped.y });
-      return;
-    }
-
-    // Resizing grows the block around its centre, and the type with it, so a
-    // block keeps looking like itself instead of reflowing at every drag.
-    const sx = state.corner === "ne" || state.corner === "se" ? 1 : -1;
-    const sy = state.corner === "sw" || state.corner === "se" ? 1 : -1;
-    const width = Math.max(80, b.width + sx * dx * 2);
-    const height = Math.max(40, b.height + sy * dy * 2);
-    const ratio = Math.min(width / b.width, height / b.height);
-    setBlockDirect(state.key, {
-      width: Math.round(Math.min(SLIDE_WIDTH - 40, width)),
-      height: Math.round(Math.min(SLIDE_HEIGHT - 40, height)),
-      fontSize: clamp(Math.round(b.fontSize * ratio), 16, 240),
-    });
-  }, []);
-
-  // Kept out of `setBlock` so the pointer handler is not re-created per render.
-  const setBlockDirect = useCallback(
-    (key: BlockKey, patch: Partial<OverlayBlock>) => {
-      setOverlay((o) => ({ ...o, [key]: { ...o[key], ...patch } }));
-    },
-    [],
-  );
-
-  const onPointerUp = useCallback(() => {
-    drag.current = null;
-    setGuides({ x: [], y: [] });
-  }, []);
-
-  /**
-   * Keyboard: escape closes, the arrows move the selected block, and undo and
-   * redo work as they do everywhere else.
-   *
-   * The arrows matter beyond convenience - before this there was no way at all
-   * to position a block without a pointer.
-   */
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      const typing =
-        target?.tagName === "INPUT" ||
-        target?.tagName === "TEXTAREA" ||
-        target?.tagName === "SELECT";
-
-      if (event.key === "Escape") {
-        onClose();
-        return;
-      }
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
-        event.preventDefault();
-        if (event.shiftKey) redo();
-        else undo();
-        return;
-      }
-      if (typing) return;
-
-      const step = event.shiftKey ? 10 : 1;
-      const moves: Record<string, [number, number]> = {
-        ArrowLeft: [-step, 0],
-        ArrowRight: [step, 0],
-        ArrowUp: [0, -step],
-        ArrowDown: [0, step],
-      };
-      const move = moves[event.key];
-      if (!move) return;
-      event.preventDefault();
-      commit(`nudge:${selected}`);
-      setOverlay((o) => ({
-        ...o,
-        [selected]: {
-          ...o[selected],
-          x: clamp(o[selected].x + move[0], 40, SLIDE_WIDTH - 40),
-          y: clamp(o[selected].y + move[1], 40, SLIDE_HEIGHT - 40),
-        },
-      }));
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, undo, redo, commit, selected]);
-
-  useEffect(() => {
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", onPointerUp);
-    window.addEventListener("pointercancel", onPointerUp);
-    return () => {
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", onPointerUp);
-      window.removeEventListener("pointercancel", onPointerUp);
-    };
-  }, [onPointerMove, onPointerUp]);
-
-  function startDrag(
-    event: React.PointerEvent,
-    key: BlockKey,
-    corner: Corner | null,
-  ) {
-    event.preventDefault();
-    event.stopPropagation();
-    // The element keeps the pointer for the whole gesture. Without it a touch
-    // drag scrolls the dialog instead of moving the block, and a mouse
-    // released outside the window leaves the block stuck to the cursor.
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-    setSelected(key);
-    commit(`drag:${key}`);
-    drag.current = {
-      key,
-      corner,
-      startX: event.clientX,
-      startY: event.clientY,
-      block: overlay[key],
-      others: BLOCKS.filter((k) => k !== key).map((k) => ({
-        x: overlay[k].x,
-        y: overlay[k].y,
-      })),
-    };
+  function setSlideStyle(style: OverlayStyle) {
+    edit("slide:style", (s) => ({ ...s, overlay: { ...s.overlay, style } }));
   }
 
-  // ------------------------------------------------------------------ saving
+  // ----------------------------------------------------------------- saving
 
-  async function save() {
+  /**
+   * Sends every slide that differs from the last confirmed state, one by one.
+   *
+   * The baseline of each slide becomes exactly what was sent, so anything
+   * typed while the request was in flight still shows as unsaved. A failure
+   * stops the run and names the slide; the ones before it are saved.
+   */
+  async function save(): Promise<boolean> {
+    if (savingRef.current) return false;
+    const targets = stateRef.current.slides
+      .map((s, i) => (sameDraft(s, baselineRef.current[i]) ? -1 : i))
+      .filter((i) => i >= 0);
+    if (targets.length === 0) return true;
+
+    savingRef.current = true;
     setSaving(true);
     setError(null);
+    let latest: CarouselRecord | null = null;
     try {
-      const res = await fetch(
-        `/api/carousels/${carousel.id}/slides/${index}`,
-        {
+      for (const i of targets) {
+        const draft = stateRef.current.slides[i];
+        if (!draft) continue;
+        const before = baselineRef.current[i];
+        const body: Record<string, unknown> = {
+          text: draft.text,
+          overlay: normaliseOverlay(draft.overlay),
+        };
+        if (photoChanged(draft, before) && draft.mediaId) body.mediaId = draft.mediaId;
+        if (draft.imagePrompt !== (before?.imagePrompt ?? "")) {
+          body.imagePrompt = draft.imagePrompt;
+        }
+
+        const res = await fetch(`/api/carousels/${carousel.id}/slides/${i}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: texts, overlay }),
-        },
-      );
-      const data = (await res.json()) as {
-        carousel?: CarouselRecord;
-        error?: { message?: string };
-      };
-      if (!res.ok || !data.carousel) {
-        setError(data.error?.message ?? t("preview.requestFailed"));
-        return;
+          body: JSON.stringify(body),
+        });
+        const data = (await res.json()) as {
+          carousel?: CarouselRecord;
+          error?: { message?: string };
+        };
+        if (!res.ok || !data.carousel) {
+          setError(
+            t("editor.saveFailed", {
+              n: i + 1,
+              reason: data.error?.message ?? t("preview.requestFailed"),
+            }),
+          );
+          return false;
+        }
+        latest = data.carousel;
+        const next = baselineRef.current.slice();
+        next[i] = draft;
+        baselineRef.current = next;
+        setBaseline(next);
       }
-      onSaved(data.carousel);
+      flash(t("editor.savedFlash"));
+      return true;
     } catch {
       setError(t("preview.unreachable"));
+      return false;
     } finally {
+      if (latest) {
+        savedRef.current = latest;
+        setSaved(latest);
+      }
+      savingRef.current = false;
       setSaving(false);
     }
   }
 
+  /** Leaves, handing back the carousel if anything was saved on the way. */
+  function finish() {
+    const latest = savedRef.current;
+    if (latest) onSaved(latest);
+    else onClose();
+  }
+
+  function requestClose() {
+    if (savingRef.current) return;
+    const unsaved = stateRef.current.slides.some(
+      (s, i) => !sameDraft(s, baselineRef.current[i]),
+    );
+    if (unsaved) setConfirmClose(true);
+    else finish();
+  }
+
+  // ---------------------------------------------------------------- export
+
+  /** The slides as JPEGs, in the language on screen, exactly as they would be published. */
+  async function exportSlides(which: "one" | "all") {
+    setExportMenu(false);
+    const indexes = which === "one" ? [active] : state.slides.map((_, i) => i);
+    const stem = fileStem(carousel.theme);
+    setExporting({ done: 0, total: indexes.length });
+    setError(null);
+    const failed: number[] = [];
+    for (const [n, i] of indexes.entries()) {
+      const draft = state.slides[i];
+      const src = photoSrc(i);
+      if (!draft || !src) {
+        failed.push(i);
+        continue;
+      }
+      const words = wordsOf(draft, lang);
+      try {
+        const dataUrl = await captureSlide({
+          src,
+          overlay: draft.overlay,
+          title: words.title,
+          subtitle: words.subtitle,
+          cta: words.cta,
+        });
+        download(dataUrl, `${stem}-${lang}-slide-${String(i + 1).padStart(2, "0")}.jpg`);
+        // Browsers drop downloads fired in the same instant.
+        if (indexes.length > 1) await new Promise((r) => window.setTimeout(r, 350));
+      } catch {
+        failed.push(i);
+      }
+      setExporting({ done: n + 1, total: indexes.length });
+    }
+    setExporting(null);
+    if (failed.length > 0) {
+      setError(t("editor.exportFailed", { slides: failed.map((i) => i + 1).join(", ") }));
+    } else {
+      flash(t("editor.exported", { n: indexes.length }));
+    }
+  }
+
+  // ------------------------------------------------------------ side effects
+
+  // The page behind must not scroll under the workspace - it would also move
+  // the anchor every dropdown list is positioned against.
+  useEffect(() => {
+    const html = document.documentElement;
+    const previous = html.style.overflow;
+    html.style.overflow = "hidden";
+    return () => {
+      html.style.overflow = previous;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (dirtyCount === 0) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [dirtyCount]);
+
+  useEffect(() => {
+    if (!exportMenu) return;
+    const close = (event: PointerEvent) => {
+      if (!(event.target as HTMLElement | null)?.closest("[data-export-menu]")) {
+        setExportMenu(false);
+      }
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [exportMenu]);
+
+  /*
+   * The keyboard. Escape backs out one layer at a time - a menu, a dialog,
+   * the text being typed, the reframing - and only then asks to leave.
+   * Everything else stays out of the way of a field being typed in, except
+   * undo, redo and save, which work from anywhere.
+   */
+  const onKey = useRef<(event: KeyboardEvent) => void>(() => {});
+  onKey.current = (event) => {
+    if (event.defaultPrevented) return;
+    const target = event.target as HTMLElement | null;
+    const typing =
+      !!target &&
+      (target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.tagName === "SELECT" ||
+        target.isContentEditable);
+    const mod = event.ctrlKey || event.metaKey;
+    const key = event.key;
+    const lower = key.toLowerCase();
+
+    if (key === "Escape") {
+      event.preventDefault();
+      if (exportMenu) return setExportMenu(false);
+      if (helpOpen) return setHelpOpen(false);
+      if (picker) return setPicker(null);
+      if (confirmClose) return setConfirmClose(false);
+      if (editing) return setEditing(null);
+      if (mode === "crop") return setMode("layout");
+      if (typing && target) return target.blur();
+      requestClose();
+      return;
+    }
+    // The dialogs own the keyboard while they are open.
+    if (picker || confirmClose || helpOpen) return;
+
+    if (mod && lower === "s") {
+      event.preventDefault();
+      void save();
+      return;
+    }
+    if (mod && (lower === "z" || lower === "y")) {
+      event.preventDefault();
+      setEditing(null);
+      dispatch({ type: lower === "y" || event.shiftKey ? "redo" : "undo" });
+      return;
+    }
+    if (typing) return;
+
+    if (key === "PageDown" || (event.altKey && key === "ArrowRight")) {
+      event.preventDefault();
+      go(Math.min(active + 1, total - 1));
+      return;
+    }
+    if (key === "PageUp" || (event.altKey && key === "ArrowLeft")) {
+      event.preventDefault();
+      go(Math.max(active - 1, 0));
+      return;
+    }
+    if (mod || event.altKey) return;
+
+    if (key === "?") return setHelpOpen(true);
+    if (lower === "g") return setShowGrid((v) => !v);
+    if (lower === "t") return setShowZones((v) => !v);
+    if (lower === "r") {
+      setEditing(null);
+      return setMode((m) => (m === "crop" ? "layout" : "crop"));
+    }
+    if (key === "Enter" && selected && mode === "layout") {
+      event.preventDefault();
+      setEditing(selected);
+      return;
+    }
+
+    const step = event.shiftKey ? 10 : 1;
+    const moves: Record<string, [number, number]> = {
+      ArrowLeft: [-step, 0],
+      ArrowRight: [step, 0],
+      ArrowUp: [0, -step],
+      ArrowDown: [0, step],
+    };
+    const move = moves[key];
+    if (!move || !slide) return;
+    event.preventDefault();
+    if (mode === "crop") {
+      const f = frameOf(slide.overlay);
+      setPhoto(
+        {
+          x: clamp(f.x + move[0] * 0.5, 0, 100),
+          y: clamp(f.y + move[1] * 0.5, 0, 100),
+        },
+        "photo:nudge",
+      );
+      return;
+    }
+    if (!selected) return;
+    const b = slide.overlay[selected];
+    setBlock(
+      selected,
+      {
+        x: clamp(b.x + move[0], 20, SLIDE_WIDTH - 20),
+        y: clamp(b.y + move[1], 20, SLIDE_HEIGHT - 20),
+      },
+      `nudge:${selected}`,
+    );
+  };
+  useEffect(() => {
+    const listener = (event: KeyboardEvent) => onKey.current(event);
+    window.addEventListener("keydown", listener);
+    return () => window.removeEventListener("keydown", listener);
+  }, []);
+
   if (!slide) return null;
 
-  const src = slideImageSrc(carousel.id, index, slide);
+  // ------------------------------------------------------------------ render
+
+  const words = wordsOf(slide, lang);
+  const src = photoSrc(active);
+  const labels: Record<BlockKey, string> = {
+    title: t(BLOCK_LABELS.title),
+    subtitle: t(BLOCK_LABELS.subtitle),
+    cta: t(BLOCK_LABELS.cta),
+  };
+  const isMention = Boolean(carousel.slides[active]?.hasPlenovaMention);
+  const block = selected ? slide.overlay[selected] : null;
+  const photoIsNew = photoChanged(slide, baseline[active]);
+  const plant = plants.find((p) => p.slug === carousel.plantSlug) ?? null;
+  const missingIn = (l: ContentLocale) =>
+    state.slides.filter((s) => !wordsOf(s, l).title.trim()).length;
+
+  const items: FilmstripItem[] = state.slides.map((s, i) => ({
+    src: photoSrc(i),
+    overlay: s.overlay,
+    words: wordsOf(s, lang),
+    dirty: dirty[i] ?? false,
+    missing: !wordsOf(s, lang).title.trim(),
+    mention: Boolean(carousel.slides[i]?.hasPlenovaMention),
+  }));
+
+  const issueText = (issue: CanvasIssue) =>
+    t(
+      issue.kind === "rail"
+        ? "editor.issueRail"
+        : issue.kind === "caption"
+          ? "editor.issueCaption"
+          : "editor.issueOutside",
+      { block: labels[issue.block] },
+    );
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4"
+      className="fixed inset-0 z-50 flex flex-col bg-[var(--color-canvas)]"
       role="dialog"
       aria-modal="true"
-      aria-label={t("editor.title", { n: index + 1 })}
+      aria-label={t("editor.workspace")}
     >
-      <Card className="max-h-[94vh] w-full max-w-5xl overflow-y-auto p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-[16px] font-semibold">
-            {t("editor.title", { n: index + 1 })}
-          </h2>
+      {/* ------------------------------------------------------ toolbar */}
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2">
+        <BarButton label={t("editor.close")} onClick={requestClose}>
+          <Icon.Close />
+          <span className="hidden sm:inline">{t("editor.close")}</span>
+        </BarButton>
 
-          {carousel.languages.length > 1 ? (
-            <div className="flex items-center gap-2">
-              <span className="text-[12px] text-[var(--color-ink-faint)]">
-                {t("editor.displayLanguage")}
+        <div className="hidden min-w-0 md:block">
+          <p className="text-[13.5px] leading-tight font-semibold">{t("editor.workspace")}</p>
+          <p className="max-w-[240px] truncate text-[11.5px] text-[var(--color-ink-faint)]">
+            {carousel.theme}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-0.5">
+          <BarButton
+            label={t("editor.prev")}
+            onClick={() => go(active - 1)}
+            disabled={active === 0}
+          >
+            <Icon.ChevronLeft />
+          </BarButton>
+          <span className="min-w-[84px] text-center text-[13px] font-semibold tabular-nums">
+            {t("editor.slideOf", { n: active + 1, total })}
+          </span>
+          <BarButton
+            label={t("editor.next")}
+            onClick={() => go(active + 1)}
+            disabled={active >= total - 1}
+          >
+            <Icon.ChevronRight />
+          </BarButton>
+        </div>
+
+        {carousel.languages.length > 1 ? (
+          <div
+            role="tablist"
+            aria-label={t("editor.displayLanguage")}
+            className="flex gap-0.5 rounded-full bg-[var(--color-surface-muted)] p-1"
+          >
+            {carousel.languages.map((l) => {
+              const missing = missingIn(l);
+              return (
+                <button
+                  key={l}
+                  type="button"
+                  role="tab"
+                  aria-selected={l === lang}
+                  title={
+                    missing > 0
+                      ? t("editor.langMissing", { n: missing, lang: CONTENT_LOCALE_LABELS[l] })
+                      : CONTENT_LOCALE_LABELS[l]
+                  }
+                  onClick={() => {
+                    setEditing(null);
+                    setLang(l);
+                  }}
+                  className={cn(
+                    "relative rounded-full px-3 py-1 text-[12.5px] font-semibold uppercase transition-colors",
+                    l === lang
+                      ? "bg-[var(--color-surface)] text-[var(--color-ink)] shadow-[var(--shadow-card)]"
+                      : "text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]",
+                  )}
+                >
+                  {l}
+                  {missing > 0 ? (
+                    <span className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-[var(--color-danger)]" />
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+
+        <div className="ml-auto flex flex-wrap items-center gap-1">
+          <BarButton
+            label={`${t("editor.zones")} (T)`}
+            pressed={showZones}
+            onClick={() => setShowZones((v) => !v)}
+          >
+            <Icon.Phone />
+            <span className="hidden xl:inline">{t("editor.zones")}</span>
+          </BarButton>
+          <BarButton
+            label={`${t("editor.grid")} (G)`}
+            pressed={showGrid}
+            onClick={() => setShowGrid((v) => !v)}
+          >
+            <Icon.Grid />
+            <span className="hidden xl:inline">{t("editor.grid")}</span>
+          </BarButton>
+
+          <span className="mx-1 h-5 w-px bg-[var(--color-line-strong)]" aria-hidden />
+
+          <BarButton
+            label={`${t("editor.undo")} (Ctrl+Z)`}
+            onClick={() => {
+              setEditing(null);
+              dispatch({ type: "undo" });
+            }}
+            disabled={state.past.length === 0}
+          >
+            <Icon.Undo />
+          </BarButton>
+          <BarButton
+            label={`${t("editor.redo")} (Ctrl+Maj+Z)`}
+            onClick={() => {
+              setEditing(null);
+              dispatch({ type: "redo" });
+            }}
+            disabled={state.future.length === 0}
+          >
+            <Icon.Redo />
+          </BarButton>
+
+          <span className="mx-1 h-5 w-px bg-[var(--color-line-strong)]" aria-hidden />
+
+          <div className="relative" data-export-menu>
+            <BarButton
+              label={t("editor.export")}
+              pressed={exportMenu}
+              disabled={exporting !== null}
+              onClick={() => setExportMenu((v) => !v)}
+            >
+              {exporting ? <Spinner /> : <Icon.Download />}
+              <span className="hidden lg:inline">
+                {exporting
+                  ? t("editor.exporting", { done: exporting.done, total: exporting.total })
+                  : t("editor.export")}
               </span>
-              <div className="flex gap-1">
-                {carousel.languages.map((lang) => (
+            </BarButton>
+            {exportMenu ? (
+              <div
+                role="menu"
+                className="absolute top-full right-0 z-10 mt-1.5 w-72 rounded-[14px] border border-[var(--color-line)] bg-[var(--color-surface)] p-1 shadow-[var(--shadow-raised)]"
+              >
+                {(["one", "all"] as const).map((which) => (
                   <button
-                    key={lang}
+                    key={which}
                     type="button"
-                    onClick={() => setDisplayLang(lang)}
-                    aria-pressed={lang === displayLang}
-                    className={cn(
-                      "rounded-[8px] border px-2.5 py-1 text-[12px] transition-colors",
-                      lang === displayLang
-                        ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)]"
-                        : "border-[var(--color-line)] hover:border-[var(--color-line-strong)]",
-                    )}
+                    role="menuitem"
+                    onClick={() => void exportSlides(which)}
+                    className="block w-full rounded-[10px] px-3 py-2 text-left transition-colors hover:bg-[var(--color-surface-muted)]"
                   >
-                    {CONTENT_LOCALE_LABELS[lang]}
+                    <span className="block text-[13.5px] font-medium">
+                      {which === "one"
+                        ? t("editor.exportOne", { n: active + 1 })
+                        : t("editor.exportAll", { n: total })}
+                    </span>
+                    <span className="block text-[11.5px] text-[var(--color-ink-faint)]">
+                      {t("editor.exportDetail", { lang: CONTENT_LOCALE_LABELS[lang] })}
+                    </span>
                   </button>
                 ))}
               </div>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
+
+          <BarButton label={`${t("editor.shortcuts")} (?)`} onClick={() => setHelpOpen(true)}>
+            <Icon.Keyboard />
+          </BarButton>
+
+          <Button
+            size="sm"
+            variant={dirtyCount > 0 ? "primary" : "secondary"}
+            onClick={() => void save()}
+            loading={saving}
+            disabled={dirtyCount === 0 && !saving}
+            className="ml-1"
+            title="Ctrl+S"
+          >
+            {saving ? null : dirtyCount === 0 ? <Icon.Check /> : null}
+            {saving
+              ? t("editor.saving")
+              : dirtyCount > 0
+                ? t("editor.saveCount", { n: dirtyCount })
+                : t("editor.saved")}
+          </Button>
+        </div>
+      </header>
+
+      {error ? (
+        <div className="border-b border-[var(--color-line)] bg-[var(--color-danger-soft)] px-4 py-2">
+          <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 text-[13px] text-[var(--color-danger)]">
+            <span>{error}</span>
+            <button
+              type="button"
+              onClick={() => setError(null)}
+              aria-label={t("editor.close")}
+              className="shrink-0 rounded-full p-1 hover:bg-black/5"
+            >
+              <Icon.Close />
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {/* ---------------------------------------------------------- body */}
+      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-[118px_minmax(0,1fr)_360px] lg:overflow-hidden xl:grid-cols-[128px_minmax(0,1fr)_380px]">
+        <div className="border-b border-[var(--color-line)] bg-[var(--color-surface-muted)]/60 lg:min-h-0 lg:overflow-y-auto lg:border-r lg:border-b-0">
+          <Filmstrip
+            items={items}
+            active={active}
+            onGo={go}
+            label={(i) => t("editor.slideOf", { n: i + 1, total })}
+          />
         </div>
 
-        <div className="mt-4 grid gap-5 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
-          {/* ------------------------------------------------------ canvas */}
-          <div>
-            <div
-              ref={canvasRef}
-              className="relative w-full select-none overflow-hidden rounded-[12px] border border-[var(--color-line)] bg-black"
-              style={{ aspectRatio: `${SLIDE_WIDTH} / ${SLIDE_HEIGHT}` }}
-            >
-              <div
-                style={{
-                  width: SLIDE_WIDTH,
-                  height: SLIDE_HEIGHT,
-                  transform: `scale(${scale})`,
-                  transformOrigin: "top left",
-                  position: "absolute",
-                  fontFamily: "'TikTok Sans', system-ui, sans-serif",
-                }}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={src}
-                  alt=""
-                  draggable={false}
-                  onError={() => setImageBroken(true)}
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "cover",
-                  }}
-                />
-
-                {guides.x.map((x) => (
-                  <div
-                    key={`gx-${x}`}
-                    style={{
-                      position: "absolute",
-                      left: x,
-                      top: 0,
-                      width: Math.max(2, Math.round(2 / scale)),
-                      height: SLIDE_HEIGHT,
-                      background: "#ff2d9b",
-                      transform: "translateX(-50%)",
-                      pointerEvents: "none",
-                    }}
-                  />
-                ))}
-                {guides.y.map((y) => (
-                  <div
-                    key={`gy-${y}`}
-                    style={{
-                      position: "absolute",
-                      top: y,
-                      left: 0,
-                      height: Math.max(2, Math.round(2 / scale)),
-                      width: SLIDE_WIDTH,
-                      background: "#ff2d9b",
-                      transform: "translateY(-50%)",
-                      pointerEvents: "none",
-                    }}
-                  />
-                ))}
-
-                {BLOCKS.map((key) => {
-                  const block = overlay[key];
-                  const text = current[key];
-                  const isSelected = selected === key;
-                  return (
-                    <div
-                      key={key}
-                      onPointerDown={(e) => startDrag(e, key, null)}
-                      style={{
-                        ...(blockLayout(block) as React.CSSProperties),
-                        cursor: "move",
-                        // Stops the browser claiming the gesture as a scroll.
-                        touchAction: "none",
-                        outline: isSelected
-                          ? `${Math.round(3 / scale)}px dashed rgba(255,255,255,0.9)`
-                          : `${Math.round(2 / scale)}px dashed rgba(255,255,255,0.35)`,
-                        outlineOffset: 0,
-                      }}
-                    >
-                      <div
-                        style={{ position: "relative", width: "100%", textAlign: block.align }}
-                        dangerouslySetInnerHTML={{
-                          __html: renderBlockInner(
-                            text,
-                            block,
-                            overlay.style,
-                            pills[BLOCKS.indexOf(key)],
-                          ),
-                        }}
-                      />
-                      {isSelected
-                        ? CORNERS.map((corner) => (
-                            <span
-                              key={corner}
-                              onPointerDown={(e) => startDrag(e, key, corner)}
-                              style={{
-                                position: "absolute",
-                                width: Math.round(14 / scale),
-                                height: Math.round(14 / scale),
-                                background: "#fff",
-                                border: `${Math.round(2 / scale)}px solid #111`,
-                                borderRadius: Math.round(4 / scale),
-                                cursor:
-                                  corner === "nw" || corner === "se"
-                                    ? "nwse-resize"
-                                    : "nesw-resize",
-                                touchAction: "none",
-                                top: corner.startsWith("n")
-                                  ? -Math.round(7 / scale)
-                                  : undefined,
-                                bottom: corner.startsWith("s")
-                                  ? -Math.round(7 / scale)
-                                  : undefined,
-                                left: corner.endsWith("w")
-                                  ? -Math.round(7 / scale)
-                                  : undefined,
-                                right: corner.endsWith("e")
-                                  ? -Math.round(7 / scale)
-                                  : undefined,
-                              }}
-                            />
-                          ))
-                        : null}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {imageBroken ? (
-              <div className="mt-2">
-                <Notice tone="danger">{t("editor.imageBroken")}</Notice>
+        <main className="flex min-w-0 flex-col items-center px-4 py-5 lg:min-h-0 lg:overflow-y-auto lg:px-8">
+          <div
+            className="my-auto w-full space-y-3"
+            style={{ maxWidth: "min(100%, calc((100dvh - 200px) * 0.8))" }}
+          >
+            {mode === "crop" ? (
+              <div className="flex items-center justify-between gap-3 rounded-[12px] bg-[var(--color-ink-fill)] px-3.5 py-2 text-[12.5px] text-[var(--color-canvas)]">
+                <span className="flex items-center gap-2">
+                  <Icon.Crop />
+                  {t("editor.cropHint")}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setMode("layout")}
+                  className="shrink-0 rounded-full bg-white/15 px-3 py-1 font-semibold hover:bg-white/25"
+                >
+                  {t("editor.cropDone")}
+                </button>
               </div>
             ) : null}
-            <p className="mt-2 text-[11.5px] leading-snug text-[var(--color-ink-faint)]">
-              {t("editor.drag")} {t("editor.keys")}
+
+            <EditorCanvas
+              overlay={slide.overlay}
+              words={words}
+              src={src}
+              selected={selected}
+              mode={mode}
+              editing={editing}
+              showZones={showZones}
+              showGrid={showGrid}
+              labels={labels}
+              onSelect={setSelected}
+              onStartEditing={(key) => {
+                setSelected(key);
+                setEditing(key);
+              }}
+              onStopEditing={() => setEditing(null)}
+              onText={setText}
+              onBlock={setBlock}
+              onPhoto={setPhoto}
+              onIssues={setIssues}
+              onImageError={() => {
+                if (src) setBroken((b) => new Set(b).add(src));
+              }}
+            />
+
+            {src && broken.has(src) ? (
+              <Notice tone="danger">{t("editor.imageBroken")}</Notice>
+            ) : null}
+
+            {issues.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {issues.map((issue) => (
+                  <span
+                    key={`${issue.block}-${issue.kind}`}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-warn-soft)] px-2.5 py-1 text-[12px] font-medium text-[var(--color-warn-ink)]"
+                  >
+                    <Icon.Warning />
+                    {issueText(issue)}
+                  </span>
+                ))}
+                {!showZones && issues.some((i) => i.kind !== "outside") ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowZones(() => true)}
+                    className="rounded-full px-2 py-1 text-[12px] font-medium text-[var(--color-accent)] hover:underline"
+                  >
+                    {t("editor.showZones")}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+
+            <p className="text-center text-[11.5px] leading-snug text-[var(--color-ink-faint)]">
+              {showZones ? `${t("editor.zonesHint")} ` : ""}
+              {t("editor.canvasHint")}
             </p>
           </div>
+        </main>
 
-          {/* ---------------------------------------------------- controls */}
-          <div className="space-y-4">
-            <div>
-              <label className="mb-1 block text-[12px] font-medium">
-                {t("editor.slideStyle")}
-              </label>
-              <Picker
-                options={OVERLAY_STYLES.map((style) => ({
-                  value: style,
-                  label: t(STYLE_LABELS[style]),
-                }))}
-                value={overlay.style}
-                onChange={(v) => {
-                  commit("slide:style");
-                  setOverlay((o) => ({
-                    ...o,
-                    style: v as OverlayStyle,
-                  }));
-                }}
-              />
-            </div>
+        <aside className="border-t border-[var(--color-line)] bg-[var(--color-surface)] lg:min-h-0 lg:overflow-y-auto lg:border-t-0 lg:border-l">
+          <TextSection
+            words={words}
+            lang={lang}
+            selected={selected}
+            isMention={isMention}
+            onSelect={setSelected}
+            onText={setText}
+          />
+          <BlockSection
+            selected={selected}
+            block={block}
+            slideStyle={slide.overlay.style}
+            onSelect={setSelected}
+            onBlock={(patch, field) => {
+              if (selected) setBlock(selected, patch, `${selected}:${field}`);
+            }}
+            onCenter={centre}
+            onResetBlock={resetBlock}
+          />
+          <SlideSection
+            slideStyle={slide.overlay.style}
+            onSlideStyle={setSlideStyle}
+            src={src}
+            frame={frameOf(slide.overlay)}
+            mode={mode}
+            onMode={(m) => {
+              setEditing(null);
+              setMode(m);
+            }}
+            onPhoto={setPhoto}
+            onOpenPicker={() => setPicker(isMention ? "cta" : plant ? "plant" : "all")}
+            photoChanged={photoIsNew}
+            imagePrompt={slide.imagePrompt}
+            hasPexels={hasPexels}
+            regen={{
+              busy: regen?.busy === true && regen.index === active,
+              elsewhere: regen?.busy === true && regen.index !== active,
+              error: regen && regen.index === active ? regen.error : null,
+            }}
+            onRegenerate={(prompt, source) => void regenerate(prompt, source)}
+          />
+          <AllSlidesSection
+            count={total}
+            onApplyLayout={() => applyToAll("layout")}
+            onApplyStyle={() => applyToAll("style")}
+            onResetSlide={resetSlide}
+          />
+        </aside>
+      </div>
 
-            {BLOCKS.map((key) => (
-              <BlockControls
-                key={key}
-                t={t}
-                label={t(
-                  key === "title"
-                    ? "editor.blockTitle"
-                    : key === "subtitle"
-                      ? "editor.blockSubtitle"
-                      : "editor.blockCta",
-                )}
-                block={overlay[key]}
-                text={current[key]}
-                active={selected === key}
-                onFocus={() => setSelected(key)}
-                onText={(value) => setText(key, value)}
-                onChange={(patch) => setBlock(key, patch)}
-                slideStyle={overlay.style}
-                emptyHint={
-                  key === "cta"
-                    ? t("editor.ctaHint")
-                    : current[key].trim()
-                      ? null
-                      : t("editor.empty", {
-                          lang: CONTENT_LOCALE_LABELS[displayLang],
-                        })
-                }
-                hintTone={key === "cta" ? "muted" : "warn"}
-              />
+      {/* ------------------------------------------------------ layers */}
+      {picker ? (
+        <PhotoPicker
+          plantSlug={carousel.plantSlug}
+          plantLabel={plant?.primary ?? carousel.plantName}
+          currentId={slide.mediaId}
+          plants={plants}
+          initialTab={picker}
+          onPick={(asset) => {
+            applyAsset(asset, active);
+            setPicker(null);
+          }}
+          onClose={() => setPicker(null)}
+        />
+      ) : null}
+
+      {helpOpen ? (
+        <Layer onDismiss={() => setHelpOpen(false)} label={t("editor.shortcuts")}>
+          <h3 className="text-[16px] font-semibold">{t("editor.shortcuts")}</h3>
+          <dl className="mt-3 divide-y divide-[var(--color-line)]">
+            {SHORTCUTS.map(([keys, what]) => (
+              <div key={what} className="flex items-center justify-between gap-4 py-2 text-[13px]">
+                <dt className="text-[var(--color-ink-soft)]">{t(what)}</dt>
+                <dd>
+                  <kbd className="rounded-[7px] border border-[var(--color-line-strong)] bg-[var(--color-surface-muted)] px-2 py-0.5 font-sans text-[12px] font-semibold whitespace-nowrap">
+                    {keys}
+                  </kbd>
+                </dd>
+              </div>
             ))}
-
-            <p className="text-[11.5px] leading-snug text-[var(--color-ink-faint)]">
-              {t("editor.hint")}
-            </p>
-
-            {error ? <Notice tone="danger">{error}</Notice> : null}
-
-            <div className="flex flex-wrap justify-end gap-2 pt-1">
-              <Button
-                variant="ghost"
-                onClick={undo}
-                disabled={past.length === 0}
-                title="Ctrl+Z"
-              >
-                {t("editor.undo")}
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={redo}
-                disabled={future.length === 0}
-                title="Ctrl+Shift+Z"
-              >
-                {t("editor.redo")}
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  commit("reset");
-                  setOverlay(defaultOverlay(overlay.style));
-                }}
-              >
-                {t("editor.reset")}
-              </Button>
-              <Button variant="ghost" onClick={onClose}>
-                {t("editor.cancel")}
-              </Button>
-              <Button variant="primary" onClick={save} loading={saving}>
-                {saving ? t("editor.saving") : t("editor.save")}
-              </Button>
-            </div>
+          </dl>
+          <div className="mt-4 flex justify-end">
+            <Button size="sm" onClick={() => setHelpOpen(false)}>
+              {t("editor.close")}
+            </Button>
           </div>
+        </Layer>
+      ) : null}
+
+      {confirmClose ? (
+        <Layer onDismiss={() => setConfirmClose(false)} label={t("editor.unsavedTitle")}>
+          <h3 className="text-[16px] font-semibold">{t("editor.unsavedTitle")}</h3>
+          <p className="mt-1.5 text-[13.5px] leading-relaxed text-[var(--color-ink-soft)]">
+            {t("editor.unsavedBody", { n: dirtyCount })}
+          </p>
+          <div className="mt-5 flex flex-wrap justify-end gap-2">
+            <Button size="sm" variant="ghost" onClick={() => setConfirmClose(false)}>
+              {t("editor.keepEditing")}
+            </Button>
+            <Button size="sm" variant="secondary" onClick={finish}>
+              {t("editor.discard")}
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              loading={saving}
+              onClick={async () => {
+                const ok = await save();
+                if (ok) finish();
+                else setConfirmClose(false);
+              }}
+            >
+              {t("editor.saveAndClose")}
+            </Button>
+          </div>
+        </Layer>
+      ) : null}
+
+      {toast ? (
+        <div
+          role="status"
+          className="pointer-events-none fixed bottom-6 left-1/2 z-[80] -translate-x-1/2 rounded-full bg-[var(--color-ink-fill)] px-4 py-2 text-[13px] font-medium text-[var(--color-canvas)] shadow-[var(--shadow-raised)]"
+        >
+          {toast}
         </div>
-      </Card>
+      ) : null}
     </div>
   );
+}
+
+function BarButton({
+  label,
+  onClick,
+  disabled,
+  pressed,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  pressed?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      aria-pressed={pressed}
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        "inline-flex h-9 items-center gap-1.5 rounded-[10px] px-2.5 text-[13px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-35",
+        pressed
+          ? "bg-[var(--color-accent-soft)] text-[var(--color-accent-ink)]"
+          : "text-[var(--color-ink-soft)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-ink)]",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** A small dialog above the workspace. */
+function Layer({
+  label,
+  onDismiss,
+  children,
+}: {
+  label: string;
+  onDismiss: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-[70] grid place-items-center bg-black/45 p-4"
+      onPointerDown={(e) => {
+        if (e.target === e.currentTarget) onDismiss();
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={label}
+        className="w-full max-w-md rounded-[var(--radius-card)] border border-[var(--color-line)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-raised)]"
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A remembered on/off switch for this browser - the guides the operator
+ * likes to see. Storage can be refused (private windows); the switch then
+ * simply starts from its default every time.
+ */
+function useStoredFlag(
+  key: string,
+  fallback: boolean,
+): [boolean, (update: (value: boolean) => boolean) => void] {
+  const [value, setValue] = useState(fallback);
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (raw !== null) setValue(raw === "1");
+    } catch {
+      // Unavailable storage: keep the default.
+    }
+  }, [key]);
+  const update = useCallback(
+    (fn: (value: boolean) => boolean) => {
+      setValue((current) => {
+        const next = fn(current);
+        try {
+          window.localStorage.setItem(key, next ? "1" : "0");
+        } catch {
+          // Unavailable storage: the switch still works for this session.
+        }
+        return next;
+      });
+    },
+    [key],
+  );
+  return [value, update];
 }
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-/** How close a block has to come, in source pixels, before it clicks on. */
-const SNAP = 14;
-
-/**
- * Pulls a dragged block onto the canvas centre or onto another block's anchor.
- *
- * Returns the lines that were caught so they can be drawn, which is the half
- * that makes snapping feel deliberate rather than like the block sticking.
- */
-function snapTo(
-  wanted: { x: number; y: number },
-  _key: BlockKey,
-  others: { x: number; y: number }[],
-): { x: number; y: number; guides: { x: number[]; y: number[] } } {
-  const candidatesX = [SLIDE_WIDTH / 2, ...others.map((o) => o.x)];
-  const candidatesY = [SLIDE_HEIGHT / 2, ...others.map((o) => o.y)];
-
-  const pick = (value: number, candidates: number[]) => {
-    let best: number | null = null;
-    for (const candidate of candidates) {
-      if (Math.abs(candidate - value) > SNAP) continue;
-      if (best === null || Math.abs(candidate - value) < Math.abs(best - value)) {
-        best = candidate;
-      }
-    }
-    return best;
-  };
-
-  const x = pick(wanted.x, candidatesX);
-  const y = pick(wanted.y, candidatesY);
-  return {
-    x: x ?? wanted.x,
-    y: y ?? wanted.y,
-    guides: { x: x === null ? [] : [x], y: y === null ? [] : [y] },
-  };
+function download(dataUrl: string, name: string) {
+  const link = document.createElement("a");
+  link.href = dataUrl;
+  link.download = name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
 }
 
-interface ControlsProps {
-  t: ReturnType<typeof translator>;
-  label: string;
-  block: OverlayBlock;
-  text: string;
-  active: boolean;
-  emptyHint: string | null;
-  hintTone: "warn" | "muted";
-  onFocus: () => void;
-  onText: (value: string) => void;
-  onChange: (patch: Partial<OverlayBlock>) => void;
-  slideStyle: OverlayStyle;
-}
-
-function BlockControls({
-  t,
-  label,
-  block,
-  text,
-  active,
-  emptyHint,
-  hintTone,
-  onFocus,
-  onText,
-  onChange,
-  slideStyle,
-}: ControlsProps) {
-  // The style that will actually be used: the block's own, or the slide's when
-  // it inherits. Showing outline controls for a pill was offering settings
-  // that changed nothing.
-  const showsStroke = (block.style ?? slideStyle) === "stroke";
-
-  return (
-    <div
-      onFocusCapture={onFocus}
-      className={cn(
-        "rounded-[10px] border p-3 transition-colors",
-        active
-          ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)]/40"
-          : "border-[var(--color-line)]",
-      )}
-    >
-      <p className="mb-1.5 text-[12px] font-semibold">{label}</p>
-
-      <textarea
-        value={text}
-        aria-label={label}
-        // The server clamps these lengths, so the editor stops at the same
-        // point rather than letting a long line be trimmed without a word.
-        maxLength={400}
-        onChange={(e) => onText(e.target.value)}
-        rows={2}
-        className="w-full rounded-[8px] border border-[var(--color-line)] bg-[var(--color-surface)] px-2.5 py-1.5 text-[13px] outline-none focus:border-[var(--color-accent)]"
-      />
-      {emptyHint ? (
-        <p
-          className={cn(
-            "mt-1 text-[11px]",
-            hintTone === "warn"
-              ? "text-[var(--color-danger)]"
-              : "text-[var(--color-ink-faint)]",
-          )}
-        >
-          {emptyHint}
-        </p>
-      ) : null}
-
-      <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2">
-        <div>
-          <label className="mb-1 block text-[11.5px] font-medium">
-            {t("editor.blockStyle")}
-          </label>
-          <Picker
-            options={[
-              // "Comme la slide" is the one row whose meaning depends on
-              // something else, so it carries what it resolves to right now.
-              {
-                value: "",
-                label: t("editor.styleInherit"),
-                detail: t(STYLE_LABELS[slideStyle]),
-              },
-              ...OVERLAY_STYLES.map((style) => ({
-                value: style,
-                label: t(STYLE_LABELS[style]),
-              })),
-            ]}
-            value={block.style ?? ""}
-            onChange={(v) =>
-              onChange({
-                style: v ? (v as OverlayStyle) : null,
-              })
-            }
-          />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-[11.5px] font-medium">
-            {t("editor.align")}
-          </label>
-          <div className="flex gap-1">
-            {(["left", "center", "right"] as const).map((align) => (
-              <button
-                key={align}
-                type="button"
-                onClick={() => onChange({ align })}
-                aria-pressed={block.align === align}
-                aria-label={`${label} — ${ALIGN_LABELS[align]}`}
-                className={cn(
-                  "flex-1 rounded-[8px] border py-1.5 text-[12px] transition-colors",
-                  block.align === align
-                    ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)]"
-                    : "border-[var(--color-line)] hover:border-[var(--color-line-strong)]",
-                )}
-              >
-                {align === "left" ? "◀" : align === "right" ? "▶" : "◆"}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <label className="mb-1 flex items-center justify-between text-[11.5px] font-medium">
-            {t("editor.size")}
-            <span className="text-[var(--color-ink-faint)]">
-              {block.fontSize}
-            </span>
-          </label>
-          <input
-            type="range"
-            min={16}
-            max={240}
-            aria-label={`${label} — ${t("editor.size")}`}
-            value={block.fontSize}
-            onChange={(e) => onChange({ fontSize: Number(e.target.value) })}
-            className="w-full accent-[var(--color-accent)]"
-          />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-[11.5px] font-medium">
-            {t("editor.weight")}
-          </label>
-          <Picker
-            options={WEIGHTS.map((weight) => ({
-              value: String(weight),
-              label: String(weight),
-            }))}
-            value={String(block.fontWeight)}
-            onChange={(v) => onChange({ fontWeight: Number(v) })}
-          />
-        </div>
-
-        <div>
-          <label className="mb-1 flex items-center justify-between text-[11.5px] font-medium">
-            {t("editor.lineHeight")}
-            <span className="text-[var(--color-ink-faint)]">
-              {block.lineHeight.toFixed(2)}
-            </span>
-          </label>
-          <input
-            type="range"
-            min={0.9}
-            max={2.5}
-            step={0.05}
-            aria-label={`${label} — ${t("editor.lineHeight")}`}
-            value={block.lineHeight}
-            onChange={(e) => onChange({ lineHeight: Number(e.target.value) })}
-            className="w-full accent-[var(--color-accent)]"
-          />
-        </div>
-
-        {showsStroke ? (
-          <>
-            <div>
-              <label className="mb-1 block text-[11.5px] font-medium">
-                {t("editor.strokeColor")}
-              </label>
-              <input
-                type="color"
-                aria-label={`${label} — ${t("editor.strokeColor")}`}
-                value={block.strokeColor}
-                onChange={(e) => onChange({ strokeColor: e.target.value })}
-                className="h-8 w-full cursor-pointer rounded-[8px] border border-[var(--color-line)] bg-transparent"
-              />
-            </div>
-            <div>
-              <label className="mb-1 flex items-center justify-between text-[11.5px] font-medium">
-                {t("editor.strokeWidth")}
-                <span className="text-[var(--color-ink-faint)]">
-                  {block.strokeWidth}%
-                </span>
-              </label>
-              <input
-                type="range"
-                min={0}
-                max={40}
-                aria-label={`${label} — ${t("editor.strokeWidth")}`}
-                value={block.strokeWidth}
-                onChange={(e) => onChange({ strokeWidth: Number(e.target.value) })}
-                className="w-full accent-[var(--color-accent)]"
-              />
-            </div>
-          </>
-        ) : null}
-      </div>
-    </div>
-  );
+/** "Top 5 des pothos rares" -> "top-5-des-pothos-rares", for file names. */
+function fileStem(theme: string): string {
+  const stem = theme
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+  return stem || "carrousel";
 }

@@ -1,7 +1,10 @@
 import { handle, ok } from "@/lib/api";
 import { randomToken } from "@/lib/crypto";
+import { plantName } from "@/lib/data/localize";
+import { getPlant } from "@/lib/data/plants";
 import { badRequest } from "@/lib/errors";
 import { extensionFor, hostImageAt } from "@/lib/images";
+import { mediaPath } from "@/lib/media";
 import { getStore } from "@/lib/store";
 import type { MediaAsset, MediaRole } from "@/lib/types";
 import { mediaFilterSchema, parseOrThrow } from "@/lib/validation";
@@ -32,8 +35,10 @@ function gcd(a: number, b: number): number {
 }
 
 /**
- * Files an image the operator prepared - a Plenova call-to-action, or an
- * opening/closing shot - into the library under its role.
+ * Files an image the operator prepared into the library: a Plenova
+ * call-to-action, an opening/closing shot, or a photograph of one species
+ * from the catalog - the slide editor files a picture brought in for a
+ * Monstera carousel under Monstera, where the next Monstera carousel finds it.
  *
  * Goes through `hostImageAt` like every other image, so its metadata is
  * scrubbed before it is stored: a file exported from a design tool carries
@@ -44,6 +49,7 @@ export async function POST(request: Request) {
     let body: {
       dataUrl?: unknown;
       role?: unknown;
+      plantSlug?: unknown;
       width?: unknown;
       height?: unknown;
       name?: unknown;
@@ -55,7 +61,11 @@ export async function POST(request: Request) {
     }
 
     const role = body.role === "cta" || body.role === "hook" ? body.role : null;
-    if (!role) throw badRequest("Indique si l'image est un CTA ou un hook.");
+    const plant =
+      !role && typeof body.plantSlug === "string" ? getPlant(body.plantSlug) : undefined;
+    if (!role && !plant) {
+      throw badRequest("Indique où ranger l'image : CTA, hook ou une plante du catalogue.");
+    }
 
     const dataUrl = typeof body.dataUrl === "string" ? body.dataUrl : "";
     const match = dataUrl.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
@@ -73,10 +83,14 @@ export async function POST(request: Request) {
         ? `${width / gcd(width, height)}:${height / gcd(width, height)}`
         : "4:5";
 
-    const shelf = ROLES[role];
+    const shelf = role
+      ? ROLES[role]
+      : { slug: plant!.slug, name: plantName(plant!, "en") };
     const id = `med_up_${randomToken(10)}`;
     const hosted = await hostImageAt(
-      `media/${shelf.slug}/${id}.${extensionFor(mimeType)}`,
+      role
+        ? `media/${shelf.slug}/${id}.${extensionFor(mimeType)}`
+        : mediaPath({ plantSlug: shelf.slug, varietySlug: null, id }, extensionFor(mimeType)),
       data,
       mimeType,
     );
@@ -99,7 +113,7 @@ export async function POST(request: Request) {
       source: "upload",
       sourceId: null,
       role,
-      tags: [role, "upload"],
+      tags: role ? [role, "upload"] : ["upload"],
       usedCount: 0,
       lastUsedAt: null,
       createdAt: now,

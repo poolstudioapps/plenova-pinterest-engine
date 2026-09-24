@@ -16,12 +16,13 @@ import { extensionFor, hostImageAt } from "@/lib/images";
 import { leastUsed, mediaPath, shelfOf, varietySlug } from "@/lib/media";
 import { findReference, isPexelsConfigured } from "@/lib/pexels";
 import { config } from "@/lib/config";
-import { signLabel } from "@/lib/crypto";
+import { randomToken, signLabel } from "@/lib/crypto";
 import { getStore } from "@/lib/store";
 import { truncate } from "@/lib/utils";
 import { getPublishStatus, publishCarousel } from "@/lib/tiktok";
 import {
   defaultOverlay,
+  normaliseOverlay,
   type OverlayStyle,
   type SlideOverlay,
 } from "@/lib/overlay";
@@ -589,11 +590,20 @@ export async function updateSlide(
   patch: {
     text?: Partial<Record<ContentLocale, SlideText>>;
     overlay?: SlideOverlay;
+    /** Another photograph from the library, by id. */
+    mediaId?: string;
+    /** The brief the photograph was made from, when it was remade. */
+    imagePrompt?: string;
   },
 ): Promise<CarouselRecord> {
   const store = getStore();
   const carousel = await store.getCarousel(id);
   if (!carousel) throw notFound(`Aucun carrousel avec l'identifiant ${id}.`);
+  // The last write of a generation rebuilds the whole record, so an edit made
+  // now would be silently thrown away a few seconds later.
+  if (carousel.status === "generating") {
+    throw badRequest("Ce carrousel est encore en cours de génération.");
+  }
 
   const slide = carousel.slides[index];
   if (!slide) throw badRequest(`Ce carrousel n'a pas de slide ${index + 1}.`);
@@ -616,15 +626,42 @@ export async function updateSlide(
   }
 
   const overlay = patch.overlay ?? slide.overlay;
-  if (patch.overlay && JSON.stringify(patch.overlay) !== JSON.stringify(slide.overlay)) {
+  // Compared normalised: an overlay stored before a field existed is the same
+  // design, and reading it as a new one re-composed every language for nothing.
+  if (
+    patch.overlay &&
+    JSON.stringify(normaliseOverlay(patch.overlay)) !==
+      JSON.stringify(normaliseOverlay(slide.overlay))
+  ) {
     for (const language of carousel.languages) stale.add(language);
+  }
+
+  let photo: Pick<CarouselSlide, "mediaId" | "imageUrl"> = {
+    mediaId: slide.mediaId,
+    imageUrl: slide.imageUrl,
+  };
+  if (patch.mediaId !== undefined && patch.mediaId !== slide.mediaId) {
+    const asset = await store.getMedia(patch.mediaId);
+    if (!asset) throw notFound(`Aucune image avec l'identifiant ${patch.mediaId}.`);
+    photo = { mediaId: asset.id, imageUrl: asset.url };
+    // Every language burned its words onto the old picture.
+    for (const language of carousel.languages) stale.add(language);
+    // A picture remade for this very slide was counted when it was made.
+    if (!asset.sourceId?.startsWith(`${id}_`)) await store.markMediaUsed(asset.id);
   }
 
   const composed = { ...slide.composed };
   for (const language of stale) delete composed[language];
 
   const slides = [...carousel.slides];
-  slides[index] = { ...slide, text, overlay, composed };
+  slides[index] = {
+    ...slide,
+    ...photo,
+    ...(patch.imagePrompt !== undefined ? { imagePrompt: patch.imagePrompt } : {}),
+    text,
+    overlay,
+    composed,
+  };
 
   const updated: CarouselRecord = {
     ...carousel,
@@ -633,6 +670,50 @@ export async function updateSlide(
   };
   await store.saveCarousel(updated);
   return updated;
+}
+
+/**
+ * A new photograph for one slide, made the way the carousel's own were: the
+ * Pexels reference reinterpreted by Gemini, or Gemini alone.
+ *
+ * Filed in the library and returned - NOT put on the slide. The editor holds
+ * it as a draft like every other change, so closing without saving leaves the
+ * slide exactly as it was, and the picture stays in the library for later.
+ */
+export async function regenerateSlidePhoto(
+  id: string,
+  index: number,
+  options: { prompt?: string; source?: "photo" | "generate" },
+): Promise<MediaAsset> {
+  const store = getStore();
+  const carousel = await store.getCarousel(id);
+  if (!carousel) throw notFound(`Aucun carrousel avec l'identifiant ${id}.`);
+  const slide = carousel.slides[index];
+  if (!slide) throw badRequest(`Ce carrousel n'a pas de slide ${index + 1}.`);
+
+  const prompt = options.prompt?.trim() || slide.imagePrompt;
+  if (!prompt) throw badRequest("Décris la photo à produire.");
+
+  // Filed under the species the current picture shows, so a listicle slide
+  // about a pothos stays a pothos; a CTA or hook picture, or one nobody could
+  // name, falls back to the carousel's own plant.
+  const current = slide.mediaId ? await store.getMedia(slide.mediaId) : null;
+  const species = current && !current.role && getPlant(current.plantSlug) ? current : null;
+  const plant = carousel.plantSlug ? getPlant(carousel.plantSlug) : undefined;
+
+  return produceSlideImage({
+    // Unique, or the new picture would overwrite the old one's file in place.
+    id: `${id}_${index}_${randomToken(4)}`,
+    imagePrompt: prompt,
+    photoQuery: slide.photoQuery,
+    source: options.source ?? "photo",
+    plantSlug: species?.plantSlug ?? plant?.slug ?? "unfiled",
+    plantName:
+      species?.plantName ?? (plant ? localizedPlantName(plant, "en") : carousel.theme),
+    variety: species?.variety ?? null,
+    varietySlug: species?.varietySlug ?? null,
+    theme: carousel.theme,
+  });
 }
 
 /**
