@@ -148,21 +148,6 @@ export function CarouselStudio({
         ? "carousels.blockedLanguages"
         : null;
 
-  /*
-   * What the folded options currently say, on the summary line.
-   *
-   * A disclosure that hides its own state makes people open it just to check.
-   */
-  const optionsSummary = [
-    plants.find((p) => p.slug === plantSlug)?.primary ?? t("carousels.anyPlant"),
-    imageSource === "photo"
-      ? t("carousels.sourcePhotoShort")
-      : imageSource === "library"
-        ? t("carousels.sourceLibraryShort")
-        : t("carousels.sourceGenerateShort"),
-    t(OVERLAY_STYLE_LABELS[overlayStyle]),
-  ].join(" · ");
-
   function toggleLanguage(lang: ContentLocale) {
     setLanguages((current) =>
       current.includes(lang)
@@ -524,78 +509,78 @@ export function CarouselStudio({
               />
             </Field>
 
-            <Field label={t("carousels.languages")} htmlFor="langs">
-              <MultiPicker
-                id="langs"
-                options={LANGUAGE_OPTIONS}
-                values={languages}
-                onToggle={(v) => toggleLanguage(v as ContentLocale)}
-                placeholder={t("carousels.blockedLanguages")}
-                summary={(n) => t("carousels.languageCount", { n })}
-              />
-            </Field>
+            {/*
+              Four menus, always in view.
 
-            <details className="border-t border-[var(--color-line)] pt-4">
-              <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-2 text-[13px] font-medium text-[var(--color-ink-soft)] transition-colors hover:text-[var(--color-ink)]">
-                {t("carousels.options")}
-                <span className="text-[12.5px] font-normal text-[var(--color-ink-faint)]">
-                  {optionsSummary}
-                </span>
-              </summary>
+              They used to fold behind an "Options" line with its marker
+              removed, so it read as static text that happened to open a hidden
+              section - nothing on screen said it could be clicked. Folding was
+              there to tame three tall native selects with a paragraph each;
+              one-line menus do not need taming.
+            */}
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label={t("carousels.languages")} htmlFor="langs">
+                <MultiPicker
+                  id="langs"
+                  options={LANGUAGE_OPTIONS}
+                  values={languages}
+                  onToggle={(v) => toggleLanguage(v as ContentLocale)}
+                  placeholder={t("carousels.blockedLanguages")}
+                  summary={(n) => t("carousels.languageCount", { n })}
+                />
+              </Field>
 
-              <div className="grid gap-5 pt-4 md:grid-cols-2">
-                <Field label={t("carousels.plantOptional")} htmlFor="plant">
-                  {/* The botanical name rides on a second line, which is the
-                      whole reason this is not a native <select>. */}
-                  <Picker
-                    id="plant"
-                    options={[
-                      { value: "", label: t("carousels.anyPlant") },
-                      ...plants.map((p) => ({
-                        value: p.slug,
-                        label: p.primary,
-                        ...(p.latin ? { detail: p.latin } : {}),
-                      })),
-                    ]}
-                    value={plantSlug}
-                    onChange={setPlantSlug}
-                  />
-                </Field>
+              <Field label={t("carousels.plantOptional")} htmlFor="plant">
+                {/* The botanical name rides on a second line, which is the
+                    whole reason this is not a native <select>. */}
+                <Picker
+                  id="plant"
+                  options={[
+                    { value: "", label: t("carousels.anyPlant") },
+                    ...plants.map((p) => ({
+                      value: p.slug,
+                      label: p.primary,
+                      ...(p.latin ? { detail: p.latin } : {}),
+                    })),
+                  ]}
+                  value={plantSlug}
+                  onChange={setPlantSlug}
+                />
+              </Field>
 
-                <Field
-                  label={t("carousels.imageSource")}
-                  htmlFor="src"
-                  hint={hasPexels ? undefined : t("carousels.noPexels")}
-                >
-                  <Picker
-                    id="src"
-                    options={[
-                      ...(hasPexels
-                        ? [{ value: "photo", label: t("carousels.sourcePhoto") }]
-                        : []),
-                      { value: "generate", label: t("carousels.sourceGenerate") },
-                      { value: "library", label: t("carousels.sourceLibrary") },
-                    ]}
-                    value={imageSource}
-                    onChange={(v) =>
-                      setImageSource(v as "generate" | "photo" | "library")
-                    }
-                  />
-                </Field>
+              <Field
+                label={t("carousels.imageSource")}
+                htmlFor="src"
+                hint={hasPexels ? undefined : t("carousels.noPexels")}
+              >
+                <Picker
+                  id="src"
+                  options={[
+                    ...(hasPexels
+                      ? [{ value: "photo", label: t("carousels.sourcePhoto") }]
+                      : []),
+                    { value: "generate", label: t("carousels.sourceGenerate") },
+                    { value: "library", label: t("carousels.sourceLibrary") },
+                  ]}
+                  value={imageSource}
+                  onChange={(v) =>
+                    setImageSource(v as "generate" | "photo" | "library")
+                  }
+                />
+              </Field>
 
-                <Field label={t("carousels.overlayStyle")} htmlFor="ov">
-                  <Picker
-                    id="ov"
-                    options={OVERLAY_STYLES.map((style) => ({
-                      value: style,
-                      label: t(OVERLAY_STYLE_LABELS[style]),
-                    }))}
-                    value={overlayStyle}
-                    onChange={(v) => setOverlayStyle(v as OverlayStyle)}
-                  />
-                </Field>
-              </div>
-            </details>
+              <Field label={t("carousels.overlayStyle")} htmlFor="ov">
+                <Picker
+                  id="ov"
+                  options={OVERLAY_STYLES.map((style) => ({
+                    value: style,
+                    label: t(OVERLAY_STYLE_LABELS[style]),
+                  }))}
+                  value={overlayStyle}
+                  onChange={(v) => setOverlayStyle(v as OverlayStyle)}
+                />
+              </Field>
+            </div>
 
             <div className="border-t border-[var(--color-line)] pt-5">
               <div className="flex flex-wrap items-center gap-3">
