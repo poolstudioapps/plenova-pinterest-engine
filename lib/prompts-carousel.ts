@@ -48,8 +48,17 @@ export interface CarouselConceptDraft {
   hashtags: Partial<Record<ContentLocale, string[]>>;
 }
 
-/** Hashtags every Plenova carousel carries, as in the original engine. */
-export const REQUIRED_HASHTAGS = ["planttok", "plantmom"];
+/** The one tag every Plenova carousel carries, whatever else it carries. */
+export const REQUIRED_HASHTAGS = ["planttok"];
+
+/**
+ * At most five, and they are chosen rather than accumulated.
+ *
+ * A dozen tags reads as spam and dilutes the two or three that actually carry
+ * the post. This is a hard cap enforced in code after generation, because a
+ * number in a prompt is a request, not a guarantee.
+ */
+export const MAX_HASHTAGS = 5;
 
 /**
  * Built per request rather than declared once, because the required language
@@ -116,7 +125,8 @@ export function carouselSchema(languages: ContentLocale[]) {
       caption: multiText("TikTok caption, without hashtags."),
       hashtags: {
         type: "object",
-        description: "6 to 12 hashtags per language, lowercase, no # prefix.",
+        description:
+        "3 to 5 hashtags per language, lowercase, no # prefix, most relevant first.",
         properties: Object.fromEntries(
           languages.map((l) => [
             l,
@@ -250,7 +260,9 @@ export function buildCarouselPrompt(input: CarouselPromptInput): string {
     "",
     "## Caption and hashtags",
     "Caption: 1 to 3 sentences, no hashtags inside it, ending on a light invitation to save the post.",
-    `Hashtags: 6 to 12 per language, lowercase, no # prefix. Always include ${REQUIRED_HASHTAGS.join(" and ")} in every language.`,
+    `Hashtags: ${MAX_HASHTAGS} at most per language, lowercase, no # prefix, ordered most relevant first.`,
+    "Choose them, do not pile them up: a tag earns its place by being what someone would actually search, not by being adjacent to the topic.",
+    `Always include ${REQUIRED_HASHTAGS.join(" and ")}, and count it within the ${MAX_HASHTAGS}.`,
   ];
 
   if (existingThemes && existingThemes.length > 0) {

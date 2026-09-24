@@ -239,6 +239,7 @@ const FR = {
   "status.failed": "échec",
   "generate.advanced": "Options avancées",
   "carousels.options": "Options",
+  "carousels.languageCount": "{n} langues",
   "carousels.themePlaceholder": "Top 5 des pothos rares",
   "carousels.sourcePhotoShort": "Vraies photos",
   "carousels.sourceGenerateShort": "Images générées",

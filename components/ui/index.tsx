@@ -11,6 +11,8 @@ import { t, type TranslationKey } from "@/lib/i18n";
 import type { PlantIdentity } from "@/lib/data/localize";
 import type { PinStatus } from "@/lib/types";
 
+export { Picker, MultiPicker, type PickerOption } from "./Picker";
+
 /* --------------------------------------------------------------- layout -- */
 
 export function Card({

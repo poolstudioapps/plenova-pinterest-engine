@@ -9,6 +9,7 @@ import { badRequest, notConfigured, notConnected, rateLimited, upstream } from "
 import { getStore } from "@/lib/store";
 import type { TikTokAccount, TikTokCreatorInfo } from "@/lib/types";
 import { DEFAULT_CONTENT_LOCALE, type ContentLocale } from "@/lib/i18n";
+import { truncate } from "@/lib/utils";
 
 /**
  * TikTok Content Posting API.
@@ -390,9 +391,14 @@ export async function publishCarousel(
       `Le compte TikTok connecté n'a pas le scope ${needed}. Reconnecte-le en accordant ce scope.`,
     );
   }
+  /*
+   * TikTok's hard limits for a photo post. Enforced here rather than trusted
+   * from the caller: this is the last line before the request goes out, and a
+   * string one character over is a rejected publish, not a cosmetic issue.
+   */
   const postInfo: Record<string, unknown> = {
-    title: input.title.slice(0, 90),
-    description: input.description.slice(0, 4000),
+    title: truncate(input.title, 90),
+    description: truncate(input.description, 4000),
   };
   if (input.postMode === "DIRECT_POST") {
     // TikTok forbids the pair, and the UI disables it - but the server must

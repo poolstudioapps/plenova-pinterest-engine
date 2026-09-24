@@ -49,11 +49,20 @@ export const PINTEREST_LIMITS = {
  */
 export function truncate(input: string, max: number): string {
   const trimmed = input.trim();
-  if (trimmed.length <= max) return trimmed;
+  /*
+   * Counted in code points, not UTF-16 units.
+   *
+   * `"a".repeat(89) + "🌿"` is 90 characters to a reader and 91 to `.length`,
+   * and slicing it at 90 leaves half a surrogate pair - a replacement glyph in
+   * the caption, and a string TikTok may reject outright. Emoji are not an
+   * edge case in this product, they are in most captions.
+   */
+  const points = [...trimmed];
+  if (points.length <= max) return trimmed;
 
   const ellipsis = "...";
   const room = Math.max(1, max - ellipsis.length);
-  const slice = trimmed.slice(0, room);
+  const slice = points.slice(0, room).join("");
 
   // Prefer a word boundary, but only when it does not gut the text.
   const lastSpace = slice.lastIndexOf(" ");

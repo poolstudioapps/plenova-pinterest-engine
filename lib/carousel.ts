@@ -18,13 +18,18 @@ import { findReference, isPexelsConfigured } from "@/lib/pexels";
 import { config } from "@/lib/config";
 import { signLabel } from "@/lib/crypto";
 import { getStore } from "@/lib/store";
+import { truncate } from "@/lib/utils";
 import { getPublishStatus, publishCarousel } from "@/lib/tiktok";
 import {
   defaultOverlay,
   type OverlayStyle,
   type SlideOverlay,
 } from "@/lib/overlay";
-import type { MultiText } from "@/lib/prompts-carousel";
+import {
+  MAX_HASHTAGS,
+  REQUIRED_HASHTAGS,
+  type MultiText,
+} from "@/lib/prompts-carousel";
 import type {
   CarouselPost,
   CarouselRecord,
@@ -287,9 +292,14 @@ async function generateCarousel(
 
   // Hashtags ride at the end of the caption, which is how TikTok reads them.
   const caption: CarouselRecord["caption"] = {};
+  const hashtags: CarouselRecord["hashtags"] = {};
   for (const lang of languages) {
-    const tags = (concept.hashtags[lang] ?? []).map((h) => `#${h}`).join(" ");
-    caption[lang] = [concept.caption[lang] ?? "", tags]
+    const tags = normaliseHashtags(concept.hashtags[lang]);
+    hashtags[lang] = tags;
+    caption[lang] = [
+      concept.caption[lang] ?? "",
+      tags.map((h) => `#${h}`).join(" "),
+    ]
       .filter(Boolean)
       .join("\n\n");
   }
@@ -300,7 +310,7 @@ async function generateCarousel(
     languages,
     theme,
     caption,
-    hashtags: concept.hashtags,
+    hashtags,
     slides,
     coverIndex: 1,
 
@@ -796,11 +806,12 @@ export async function publishToAccounts(
       const { publishId } = await publishCarousel({
         openId,
         // TikTok takes the first line as the title.
-        title: (
+        title: truncate(
           options.title?.trim() ||
-          carousel.slides[0]?.text[language]?.title ||
-          carousel.theme
-        ).slice(0, 90),
+            carousel.slides[0]?.text[language]?.title ||
+            carousel.theme,
+          90,
+        ),
         description: caption,
         imageUrls: urls,
         coverIndex: carousel.coverIndex,
@@ -969,4 +980,38 @@ async function confirmPublish(
     await new Promise((resolve) => setTimeout(resolve, 2500));
   }
   return { settled: "pending", reason: null };
+}
+
+
+/**
+ * The hashtag rule, applied to whatever the model returned.
+ *
+ * The prompt asks for at most five with `planttok` among them; this is what
+ * makes it true. A model asked for "3 to 5" will sometimes send nine, and the
+ * required tag is the one most likely to be dropped when it is competing for
+ * room - so the cap is applied first and `planttok` is then guaranteed a slot.
+ *
+ * Order is meaning here: the model is told to put the most relevant first, so
+ * trimming takes from the tail.
+ */
+export function normaliseHashtags(raw: string[] | undefined): string[] {
+  const seen = new Set<string>();
+  const clean: string[] = [];
+
+  for (const tag of raw ?? []) {
+    const value = tag
+      .trim()
+      .replace(/^#+/, "")
+      .replace(/\s+/g, "")
+      .toLowerCase();
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    clean.push(value);
+  }
+
+  const required = REQUIRED_HASHTAGS.filter((tag) => !seen.has(tag));
+  // Trim to leave room for the required tags, then put them at the front:
+  // #planttok is the one that has to survive.
+  const room = Math.max(0, MAX_HASHTAGS - required.length);
+  return [...required, ...clean.slice(0, room)];
 }

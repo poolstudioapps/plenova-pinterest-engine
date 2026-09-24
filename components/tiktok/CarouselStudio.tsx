@@ -8,10 +8,11 @@ import {
   EmptyState,
   Field,
   Input,
+  MultiPicker,
   Notice,
+  Picker,
   RowMenu,
   RowMenuItem,
-  Select,
 } from "@/components/ui";
 import { PublishDialog } from "@/components/tiktok/PublishDialog";
 import { RepostPanel } from "@/components/tiktok/RepostPanel";
@@ -66,6 +67,11 @@ const OVERLAY_STYLE_LABELS: Record<OverlayStyle, TranslationKey> = {
   pillBlack: "editor.stylePillBlack",
   none: "editor.styleNone",
 };
+
+const LANGUAGE_OPTIONS = CONTENT_LOCALES.map((l) => ({
+  value: l,
+  label: CONTENT_LOCALE_LABELS[l],
+}));
 
 const TABS = [
   { key: "new" as const, labelKey: "carousels.build" as TranslationKey },
@@ -518,32 +524,16 @@ export function CarouselStudio({
               />
             </Field>
 
-            <div>
-              <p className="mb-2 text-[13px] font-medium">
-                {t("carousels.languages")}
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {CONTENT_LOCALES.map((lang) => {
-                  const on = languages.includes(lang);
-                  return (
-                    <button
-                      key={lang}
-                      type="button"
-                      onClick={() => toggleLanguage(lang)}
-                      aria-pressed={on}
-                      className={cn(
-                        "rounded-[var(--radius-pill)] border px-3.5 py-1.5 text-[13px] font-medium transition-colors",
-                        on
-                          ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent-ink)]"
-                          : "border-[var(--color-line)] text-[var(--color-ink-soft)] hover:border-[var(--color-line-strong)]",
-                      )}
-                    >
-                      {CONTENT_LOCALE_LABELS[lang]}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+            <Field label={t("carousels.languages")} htmlFor="langs">
+              <MultiPicker
+                id="langs"
+                options={LANGUAGE_OPTIONS}
+                values={languages}
+                onToggle={(v) => toggleLanguage(v as ContentLocale)}
+                placeholder={t("carousels.blockedLanguages")}
+                summary={(n) => t("carousels.languageCount", { n })}
+              />
+            </Field>
 
             <details className="border-t border-[var(--color-line)] pt-4">
               <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-2 text-[13px] font-medium text-[var(--color-ink-soft)] transition-colors hover:text-[var(--color-ink)]">
@@ -555,18 +545,21 @@ export function CarouselStudio({
 
               <div className="grid gap-5 pt-4 md:grid-cols-2">
                 <Field label={t("carousels.plantOptional")} htmlFor="plant">
-                  <Select
+                  {/* The botanical name rides on a second line, which is the
+                      whole reason this is not a native <select>. */}
+                  <Picker
                     id="plant"
+                    options={[
+                      { value: "", label: t("carousels.anyPlant") },
+                      ...plants.map((p) => ({
+                        value: p.slug,
+                        label: p.primary,
+                        ...(p.latin ? { detail: p.latin } : {}),
+                      })),
+                    ]}
                     value={plantSlug}
-                    onChange={(e) => setPlantSlug(e.target.value)}
-                  >
-                    <option value="">{t("carousels.anyPlant")}</option>
-                    {plants.map((p) => (
-                      <option key={p.slug} value={p.slug}>
-                        {p.label}
-                      </option>
-                    ))}
-                  </Select>
+                    onChange={setPlantSlug}
+                  />
                 </Field>
 
                 <Field
@@ -574,35 +567,32 @@ export function CarouselStudio({
                   htmlFor="src"
                   hint={hasPexels ? undefined : t("carousels.noPexels")}
                 >
-                  <Select
+                  <Picker
                     id="src"
+                    options={[
+                      ...(hasPexels
+                        ? [{ value: "photo", label: t("carousels.sourcePhoto") }]
+                        : []),
+                      { value: "generate", label: t("carousels.sourceGenerate") },
+                      { value: "library", label: t("carousels.sourceLibrary") },
+                    ]}
                     value={imageSource}
-                    onChange={(e) =>
-                      setImageSource(
-                        e.target.value as "generate" | "photo" | "library",
-                      )
+                    onChange={(v) =>
+                      setImageSource(v as "generate" | "photo" | "library")
                     }
-                  >
-                    {hasPexels ? (
-                      <option value="photo">{t("carousels.sourcePhoto")}</option>
-                    ) : null}
-                    <option value="generate">{t("carousels.sourceGenerate")}</option>
-                    <option value="library">{t("carousels.sourceLibrary")}</option>
-                  </Select>
+                  />
                 </Field>
 
                 <Field label={t("carousels.overlayStyle")} htmlFor="ov">
-                  <Select
+                  <Picker
                     id="ov"
+                    options={OVERLAY_STYLES.map((style) => ({
+                      value: style,
+                      label: t(OVERLAY_STYLE_LABELS[style]),
+                    }))}
                     value={overlayStyle}
-                    onChange={(e) => setOverlayStyle(e.target.value as OverlayStyle)}
-                  >
-                    {OVERLAY_STYLES.map((style) => (
-                      <option key={style} value={style}>
-                        {t(OVERLAY_STYLE_LABELS[style])}
-                      </option>
-                    ))}
-                  </Select>
+                    onChange={(v) => setOverlayStyle(v as OverlayStyle)}
+                  />
                 </Field>
               </div>
             </details>

@@ -8,7 +8,9 @@ export default async function LoginPage() {
   const t = translator();
 
   return (
-    <div className="grid min-h-[70vh] place-items-center">
+    // Its own full-height shell now: the login page sits outside the dashboard
+    // group, so nothing else on screen belongs to the signed-in tool.
+    <div className="grid min-h-dvh place-items-center px-5 py-12">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex items-center gap-2.5">
           <PlenovaMark className="size-9 rounded-[10px]" />
