@@ -32,7 +32,7 @@ export interface PickerOption {
   disabled?: boolean;
 }
 
-interface Box {
+export interface Box {
   left: number;
   width: number;
   /** Page coordinates, so the panel scrolls with the document by itself. */
@@ -59,7 +59,7 @@ const MAX_PANEL = 300;
  * was at that moment, and having it flip about mid-interaction would be worse
  * than being slightly off after a long scroll.
  */
-function anchorFor(el: HTMLElement): Box {
+export function anchorFor(el: HTMLElement): Box {
   const r = el.getBoundingClientRect();
   const scrollX = window.scrollX;
   const scrollY = window.scrollY;
@@ -92,7 +92,7 @@ function anchorFor(el: HTMLElement): Box {
   };
 }
 
-function useDismiss(
+export function useDismiss(
   open: boolean,
   close: () => void,
   refs: React.RefObject<HTMLElement | null>[],

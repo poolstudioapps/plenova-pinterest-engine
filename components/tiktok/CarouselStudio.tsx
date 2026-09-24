@@ -813,7 +813,7 @@ export function CarouselStudio({
                     >
                       {t("carousels.publish")}
                     </Button>
-                    <RowMenu label={t("carousels.more")}>
+                    <RowMenu label={t("carousels.more")} onClose={() => setConfirming(null)}>
                       <RowMenuItem
                         onClick={() => void compose(carousel)}
                         disabled={composing === carousel.id || inFlight}
@@ -830,6 +830,7 @@ export function CarouselStudio({
                       ) : null}
                       <RowMenuItem
                         danger
+                        keepOpen={confirming !== carousel.id}
                         onClick={() => {
                           if (confirming === carousel.id) void remove(carousel.id);
                           else setConfirming(carousel.id);

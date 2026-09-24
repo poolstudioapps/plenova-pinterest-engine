@@ -14,6 +14,7 @@ import type { PinStatus } from "@/lib/types";
 
 export { Picker, MultiPicker, type PickerOption } from "./Picker";
 export { SortableGrid, FileDropZone } from "./Sortable";
+export { Menu, MenuItem, RowMenu, RowMenuItem } from "./Menu";
 
 /* --------------------------------------------------------------- layout -- */
 
@@ -184,69 +185,6 @@ export function Textarea({
       {...props}
       className={cn(CONTROL_CLASS, "resize-y leading-relaxed", className)}
     />
-  );
-}
-
-/* ----------------------------------------------------------------- menu -- */
-
-/**
- * The overflow menu on a list row.
- *
- * Built on <details> rather than a state machine: the open/closed state, the
- * Escape key and the toggle semantics come from the element itself, which is
- * less to get wrong than a hand-rolled popover. The only thing added is
- * closing when focus leaves, so a click elsewhere on the page dismisses it.
- */
-export function RowMenu({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) {
-  return (
-    <details
-      className="relative"
-      onBlur={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
-          e.currentTarget.removeAttribute("open");
-        }
-      }}
-    >
-      <summary
-        aria-label={label}
-        title={label}
-        className="grid size-8 cursor-pointer list-none place-items-center rounded-[var(--radius-control)] text-[var(--color-ink-soft)] transition-colors hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-ink)] [&::-webkit-details-marker]:hidden"
-      >
-        <span aria-hidden className="text-[16px] leading-none">
-          ⋯
-        </span>
-      </summary>
-      <div className="absolute right-0 z-20 mt-1 min-w-[190px] overflow-hidden rounded-[12px] border border-[var(--color-line)] bg-[var(--color-surface)] py-1 shadow-[var(--shadow-raised)]">
-        {children}
-      </div>
-    </details>
-  );
-}
-
-export function RowMenuItem({
-  danger,
-  children,
-  ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { danger?: boolean }) {
-  return (
-    <button
-      {...props}
-      type="button"
-      className={cn(
-        "block w-full px-3 py-2 text-left text-[13px] transition-colors disabled:cursor-not-allowed disabled:text-[var(--color-ink-faint)]",
-        danger
-          ? "text-[var(--color-danger)] hover:bg-[var(--color-danger-soft)]"
-          : "text-[var(--color-ink)] hover:bg-[var(--color-surface-muted)]",
-      )}
-    >
-      {children}
-    </button>
   );
 }
 
