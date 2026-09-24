@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Badge, Button, Card, Field, Notice, Select, Spinner } from "@/components/ui";
+import { Badge, Button, Card, Field, Notice, Picker, Spinner } from "@/components/ui";
 import type { AccountView } from "@/components/tiktok/TikTokPanel";
 import { CONTENT_LOCALE_LABELS, translator } from "@/lib/i18n";
 import type {
@@ -413,27 +413,31 @@ export function PublishDialog({
                     : t("publish.privacyHint")
                 }
               >
-                <Select
+                <Picker
                   id="privacy"
+                  options={[
+                    // Stays an option, and stays first: nothing is preselected,
+                    // and the operator must be able to go back to having chosen
+                    // nothing.
+                    { value: "", label: "—" },
+                    ...privacyOptions.map((option) => {
+                      const blocked = brandContent && !PUBLIC_ENOUGH.has(option);
+                      return {
+                        value: option,
+                        label: PRIVACY_LABELS[option] ?? option,
+                        // Visibly unavailable, with the reason on the second
+                        // line - TikTok's review expects branded content to be
+                        // unable to go private, not to bounce back after being
+                        // picked. The effect above stays as the second guard.
+                        ...(blocked
+                          ? { disabled: true, detail: t("publish.brandedNotPrivate") }
+                          : {}),
+                      };
+                    }),
+                  ]}
                   value={privacy}
-                  onChange={(e) => setPrivacy(e.target.value)}
-                >
-                  <option value="">—</option>
-                  {privacyOptions.map((option) => {
-                    const blocked = brandContent && !PUBLIC_ENOUGH.has(option);
-                    return (
-                      <option
-                        key={option}
-                        value={option}
-                        disabled={blocked}
-                        title={blocked ? t("publish.brandedNotPrivate") : undefined}
-                      >
-                        {PRIVACY_LABELS[option] ?? option}
-                        {blocked ? ` — ${t("publish.brandedNotPrivate")}` : ""}
-                      </option>
-                    );
-                  })}
-                </Select>
+                  onChange={setPrivacy}
+                />
               </Field>
 
               {privacy && privacy !== "SELF_ONLY" ? (

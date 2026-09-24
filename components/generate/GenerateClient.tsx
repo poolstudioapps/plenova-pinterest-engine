@@ -7,7 +7,7 @@ import {
   Field,
   Input,
   Notice,
-  Select,
+  Picker,
   Textarea,
 } from "@/components/ui";
 import { PinPreview } from "@/components/generate/PinPreview";
@@ -146,35 +146,36 @@ export function GenerateClient({
       <Card className="h-fit p-5">
         <div className="space-y-4">
           <Field label={t("generate.plant")} htmlFor="plant">
-            <Select
+            {/* `p.primary` + `p.latin`, not the flat `p.label`: the picker
+                draws a second line, so the botanical name no longer has to be
+                folded into the first one to fit an <option>. */}
+            <Picker
               id="plant"
+              options={plants.map((p) => ({
+                value: p.slug,
+                label: p.primary,
+                ...(p.latin ? { detail: p.latin } : {}),
+              }))}
               value={plantSlug}
-              onChange={(e) => setPlantSlug(e.target.value)}
-            >
-              {plants.map((p) => (
-                <option key={p.slug} value={p.slug}>
-                  {p.label}
-                </option>
-              ))}
-            </Select>
+              onChange={setPlantSlug}
+            />
           </Field>
 
           <Field label={t("generate.angle")} htmlFor="angle">
-            <Select
+            {/* Flattened: the panel has no <optgroup>, so the category rides
+                on each row's second line rather than being lost. */}
+            <Picker
               id="angle"
+              options={grouped.flatMap((group) =>
+                group.items.map((a) => ({
+                  value: a.slug,
+                  label: a.label,
+                  detail: group.label,
+                })),
+              )}
               value={angleSlug}
-              onChange={(e) => setAngleSlug(e.target.value)}
-            >
-              {grouped.map((group) => (
-                <optgroup key={group.key} label={group.label}>
-                  {group.items.map((a) => (
-                    <option key={a.slug} value={a.slug}>
-                      {a.label}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </Select>
+              onChange={setAngleSlug}
+            />
           </Field>
 
           <Field
@@ -182,17 +183,15 @@ export function GenerateClient({
             htmlFor="pin-locale"
             hint={t("generate.pinLanguageHint")}
           >
-            <Select
+            <Picker
               id="pin-locale"
+              options={CONTENT_LOCALES.map((l) => ({
+                value: l,
+                label: CONTENT_LOCALE_LABELS[l],
+              }))}
               value={pinLocale}
-              onChange={(e) => setPinLocale(e.target.value as ContentLocale)}
-            >
-              {CONTENT_LOCALES.map((l) => (
-                <option key={l} value={l}>
-                  {CONTENT_LOCALE_LABELS[l]}
-                </option>
-              ))}
-            </Select>
+              onChange={(v) => setPinLocale(v as ContentLocale)}
+            />
           </Field>
 
           {/*
@@ -220,18 +219,15 @@ export function GenerateClient({
             htmlFor="style"
             hint={t("generate.styleHint")}
           >
-            <Select
+            <Picker
               id="style"
+              options={[
+                { value: "", label: t("generate.styleAuto") },
+                ...styles.map((s) => ({ value: s.slug, label: s.label })),
+              ]}
               value={visualStyle}
-              onChange={(e) => setVisualStyle(e.target.value)}
-            >
-              <option value="">{t("generate.styleAuto")}</option>
-              {styles.map((s) => (
-                <option key={s.slug} value={s.slug}>
-                  {s.label}
-                </option>
-              ))}
-            </Select>
+              onChange={setVisualStyle}
+            />
           </Field>
 
           <Field
@@ -283,25 +279,27 @@ export function GenerateClient({
                 : t("generate.reuseHint")
             }
           >
-            <Select
+            {/* The reuse count moves to the second line: it is what decides
+                between two otherwise identical shots, and on one line it was
+                the third thing after the cultivar and the style. */}
+            <Picker
               id="reuse"
-              value={reuseMediaId}
-              disabled={reusable.length === 0}
-              onChange={(e) => setReuseMediaId(e.target.value)}
-            >
-              <option value="">{t("generate.reuseNone")}</option>
-              {reusable.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {[
+              options={[
+                { value: "", label: t("generate.reuseNone") },
+                ...reusable.map((a) => ({
+                  value: a.id,
+                  label: [
                     a.variety,
                     styleLabels.get(a.visualStyle) ?? a.visualStyle,
-                    t("media.used", { n: a.usedCount }),
                   ]
                     .filter(Boolean)
-                    .join(" · ")}
-                </option>
-              ))}
-            </Select>
+                    .join(" · "),
+                  detail: t("media.used", { n: a.usedCount }),
+                })),
+              ]}
+              value={reuseMediaId}
+              onChange={setReuseMediaId}
+            />
           </Field>
 
           <label className="flex items-start gap-2.5 text-[13px] text-[var(--color-ink-soft)]">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Button, Card, Notice, Select } from "@/components/ui";
+import { Button, Card, Notice, Picker } from "@/components/ui";
 import {
   OVERLAY_STYLES,
   SLIDE_HEIGHT,
@@ -560,22 +560,20 @@ export function SlideEditor({
               <label className="mb-1 block text-[12px] font-medium">
                 {t("editor.slideStyle")}
               </label>
-              <Select
+              <Picker
+                options={OVERLAY_STYLES.map((style) => ({
+                  value: style,
+                  label: t(STYLE_LABELS[style]),
+                }))}
                 value={overlay.style}
-                onChange={(e) => {
+                onChange={(v) => {
                   commit("slide:style");
                   setOverlay((o) => ({
                     ...o,
-                    style: e.target.value as OverlayStyle,
+                    style: v as OverlayStyle,
                   }));
                 }}
-              >
-                {OVERLAY_STYLES.map((style) => (
-                  <option key={style} value={style}>
-                    {t(STYLE_LABELS[style])}
-                  </option>
-                ))}
-              </Select>
+              />
             </div>
 
             {BLOCKS.map((key) => (
@@ -768,21 +766,27 @@ function BlockControls({
           <label className="mb-1 block text-[11.5px] font-medium">
             {t("editor.blockStyle")}
           </label>
-          <Select
+          <Picker
+            options={[
+              // "Comme la slide" is the one row whose meaning depends on
+              // something else, so it carries what it resolves to right now.
+              {
+                value: "",
+                label: t("editor.styleInherit"),
+                detail: t(STYLE_LABELS[slideStyle]),
+              },
+              ...OVERLAY_STYLES.map((style) => ({
+                value: style,
+                label: t(STYLE_LABELS[style]),
+              })),
+            ]}
             value={block.style ?? ""}
-            onChange={(e) =>
+            onChange={(v) =>
               onChange({
-                style: e.target.value ? (e.target.value as OverlayStyle) : null,
+                style: v ? (v as OverlayStyle) : null,
               })
             }
-          >
-            <option value="">{t("editor.styleInherit")}</option>
-            {OVERLAY_STYLES.map((style) => (
-              <option key={style} value={style}>
-                {t(STYLE_LABELS[style])}
-              </option>
-            ))}
-          </Select>
+          />
         </div>
 
         <div>
@@ -832,16 +836,14 @@ function BlockControls({
           <label className="mb-1 block text-[11.5px] font-medium">
             {t("editor.weight")}
           </label>
-          <Select
+          <Picker
+            options={WEIGHTS.map((weight) => ({
+              value: String(weight),
+              label: String(weight),
+            }))}
             value={String(block.fontWeight)}
-            onChange={(e) => onChange({ fontWeight: Number(e.target.value) })}
-          >
-            {WEIGHTS.map((weight) => (
-              <option key={weight} value={weight}>
-                {weight}
-              </option>
-            ))}
-          </Select>
+            onChange={(v) => onChange({ fontWeight: Number(v) })}
+          />
         </div>
 
         <div>

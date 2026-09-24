@@ -25,6 +25,11 @@ export interface PickerOption {
   label: string;
   /** A second, quieter line - the botanical name, a hint, a count. */
   detail?: string;
+  /**
+   * Shown but not choosable. Use `detail` to say why: an option that simply
+   * refuses to be picked, with no reason given, reads as a broken control.
+   */
+  disabled?: boolean;
 }
 
 interface Box {
@@ -127,12 +132,16 @@ function Row({
       type="button"
       role="option"
       aria-selected={selected}
+      aria-disabled={option.disabled || undefined}
+      disabled={option.disabled}
       onClick={onPick}
       className={cn(
         "flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left transition-colors",
-        selected
-          ? "bg-[var(--color-accent-soft)] text-[var(--color-accent-ink)]"
-          : "text-[var(--color-ink)] hover:bg-[var(--color-surface-muted)]",
+        option.disabled
+          ? "cursor-not-allowed text-[var(--color-ink-faint)]"
+          : selected
+            ? "bg-[var(--color-accent-soft)] text-[var(--color-accent-ink)]"
+            : "text-[var(--color-ink)] hover:bg-[var(--color-surface-muted)]",
       )}
     >
       <span

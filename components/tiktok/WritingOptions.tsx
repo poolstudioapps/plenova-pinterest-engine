@@ -1,6 +1,6 @@
 "use client";
 
-import { Field, Select } from "@/components/ui";
+import { Field, Picker } from "@/components/ui";
 import {
   CONTENT_LOCALES,
   CONTENT_LOCALE_LABELS,
@@ -73,17 +73,15 @@ export function WritingOptions({
         htmlFor="ov"
         hint={t("carousels.overlayHint")}
       >
-        <Select
+        <Picker
           id="ov"
+          options={OVERLAY_STYLES.map((style) => ({
+            value: style,
+            label: t(OVERLAY_STYLE_LABELS[style]),
+          }))}
           value={overlayStyle}
-          onChange={(e) => onOverlayStyle(e.target.value as OverlayStyle)}
-        >
-          {OVERLAY_STYLES.map((style) => (
-            <option key={style} value={style}>
-              {t(OVERLAY_STYLE_LABELS[style])}
-            </option>
-          ))}
-        </Select>
+          onChange={(v) => onOverlayStyle(v as OverlayStyle)}
+        />
       </Field>
     </div>
   );

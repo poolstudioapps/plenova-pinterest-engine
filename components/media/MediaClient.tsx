@@ -6,8 +6,8 @@ import {
   Card,
   EmptyState,
   Input,
+  Picker,
   PlantName,
-  Select,
 } from "@/components/ui";
 import { groupByPlant, identityForAsset, normaliseSearch } from "@/lib/media";
 import type { PlantIdentity } from "@/lib/data/localize";
@@ -75,14 +75,21 @@ export function MediaClient({ initialAssets, plants, styles }: Props) {
   return (
     <div className="space-y-6">
       <Card className="grid gap-3 p-4 sm:grid-cols-2">
-        <Select value={plantSlug} onChange={(e) => setPlantSlug(e.target.value)}>
-          <option value="">{t("media.allPlants")}</option>
-          {plants.map((p) => (
-            <option key={p.slug} value={p.slug}>
-              {p.label}
-            </option>
-          ))}
-        </Select>
+        {/* `p.primary` + `p.latin`, not the flat `p.label`: the picker draws a
+            second line, so the botanical name no longer has to be folded into
+            the first one to fit an <option>. */}
+        <Picker
+          options={[
+            { value: "", label: t("media.allPlants") },
+            ...plants.map((p) => ({
+              value: p.slug,
+              label: p.primary,
+              ...(p.latin ? { detail: p.latin } : {}),
+            })),
+          ]}
+          value={plantSlug}
+          onChange={setPlantSlug}
+        />
         <Input
           type="search"
           placeholder={t("media.search")}

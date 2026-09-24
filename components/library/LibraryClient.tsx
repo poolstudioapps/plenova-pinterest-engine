@@ -7,7 +7,7 @@ import {
   Card,
   EmptyState,
   Input,
-  Select,
+  Picker,
   PlantName,
   StatusBadge,
 } from "@/components/ui";
@@ -139,54 +139,63 @@ export function LibraryClient({ initialPins, plants, angles }: Props) {
   return (
     <div className="space-y-6">
       <Card className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-6">
-        <Select value={plantSlug} onChange={(e) => setPlantSlug(e.target.value)}>
-          <option value="">{t("library.allPlants")}</option>
-          {plants.map((p) => (
-            <option key={p.slug} value={p.slug}>
-              {p.label}
-            </option>
-          ))}
-        </Select>
+        {/* `p.primary` + `p.latin`, not the flat `p.label`: the picker draws a
+            second line, so the botanical name no longer has to be folded into
+            the first one to fit an <option>. */}
+        <Picker
+          options={[
+            { value: "", label: t("library.allPlants") },
+            ...plants.map((p) => ({
+              value: p.slug,
+              label: p.primary,
+              ...(p.latin ? { detail: p.latin } : {}),
+            })),
+          ]}
+          value={plantSlug}
+          onChange={setPlantSlug}
+        />
 
-        <Select value={angleSlug} onChange={(e) => setAngleSlug(e.target.value)}>
-          <option value="">{t("library.allAngles")}</option>
-          {angles.map((a) => (
-            <option key={a.slug} value={a.slug}>
-              {a.label}
-            </option>
-          ))}
-        </Select>
+        <Picker
+          options={[
+            { value: "", label: t("library.allAngles") },
+            ...angles.map((a) => ({ value: a.slug, label: a.label })),
+          ]}
+          value={angleSlug}
+          onChange={setAngleSlug}
+        />
 
-        <Select value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="">{t("library.allStatuses")}</option>
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {t(PIN_STATUS_KEYS[s])}
-            </option>
-          ))}
-        </Select>
+        <Picker
+          options={[
+            { value: "", label: t("library.allStatuses") },
+            ...STATUSES.map((s) => ({ value: s, label: t(PIN_STATUS_KEYS[s]) })),
+          ]}
+          value={status}
+          onChange={setStatus}
+        />
 
-        <Select
+        {/* With no cultivars in the data the list holds only "Tous les
+            cultivars": the picker has no disabled state, and an empty one says
+            the same thing by having nothing else to pick. */}
+        <Picker
+          options={[
+            { value: "", label: t("library.allVarieties") },
+            ...varieties.map((v) => ({ value: v, label: v })),
+          ]}
           value={variety}
-          onChange={(e) => setVariety(e.target.value)}
-          disabled={varieties.length === 0}
-        >
-          <option value="">{t("library.allVarieties")}</option>
-          {varieties.map((v) => (
-            <option key={v} value={v}>
-              {v}
-            </option>
-          ))}
-        </Select>
+          onChange={setVariety}
+        />
 
-        <Select value={pinLocale} onChange={(e) => setPinLocale(e.target.value)}>
-          <option value="">{t("library.allLanguages")}</option>
-          {CONTENT_LOCALES.map((l) => (
-            <option key={l} value={l}>
-              {CONTENT_LOCALE_LABELS[l]}
-            </option>
-          ))}
-        </Select>
+        <Picker
+          options={[
+            { value: "", label: t("library.allLanguages") },
+            ...CONTENT_LOCALES.map((l) => ({
+              value: l,
+              label: CONTENT_LOCALE_LABELS[l],
+            })),
+          ]}
+          value={pinLocale}
+          onChange={setPinLocale}
+        />
 
         <Input
           type="search"

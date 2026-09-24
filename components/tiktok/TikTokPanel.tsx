@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Badge, Button, Card, EmptyState, Notice, Select } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Notice, Picker } from "@/components/ui";
 import {
   CONTENT_LOCALES,
   CONTENT_LOCALE_LABELS,
@@ -23,6 +23,12 @@ export interface AccountView {
   connectedAt: string;
   expiresAt: string | null;
 }
+
+/** The five content languages, built once rather than once per account row. */
+const LANGUAGE_OPTIONS = CONTENT_LOCALES.map((l) => ({
+  value: l,
+  label: CONTENT_LOCALE_LABELS[l],
+}));
 
 /**
  * Every connected TikTok account, each with the language it publishes in.
@@ -199,24 +205,28 @@ export function TikTokPanel({
                   >
                     {t("tiktok.language")}
                   </label>
-                  <Select
-                    id={`lang-${account.openId}`}
-                    aria-label={t("tiktok.language")}
-                    value={account.language}
-                    disabled={saving === account.openId}
-                    onChange={(e) =>
-                      void setLanguage(
-                        account.openId,
-                        e.target.value as ContentLocale,
-                      )
+                  {/* Picker has no `disabled` prop and components/ui is not
+                      ours to change, so the in-flight lock stays here: without
+                      it a second language could be sent while the first PATCH
+                      is still out, and the revert would put back the wrong one.
+                      The <label htmlFor> names the trigger button, so the
+                      aria-label the <select> needed is no longer one. */}
+                  <div
+                    className={
+                      saving === account.openId
+                        ? "pointer-events-none opacity-60"
+                        : undefined
                     }
                   >
-                    {CONTENT_LOCALES.map((l) => (
-                      <option key={l} value={l}>
-                        {CONTENT_LOCALE_LABELS[l]}
-                      </option>
-                    ))}
-                  </Select>
+                    <Picker
+                      id={`lang-${account.openId}`}
+                      options={LANGUAGE_OPTIONS}
+                      value={account.language}
+                      onChange={(v) =>
+                        void setLanguage(account.openId, v as ContentLocale)
+                      }
+                    />
+                  </div>
                 </div>
 
                 <Badge className="uppercase">{account.language}</Badge>
