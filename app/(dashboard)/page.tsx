@@ -6,6 +6,7 @@ import {
   SectionHeader,
   StatusBadge,
 } from "@/components/ui";
+import { Plant3D } from "@/components/plants/Plant3D";
 import { readiness } from "@/lib/config";
 import { ANGLES } from "@/lib/data/angles";
 import { PLANTS } from "@/lib/data/plants";
@@ -60,7 +61,13 @@ export default async function DashboardPage() {
 
   return (
     <>
-      <SectionHeader title={t("dashboard.title")} description={t("dashboard.subtitle")} />
+      <SectionHeader
+        title={t("dashboard.title")}
+        description={t("dashboard.subtitle")}
+        action={
+          <Plant3D className="-my-8 hidden h-[190px] w-[230px] shrink-0 md:block" floating={4} />
+        }
+      />
 
       {report.warnings.length > 0 ? (
         <div className="mb-6 space-y-2.5">

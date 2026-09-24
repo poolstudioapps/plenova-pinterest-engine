@@ -245,3 +245,28 @@
     }
   }
 }
+
+/*
+ * Plants: a leaf sways about the point where its stem meets the soil. Each
+ * leaf sets its own origin, duration and delay, so no two move in step.
+ */
+@keyframes plant-sway {
+  0%,
+  100% {
+    transform: rotate(-2.6deg);
+  }
+  50% {
+    transform: rotate(2.6deg);
+  }
+}
+
+.plant-leaf {
+  transform-box: view-box;
+  animation: plant-sway 5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plant-leaf {
+    animation: none;
+  }
+}

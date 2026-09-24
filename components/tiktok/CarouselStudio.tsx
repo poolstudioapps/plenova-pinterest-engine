@@ -18,6 +18,7 @@ import {
 import { PublishDialog } from "@/components/tiktok/PublishDialog";
 import { RepostPanel } from "@/components/tiktok/RepostPanel";
 import { SlideEditor } from "@/components/tiktok/SlideEditor";
+import { Sprout } from "@/components/plants/Sprout";
 import { SlidePreview } from "@/components/tiktok/SlidePreview";
 import type { AccountView } from "@/components/tiktok/TikTokPanel";
 import { captureSlides } from "@/lib/capture";
@@ -734,6 +735,17 @@ export function CarouselStudio({
                     aria-expanded={open}
                     aria-label={t("carousels.openLabel")}
                   >
+                    {/* While it is being written, a seedling grows slide by slide. */}
+                    {inFlight ? (
+                      <Sprout
+                        progress={
+                          carousel.progress && carousel.progress.total > 0
+                            ? carousel.progress.done / carousel.progress.total
+                            : 0
+                        }
+                        className="size-12 rounded-[9px] bg-[var(--color-surface-muted)] p-1.5"
+                      />
+                    ) : null}
                     {carousel.slides.slice(0, 3).map((slide, i) => {
                       const url = slide.composed[lang] ?? slide.imageUrl;
                       return url ? (

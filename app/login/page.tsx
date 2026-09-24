@@ -1,5 +1,6 @@
 import { LoginForm } from "@/components/layout/LoginForm";
 import { PlenovaMark } from "@/components/layout/PlenovaMark";
+import { Plant3D } from "@/components/plants/Plant3D";
 import { translator } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +13,8 @@ export default async function LoginPage() {
     // group, so nothing else on screen belongs to the signed-in tool.
     <div className="grid min-h-dvh place-items-center px-5 py-12">
       <div className="w-full max-w-sm">
+        {/* Follows the pointer; decorative, so hidden from assistive tech. */}
+        <Plant3D className="mx-auto -mt-6 mb-2 h-[220px] w-full max-w-[280px]" floating={6} />
         <div className="mb-6 flex items-center gap-2.5">
           <PlenovaMark size={36} />
           <div className="leading-tight">

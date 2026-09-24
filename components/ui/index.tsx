@@ -1,3 +1,4 @@
+import { PottedPlant } from "@/components/plants/PottedPlant";
 import type {
   ButtonHTMLAttributes,
   InputHTMLAttributes,
@@ -408,7 +409,8 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-[16px] border border-dashed border-[var(--color-line-strong)] px-6 py-16 text-center">
+    <div className="flex flex-col items-center justify-center rounded-[16px] border border-dashed border-[var(--color-line-strong)] px-6 py-14 text-center">
+      <PottedPlant className="mb-3 size-20" />
       <p className="text-[15px] font-medium text-[var(--color-ink)]">{title}</p>
       <p className="mt-1.5 max-w-sm text-[13.5px] leading-relaxed text-[var(--color-ink-soft)]">
         {description}
