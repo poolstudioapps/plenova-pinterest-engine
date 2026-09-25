@@ -173,7 +173,10 @@ export async function agentPlan(): Promise<AgentPlanAccount[]> {
   }
   const pending = queued.filter((q) => !have.has(q.id));
 
-  return (accounts ?? []).map((a) => {
+  // Our accounts first: the versus page waits on them, the competitors can wait.
+  const ordered = [...(accounts ?? [])].sort((a, b) => Number(!a.team) - Number(!b.team));
+
+  return ordered.map((a) => {
     const username = a.username as string;
     const ours = Boolean(a.team);
     const windowDays = ours ? WINDOW_DAYS.ours : WINDOW_DAYS.competitor;

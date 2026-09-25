@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { SpyAccounts } from "@/components/spy/SpyAccounts";
+import { Notice } from "@/components/ui";
 import { VersusHero } from "@/components/versus/VersusHero";
 import { compactNumber, percent } from "@/lib/spy-format";
 import type { SpyAccount, SpyPost, Team } from "@/lib/types";
@@ -71,6 +72,9 @@ export function VersusClient({
     .slice(0, 8);
   const teamOf = new Map(accounts.map((a) => [a.username, a.team]));
 
+  // The history import still running: the numbers are not whole yet.
+  const importing = accounts.reduce((n, a) => n + (pending[a.username] ?? 0), 0);
+
   const manage = (
     <section className="rounded-[16px] border border-[var(--color-line)] bg-[var(--color-surface)] p-4 md:p-5">
       <h2 className="mb-3 text-[15px] font-semibold">Nos comptes</h2>
@@ -117,6 +121,13 @@ export function VersusClient({
             : ""}
         </p>
       </div>
+
+      {importing > 0 ? (
+        <Notice tone="warn" title="Import de l'historique en cours">
+          Encore {importing} post(s) de nos comptes à relever : les chiffres, surtout sur 30 jours et depuis le
+          début, se complètent au fil de l&apos;import. Recharge la page pour voir où il en est.
+        </Notice>
+      ) : null}
 
       <VersusHero
         stark={stark.views}
