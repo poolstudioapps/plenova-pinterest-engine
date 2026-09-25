@@ -25,6 +25,8 @@ export interface VersusData {
   accounts: SpyAccount[];
   posts: SpyPost[];
   snapshots: AccountSnapshot[];
+  /** Posts of each account's history still waiting to be imported. */
+  pending: Record<string, number>;
 }
 
 export async function versusData(): Promise<VersusData> {
@@ -57,9 +59,25 @@ export async function versusData(): Promise<VersusData> {
     }
   }
 
+  // The history import in progress, account by account.
+  const pending: Record<string, number> = {};
+  if (config.supabase.url && config.supabase.serviceKey && names.size > 0) {
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await supabaseService()
+        .from("spy_backfill")
+        .select("username")
+        .in("username", [...names])
+        .range(from, from + 999);
+      if (error) throw new Error(`historique à importer: ${error.message}`);
+      for (const r of data ?? []) pending[r.username as string] = (pending[r.username as string] ?? 0) + 1;
+      if ((data ?? []).length < 1000) break;
+    }
+  }
+
   return {
     accounts: ours,
     posts: posts.filter((p) => names.has(p.username)),
     snapshots,
+    pending,
   };
 }

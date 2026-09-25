@@ -41,11 +41,14 @@ export function VersusClient({
   initialAccounts,
   posts,
   snapshots,
+  pending,
   trackedSince,
 }: {
   initialAccounts: SpyAccount[];
   posts: SpyPost[];
   snapshots: Snapshot[];
+  /** History posts still to import, per account. */
+  pending: Record<string, number>;
   /** When the spy first saw one of these posts, already formatted. */
   trackedSince: string | null;
 }) {
@@ -204,28 +207,42 @@ export function VersusClient({
 
       {/* Account by account. */}
       <section className="overflow-hidden rounded-[16px] border border-[var(--color-line)] bg-[var(--color-surface)]">
-        <h2 className="border-b border-[var(--color-line)] px-4 py-3 text-[15px] font-semibold">Compte par compte</h2>
+        <div className="border-b border-[var(--color-line)] px-4 py-3">
+          <h2 className="text-[15px] font-semibold">Compte par compte</h2>
+          <p className="mt-0.5 text-[12px] text-[var(--color-ink-faint)]">
+            Depuis toujours : tous les posts relevés du compte. La dernière colonne suit la période choisie.
+          </p>
+        </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-[13px]">
+          <table className="w-full min-w-[860px] text-[13px]">
             <thead>
               <tr className="text-left text-[11.5px] text-[var(--color-ink-faint)]">
                 <th className="px-4 py-2 font-medium">Compte</th>
                 <th className="px-3 py-2 text-right font-medium">Abonnés</th>
-                <th className="px-3 py-2 text-right font-medium">Gagnés</th>
                 <th className="px-3 py-2 text-right font-medium">Likes (profil)</th>
-                <th className="px-3 py-2 text-right font-medium">Vues</th>
-                <th className="px-3 py-2 text-right font-medium">Enreg.</th>
-                <th className="px-3 py-2 text-right font-medium">Posts</th>
+                <th className="px-3 py-2 text-right font-medium">Vues totales</th>
+                <th className="px-3 py-2 text-right font-medium">Enreg. totaux</th>
+                <th className="px-3 py-2 text-right font-medium">Posts relevés</th>
                 <th className="px-3 py-2 text-right font-medium">Vues / post</th>
-                <th className="px-4 py-2 text-right font-medium">Vu</th>
+                <th className="px-3 py-2 text-right font-medium">Gagnés</th>
+                <th className="px-4 py-2 text-right font-medium">
+                  Vues · {period === "all" ? "tout" : `${period} j`}
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--color-line)]">
               {[...byTeam.stark, ...byTeam.mousk].map((account) => {
-                const t = totalsFor([account], posts, snapshots, period);
                 const meta = TEAM_META[account.team!];
                 return (
-                  <AccountRow key={account.username} account={account} totals={t} color={meta.color} teamName={meta.name} />
+                  <AccountRow
+                    key={account.username}
+                    account={account}
+                    ever={totalsFor([account], posts, snapshots, "all")}
+                    inPeriod={totalsFor([account], posts, snapshots, period)}
+                    pending={pending[account.username] ?? 0}
+                    color={meta.color}
+                    teamName={meta.name}
+                  />
                 );
               })}
             </tbody>
@@ -289,12 +306,17 @@ export function VersusClient({
 
 function AccountRow({
   account,
-  totals,
+  ever,
+  inPeriod,
+  pending,
   color,
   teamName,
 }: {
   account: SpyAccount;
-  totals: Totals;
+  /** Everything stored for this account, whatever the period. */
+  ever: Totals;
+  inPeriod: Totals;
+  pending: number;
   color: string;
   teamName: string;
 }) {
@@ -325,19 +347,26 @@ function AccountRow({
                 </span>
               ) : null}
             </span>
+            <span className="block text-[11px] text-[var(--color-ink-faint)]" suppressHydrationWarning>
+              {pending > 0
+                ? `historique en cours d'import · ${pending} post(s) restant(s)`
+                : account.lastCheckedAt
+                  ? `relevé ${relativeTime(account.lastCheckedAt)}`
+                  : "pas encore relevé"}
+            </span>
           </span>
         </a>
       </td>
       <td className="px-3 py-2.5 text-right tabular-nums">{format(account.followers, "number")}</td>
-      <td className="px-3 py-2.5 text-right tabular-nums">{format(totals.followersGained, "delta")}</td>
       <td className="px-3 py-2.5 text-right tabular-nums">{format(account.likesTotal, "number")}</td>
-      <td className="px-3 py-2.5 text-right font-semibold tabular-nums">{format(totals.views, "number")}</td>
-      <td className="px-3 py-2.5 text-right tabular-nums">{format(totals.saves, "number")}</td>
-      <td className="px-3 py-2.5 text-right tabular-nums">{totals.posts}</td>
-      <td className="px-3 py-2.5 text-right tabular-nums">{format(totals.avgViews, "number")}</td>
-      <td className="px-4 py-2.5 text-right text-[11.5px] text-[var(--color-ink-faint)]">
-        {account.lastCheckedAt ? relativeTime(account.lastCheckedAt) : "jamais"}
+      <td className="px-3 py-2.5 text-right font-semibold tabular-nums">{format(ever.views, "number")}</td>
+      <td className="px-3 py-2.5 text-right tabular-nums">{format(ever.saves, "number")}</td>
+      <td className="px-3 py-2.5 text-right tabular-nums">{ever.posts}</td>
+      <td className="px-3 py-2.5 text-right tabular-nums">{format(ever.avgViews, "number")}</td>
+      <td className="px-3 py-2.5 text-right tabular-nums" title="Abonnés gagnés sur la période (dès le 2e jour de relevés)">
+        {format(inPeriod.followersGained, "delta")}
       </td>
+      <td className="px-4 py-2.5 text-right tabular-nums">{format(inPeriod.views, "number")}</td>
     </tr>
   );
 }

@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 const anton = Anton({ subsets: ["latin"], weight: "400", variable: "--font-versus", display: "swap" });
 
 export default async function VersusPage() {
-  const { accounts, posts, snapshots } = await versusData();
+  const { accounts, posts, snapshots, pending } = await versusData();
   // Formatted here, in Paris time, so the server and the browser print the same date.
   const first = posts.map((p) => p.firstSeenAt).sort()[0];
   const trackedSince = first
@@ -22,7 +22,13 @@ export default async function VersusPage() {
         title="Mr Stark vs Mr Mousk"
         description="Nos comptes TikTok, équipe contre équipe, relevés à chaque passage du spy."
       />
-      <VersusClient initialAccounts={accounts} posts={posts} snapshots={snapshots} trackedSince={trackedSince} />
+      <VersusClient
+        initialAccounts={accounts}
+        posts={posts}
+        snapshots={snapshots}
+        pending={pending}
+        trackedSince={trackedSince}
+      />
     </div>
   );
 }
