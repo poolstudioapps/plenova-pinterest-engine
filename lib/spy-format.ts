@@ -37,4 +37,16 @@ export function sortSpyPosts(posts: SpyPost[], sort: SpySort): SpyPost[] {
 }
 
 /** Below this many views, an engagement rate says little. */
-const MEANINGFUL_VIEWS = 500;
+export const MEANINGFUL_VIEWS = 500;
+
+/**
+ * Best engagement first - among posts seen by enough people for the rate to
+ * mean something; the rest follow.
+ */
+export function compareEngagement(
+  a: Pick<SpyPost, "views" | "likes" | "comments" | "shares" | "saves"> | null,
+  b: Pick<SpyPost, "views" | "likes" | "comments" | "shares" | "saves"> | null,
+): number {
+  const reach = Number((b?.views ?? 0) >= MEANINGFUL_VIEWS) - Number((a?.views ?? 0) >= MEANINGFUL_VIEWS);
+  return reach || (b ? (engagementRate(b) ?? -1) : -1) - (a ? (engagementRate(a) ?? -1) : -1);
+}

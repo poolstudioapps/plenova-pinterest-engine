@@ -70,11 +70,11 @@ export function ProcessDialog({
   onClose,
   onStarted,
 }: {
-  post: SpyPost;
+  post: Pick<SpyPost, "id">;
   defaultLanguages: ContentLocale[];
   hasPexels: boolean;
   onClose: () => void;
-  onStarted: (post: SpyPost, carousel: CarouselRecord) => void;
+  onStarted: (postId: string, carousel: CarouselRecord) => void;
 }) {
   const t = translator();
   const [languages, setLanguages] = useState<ContentLocale[]>(defaultLanguages);
@@ -102,7 +102,7 @@ export function ProcessDialog({
         return;
       }
       setStarted(data.carousel);
-      onStarted(post, data.carousel);
+      onStarted(post.id, data.carousel);
     } catch {
       setError(t("preview.unreachable"));
     } finally {

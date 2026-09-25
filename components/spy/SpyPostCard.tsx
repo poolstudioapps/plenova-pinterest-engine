@@ -94,6 +94,15 @@ export function SpyPostCard({
         ))}
       </div>
 
+      {post.hookText ? (
+        <p className="px-4 pt-2 text-[13px] leading-snug">
+          <span className="mr-1.5 text-[11px] font-semibold tracking-wide text-[var(--color-ink-faint)] uppercase">
+            {t("spy.hook")}
+          </span>
+          <span className="font-medium">« {post.hookText} »</span>
+        </p>
+      ) : null}
+
       {post.caption && !compact ? (
         <p className="line-clamp-2 px-4 pt-2 text-[12.5px] leading-snug text-[var(--color-ink-soft)]">
           {post.caption}
@@ -132,7 +141,7 @@ export function SpyPostCard({
 }
 
 /** The slides large, one at a time, with the arrows and Escape. */
-function SlideViewer({
+export function SlideViewer({
   images,
   start,
   onClose,
@@ -145,13 +154,19 @@ function SlideViewer({
   const [at, setAt] = useState(start);
 
   useEffect(() => {
+    // Captured first and kept: the viewer is the top layer, so a dialog under
+    // it must not also close on this Escape.
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        onClose();
+      }
       if (e.key === "ArrowRight") setAt((i) => Math.min(images.length - 1, i + 1));
       if (e.key === "ArrowLeft") setAt((i) => Math.max(0, i - 1));
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
   }, [images.length, onClose]);
 
   const arrow =

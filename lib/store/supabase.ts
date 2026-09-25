@@ -59,6 +59,25 @@ function check(what: string, error: { message: string } | null): void {
   if (error) throw new Error(`${what}: ${error.message}`);
 }
 
+/** Supabase answers at most 1000 rows per request; this reads them all. */
+const PAGE = 1000;
+async function allRows(
+  what: string,
+  query: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>,
+): Promise<Record<string, unknown>[]> {
+  const rows: Record<string, unknown>[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await query(from, from + PAGE - 1);
+    check(what, error);
+    const page = (data ?? []) as Record<string, unknown>[];
+    rows.push(...page);
+    if (page.length < PAGE) return rows;
+  }
+}
+
+/** How long a cover stays reserved for one reader. */
+const CLAIM_MS = 10 * 60 * 1000;
+
 export class SupabaseStore implements EngineStore {
   readonly name = "Supabase Postgres";
   readonly persistent = true;
@@ -411,13 +430,10 @@ export class SupabaseStore implements EngineStore {
   // ----------------------------------------------------------------- hooks
 
   async listHooks(): Promise<Hook[]> {
-    const { data, error } = await db()
-      .from("hooks")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(2000);
-    check("lecture des hooks", error);
-    return (data ?? []).map(hookFromRow);
+    const rows = await allRows("lecture des hooks", (from, to) =>
+      db().from("hooks").select("*").order("created_at", { ascending: false }).order("id").range(from, to),
+    );
+    return rows.map(hookFromRow);
   }
 
   async getHook(id: string): Promise<Hook | null> {
@@ -479,13 +495,15 @@ export class SupabaseStore implements EngineStore {
   }
 
   async listSpyPosts(): Promise<SpyPost[]> {
-    const { data, error } = await db()
-      .from("spy_posts")
-      .select("*")
-      .order("posted_at", { ascending: false, nullsFirst: false })
-      .limit(1000);
-    check("lecture des carrousels espionnés", error);
-    return (data ?? []).map(spyPostFromRow);
+    const rows = await allRows("lecture des carrousels espionnés", (from, to) =>
+      db()
+        .from("spy_posts")
+        .select("*")
+        .order("posted_at", { ascending: false, nullsFirst: false })
+        .order("id")
+        .range(from, to),
+    );
+    return rows.map(spyPostFromRow);
   }
 
   async getSpyPost(id: string): Promise<SpyPost | null> {
@@ -508,6 +526,47 @@ export class SupabaseStore implements EngineStore {
       })
       .eq("id", id);
     check("mise à jour d'un carrousel espionné", error);
+  }
+
+  /**
+   * One conditional update, so two readers can never both win: the row is
+   * only taken if it is unread and nobody holds a live claim on it.
+   */
+  async claimSpyPostHook(id: string): Promise<boolean> {
+    const now = new Date();
+    const stale = new Date(now.getTime() - CLAIM_MS).toISOString();
+    const { data, error } = await db()
+      .from("spy_posts")
+      .update({ hook_claimed_at: now.toISOString() })
+      .eq("id", id)
+      .is("hook_checked_at", null)
+      .or(`hook_claimed_at.is.null,hook_claimed_at.lt.${stale}`)
+      .select("id");
+    check("réservation d'une couverture", error);
+    return (data ?? []).length > 0;
+  }
+
+  async releaseSpyPostHook(id: string): Promise<void> {
+    const { error } = await db().from("spy_posts").update({ hook_claimed_at: null }).eq("id", id);
+    check("libération d'une couverture", error);
+  }
+
+  async setSpyPostHook(
+    id: string,
+    hook: { text: string; lang: string | null; format: string | null; fr: string | null },
+  ): Promise<void> {
+    const { error } = await db()
+      .from("spy_posts")
+      .update({
+        hook_text: hook.text,
+        hook_lang: hook.lang,
+        hook_format: hook.format,
+        hook_fr: hook.fr,
+        hook_checked_at: new Date().toISOString(),
+        hook_claimed_at: null,
+      })
+      .eq("id", id);
+    check("enregistrement du hook d'un carrousel espionné", error);
   }
 
   async latestSpyRun(): Promise<SpyRun | null> {
@@ -581,6 +640,11 @@ function spyPostFromRow(row: Record<string, unknown>): SpyPost {
     firstSeenAt: row.first_seen_at as string,
     statsUpdatedAt: row.stats_updated_at as string,
     handledAt: (row.handled_at as string | null) ?? null,
+    hookText: (row.hook_text as string | null) ?? null,
+    hookLang: (row.hook_lang as string | null) ?? null,
+    hookFormat: (row.hook_format as SpyPost["hookFormat"]) ?? null,
+    hookFr: (row.hook_fr as string | null) ?? null,
+    hookCheckedAt: (row.hook_checked_at as string | null) ?? null,
   };
 }
 

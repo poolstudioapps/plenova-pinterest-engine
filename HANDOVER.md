@@ -138,6 +138,23 @@ commentaires, partages, enregistrements). Il écrit directement dans Supabase
 que ses chiffres rafraîchis ; son statut appartient à l'utilisateur. Rien de
 nouveau = aucun appel Gemini.
 
+**Tier list des hooks** (`lib/spy-hooks.ts`, `lib/hook-tiers.ts`, onglet
+Hooks). À la fin de chaque passage, le script lit la couverture des carrousels
+jamais lus (Gemini vision, `readSpiedHook`) : texte d'origine + langue +
+format sur `spy_posts.hook_*`, et une version française dans la voix entre dans
+la banque comme idée (`source = spy`, `spy_post_id`). Doublon d'idée : on garde
+le post le plus vu. Les stats ne sont jamais copiées sur le hook : elles sont
+jointes à la lecture (`listHookViews`), donc toujours celles du jour. Les rangs
+sont des parts du classement par vues (S = top 10 %, D = dernier sixième), pas
+des seuils fixes. « ×N » = vues du post / médiane des posts de son compte. Les
+idées gardées du formulaire de carrousel sont triées par vues. Reliquat de
+couvertures non lues : bouton « Les lire maintenant » (`POST /api/spy/hooks`)
+ou `npm run spy -- --hooks-only`.
+
+**Les listes flottantes (Picker, Menu) sont en z-[100]**, au-dessus de tout
+dialogue : en z-50 elles s'ouvraient derrière. `Dialog` tient une pile : Échap
+ne ferme que celui du dessus.
+
 **Traiter un carrousel du spy = le pipeline repost** (`lib/repost-carousel.ts`) :
 lecture de chaque slide (texte réécrit dans la voix, plante nommée depuis la
 photo ou le texte), image « d'origine nettoyée » (choix de l'utilisateur) ou
@@ -185,6 +202,11 @@ partagée a déjà écrit 28 Mo d'images en clair et fait tomber le site.
 
 ## 7. Pièges déjà payés
 
+- **Un `next build` pendant que `npm run dev:offline` tourne fait tomber le
+  serveur de dev** (même dossier `.next`) : le relancer après chaque build.
+- **Lectures de couvertures concurrentes** (script à 9 h + bouton de l'app) :
+  chaque post est réservé en base (`hook_claimed_at`, bail de 10 min) et n'est
+  marqué lu qu'après le classement de son idée ; un post ne porte qu'une idée.
 - **Ne pas lancer un serveur avec `| head`** : le pipe ferme stdout et tue le
   serveur (SIGPIPE). Rediriger vers un fichier.
 - `taskkill //F //IM node.exe` pour nettoyer les serveurs zombies sous Git Bash.

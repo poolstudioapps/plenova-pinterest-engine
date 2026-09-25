@@ -59,7 +59,6 @@ export function SpyClient({
 
   async function setStatus(post: SpyPost, status: "new" | "dismissed") {
     setError(null);
-    const before = posts;
     setPosts((current) =>
       current.map((p) =>
         p.id === post.id
@@ -75,7 +74,8 @@ export function SpyClient({
       });
       if (!res.ok) throw new Error();
     } catch {
-      setPosts(before);
+      // Only this post goes back: anything else changed meanwhile stays.
+      setPosts((current) => current.map((p) => (p.id === post.id ? post : p)));
       setError(t("preview.requestFailed"));
     }
   }
@@ -233,10 +233,10 @@ export function SpyClient({
           defaultLanguages={defaultLanguages}
           hasPexels={hasPexels}
           onClose={() => setProcessing(null)}
-          onStarted={(post, carousel) =>
+          onStarted={(postId, carousel) =>
             setPosts((current) =>
               current.map((p) =>
-                p.id === post.id
+                p.id === postId
                   ? { ...p, status: "processed", carouselId: carousel.id, handledAt: new Date().toISOString() }
                   : p,
               ),

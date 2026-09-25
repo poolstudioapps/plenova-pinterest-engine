@@ -148,7 +148,7 @@ export function Menu({
                   top: box.top,
                   transform: box.above ? "translate(-100%, -100%)" : "translateX(-100%)",
                 }}
-                className="z-50 min-w-[200px] overflow-hidden rounded-[12px] border border-[var(--color-line)] bg-[var(--color-surface)] py-1 shadow-[var(--shadow-raised)]"
+                className="z-[100] min-w-[200px] overflow-hidden rounded-[12px] border border-[var(--color-line)] bg-[var(--color-surface)] py-1 shadow-[var(--shadow-raised)]"
               >
                 {children}
               </div>

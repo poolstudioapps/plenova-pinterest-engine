@@ -96,6 +96,11 @@ export function CarouselStudio({
 
   const [carousels, setCarousels] = useState(initialCarousels);
   const [theme, setTheme] = useState(initialTheme ?? "");
+  // A hook handed over in the address is read once: reloading later must not
+  // put back one that has been used since.
+  useEffect(() => {
+    if (initialTheme) window.history.replaceState(null, "", window.location.pathname);
+  }, [initialTheme]);
   const [plantSlug, setPlantSlug] = useState("");
   // Default to the languages the connected accounts actually publish in - the
   // point of writing several is feeding those accounts, not filling a matrix.

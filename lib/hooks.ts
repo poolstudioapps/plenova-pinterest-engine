@@ -1,12 +1,13 @@
 import "server-only";
 import { randomToken } from "@/lib/crypto";
-import { getPlant } from "@/lib/data/plants";
+import { PLANTS, getPlant } from "@/lib/data/plants";
+import { PLANTS_FR } from "@/lib/data/plants.fr";
 import { plantName as localizedPlantName } from "@/lib/data/localize";
 import { badRequest, conflict, notFound } from "@/lib/errors";
 import { generateHookIdeas } from "@/lib/gemini";
 import { HOOK_MAX_LENGTH, hookKey, sameHook } from "@/lib/hook-key";
 import { getStore } from "@/lib/store";
-import type { Hook, HookSource, HookStatus } from "@/lib/types";
+import type { Hook, HookSource, HookStatus, HookView, SpyPost } from "@/lib/types";
 
 /**
  * The hook bank: every cover line already used, kept as an idea, or seen on a
@@ -17,6 +18,34 @@ import type { Hook, HookSource, HookStatus } from "@/lib/types";
  * carousel records the one it was rebuilt with.
  */
 
+/** Too common in plant names to make two hooks different on their own. */
+const GENERIC = new Set(
+  "plante plantes plant plants fleur fleurs feuille feuilles arbre commun commune grande petite variegata"
+    .split(" "),
+);
+let vetoCache: Set<string> | null = null;
+
+/**
+ * Every word of every plant name the catalog knows - botanical, English,
+ * French. Two hooks that differ by one of these are about two plants, so the
+ * near-copy rule never merges them.
+ */
+export function plantVetoes(): ReadonlySet<string> {
+  if (vetoCache) return vetoCache;
+  const names = PLANTS.flatMap((p) => [
+    p.name,
+    p.scientificName ?? "",
+    PLANTS_FR[p.slug]?.name ?? "",
+    ...(PLANTS_FR[p.slug]?.aka ?? []),
+  ]);
+  vetoCache = new Set(
+    names
+      .flatMap((n) => hookKey(n).split(" "))
+      .filter((w) => w.length > 3 && !GENERIC.has(w)),
+  );
+  return vetoCache;
+}
+
 function cleanText(raw: unknown): string {
   const text = typeof raw === "string" ? raw.replace(/\s+/g, " ").trim() : "";
   if (text.length < 3) throw badRequest("Écris le hook, au moins quelques mots.");
@@ -25,6 +54,85 @@ function cleanText(raw: unknown): string {
 
 export async function listHooks(): Promise<Hook[]> {
   return getStore().listHooks();
+}
+
+/**
+ * The bank with its evidence: each spied hook carries the numbers of the post
+ * it came from - fresh every day, since the spy refreshes them - and how that
+ * post did against its own account's usual views.
+ */
+export async function listHookViews(): Promise<{ hooks: HookView[]; unread: number }> {
+  const store = getStore();
+  const [hooks, posts] = await Promise.all([store.listHooks(), store.listSpyPosts()]);
+  const byId = new Map(posts.map((p) => [p.id, p]));
+
+  const perAccount = new Map<string, number[]>();
+  for (const post of posts) {
+    const list = perAccount.get(post.username) ?? [];
+    list.push(post.views);
+    perAccount.set(post.username, list);
+  }
+  const medians = new Map([...perAccount].map(([name, views]) => [name, median(views)]));
+
+  const views: HookView[] = hooks.map((hook) => {
+    const post: SpyPost | undefined = hook.spyPostId ? byId.get(hook.spyPostId) : undefined;
+    return {
+      ...hook,
+      spy: post
+        ? {
+            postId: post.id,
+            username: post.username,
+            url: post.url,
+            postedAt: post.postedAt,
+            views: post.views,
+            likes: post.likes,
+            comments: post.comments,
+            shares: post.shares,
+            saves: post.saves,
+            images: post.images,
+            original: post.hookText ?? "",
+            lang: post.hookLang,
+            format: post.hookFormat,
+            accountMedian: medians.get(post.username) ?? null,
+            postStatus: post.status,
+          }
+        : null,
+    };
+  });
+  const unread = posts.filter((p) => !p.hookCheckedAt && p.images.length > 0).length;
+  return { hooks: views, unread };
+}
+
+function median(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
+}
+
+/**
+ * A spied carousel was rebuilt: its hook idea is used now - found by the post
+ * it points to, or by the idea read from that post's cover, since a better
+ * post saying the same thing may have taken the idea over since.
+ */
+export async function markSpyHooksUsed(spyPostId: string, carouselId: string): Promise<void> {
+  try {
+    const store = getStore();
+    const now = new Date().toISOString();
+    const post = await store.getSpyPost(spyPostId);
+    const vetoes = plantVetoes();
+    const linked = (await store.listHooks()).filter(
+      (h) =>
+        h.status !== "used" &&
+        (h.spyPostId === spyPostId ||
+          (h.source === "spy" && Boolean(post?.hookFr) && sameHook(h.text, post!.hookFr!, vetoes))),
+    );
+    for (const hook of linked) {
+      await store.saveHook({ ...hook, status: "used", usedAt: now, carouselId, updatedAt: now });
+    }
+  } catch (err) {
+    console.error("[hooks] could not mark a spied hook used:", err);
+  }
 }
 
 /** Adds a hook, or hands back the one already holding that text. */
@@ -87,8 +195,9 @@ export async function deleteHook(id: string): Promise<void> {
 
 /**
  * Marks a hook as used - creating it if it was typed straight into the form.
- * Never fails the caller: a carousel does not stop because its hook could not
- * be filed.
+ * A reworded version of an idea in the bank marks that idea used too, so it
+ * is not offered again under its old wording. Never fails the caller: a
+ * carousel does not stop because its hook could not be filed.
  */
 export async function recordHookUsed(
   text: string,
@@ -101,6 +210,21 @@ export async function recordHookUsed(
     const now = new Date().toISOString();
     const key = hookKey(clean);
     const existing = await store.findHookByKey(key);
+    if (!existing) {
+      const vetoes = plantVetoes();
+      const idea = (await store.listHooks()).find(
+        (h) => h.status === "idea" && sameHook(h.text, clean, vetoes),
+      );
+      if (idea) {
+        await store.saveHook({
+          ...idea,
+          status: "used",
+          usedAt: now,
+          carouselId: idea.carouselId ?? origin.carouselId ?? null,
+          updatedAt: now,
+        });
+      }
+    }
     await store.saveHook(
       existing
         ? {
@@ -149,6 +273,7 @@ export async function suggestHooks(input: {
   const known = [...hooks.map((h) => h.text), ...carousels.map((c) => c.theme)].filter(Boolean);
   const exclude = Array.from(new Map(known.map((t) => [hookKey(t), t])).values());
 
+  const vetoes = plantVetoes();
   const fresh: string[] = [];
   // A second round only if the first came back mostly as repeats.
   for (let round = 0; round < 2 && fresh.length < count; round++) {
@@ -160,7 +285,7 @@ export async function suggestHooks(input: {
     });
     for (const idea of ideas) {
       if (fresh.length >= count) break;
-      if (exclude.some((e) => sameHook(e, idea)) || fresh.some((f) => sameHook(f, idea))) continue;
+      if (exclude.some((e) => sameHook(e, idea, vetoes)) || fresh.some((f) => sameHook(f, idea, vetoes))) continue;
       fresh.push(idea.slice(0, HOOK_MAX_LENGTH));
     }
   }

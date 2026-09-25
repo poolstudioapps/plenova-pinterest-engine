@@ -21,7 +21,7 @@ import {
 } from "@/lib/prompts-carousel";
 import type { ContentLocale } from "@/lib/i18n";
 import { PINTEREST_LIMITS, truncate } from "@/lib/utils";
-import type { VisualStyle } from "@/lib/types";
+import { HOOK_FORMATS, type HookFormat, type VisualStyle } from "@/lib/types";
 import { creatorVoice, voiceRegister } from "@/lib/voice";
 
 /**
@@ -646,5 +646,97 @@ export async function generateHookIdeas(input: {
   } catch (err) {
     if (err && typeof err === "object" && "code" in err) throw err;
     wrapUpstream(err, "la proposition de hooks");
+  }
+}
+
+export interface SpiedHookRead {
+  /** The cover line exactly as written, in its own language; "" when there is none. */
+  hook: string;
+  /** ISO 639-1 code of that line. */
+  lang: string;
+  format: HookFormat;
+  /** The same hook in natural French, in our voice; "" when there is no hook. */
+  hookFr: string;
+}
+
+/**
+ * Reads the hook off the cover of a spied carousel, and brings it home.
+ *
+ * The original is kept word for word - it is the evidence of what worked - and
+ * a French version in our voice goes into the hook bank as an idea: same
+ * promise, same shape, same number, since the number sets how many slides a
+ * carousel built from it will have.
+ */
+export async function readSpiedHook(
+  cover: { data: Buffer; mimeType: string },
+  caption: string,
+): Promise<SpiedHookRead> {
+  const ai = getClient();
+  const prompt = [
+    "This is the FIRST slide - the cover - of a TikTok photo carousel about plants, posted by another creator.",
+    caption ? `Its caption, for context only: ${caption.slice(0, 500)}` : "",
+    "",
+    "hook: the text written on this cover, exactly as written, in its own language. Join its lines with spaces. Ignore the app's interface and any watermark. Empty string if the cover carries no text.",
+    "lang: the ISO 639-1 code of that text (fr, en, es, pt, it, de, nl, cs...). Empty if there is no text.",
+    `format: the shape of the hook, one of ${HOOK_FORMATS.join(", ")}.`,
+    "  list = a numbered or counted selection ('5 plants that...'); mistakes = errors or myths; tip = a care trick or how-to; transformation = before/after or a rescue; pov = a POV or a situation; question = a question to the viewer; story = a confession or personal story; other = anything else.",
+    "hookFr: the same hook rewritten in natural, spoken French, in her voice - not a word-for-word translation. Keep the promise, the format and any number exactly. 4 to 14 words, no emoji, no final full stop. If it names another app, brand, shop or creator, put Plenova in its place where the sentence still works, otherwise drop that part. Empty string if hook is empty.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  try {
+    const response = await withRetry(() =>
+      ai.models.generateContent({
+        model: config.gemini.textModel,
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { inlineData: { mimeType: cover.mimeType, data: cover.data.toString("base64") } },
+              { text: prompt },
+            ],
+          },
+        ],
+        config: {
+          systemInstruction: [
+            "You read TikTok carousels for a houseplant influencer, a woman talking to her own community, and bring the good ideas home in her voice.",
+            ...creatorVoice(["fr"]),
+          ].join("\n"),
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "object",
+            properties: {
+              hook: { type: "string" },
+              lang: { type: "string" },
+              format: { type: "string", enum: [...HOOK_FORMATS] },
+              hookFr: { type: "string" },
+            },
+            required: ["hook", "lang", "format", "hookFr"],
+          } as unknown as Record<string, unknown>,
+          temperature: 0.4,
+        },
+      }),
+    );
+    const raw = response.text;
+    if (!raw) throw upstream("Gemini n'a rien lu sur la couverture.");
+    let parsed: Partial<SpiedHookRead>;
+    try {
+      parsed = JSON.parse(raw) as Partial<SpiedHookRead>;
+    } catch {
+      throw upstream("La lecture du hook est revenue illisible.");
+    }
+    const clean = (v: unknown) =>
+      typeof v === "string" ? v.replace(/\s+/g, " ").trim().replace(/[.。]+$/, "") : "";
+    const hook = clean(parsed.hook);
+    return {
+      hook,
+      lang: hook ? clean(parsed.lang).toLowerCase().slice(0, 5) : "",
+      format: HOOK_FORMATS.includes(parsed.format as HookFormat) ? (parsed.format as HookFormat) : "other",
+      hookFr: hook ? clean(parsed.hookFr) : "",
+    };
+  } catch (err) {
+    if (err && typeof err === "object" && "code" in err) throw err;
+    wrapUpstream(err, "la lecture d'un hook");
   }
 }

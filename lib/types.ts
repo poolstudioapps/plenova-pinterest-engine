@@ -438,6 +438,63 @@ export interface SpyPost {
   firstSeenAt: string;
   statsUpdatedAt: string;
   handledAt: string | null;
+  /** The cover line read on its first slide, in its own language; "" when it has none. */
+  hookText: string | null;
+  hookLang: string | null;
+  hookFormat: HookFormat | null;
+  /** That hook in French, in our voice - the idea filed in the bank from it. */
+  hookFr: string | null;
+  /** When the first slide was read; null while it has not been. */
+  hookCheckedAt: string | null;
+}
+
+/** What kind of hook it is - for browsing the bank by shape. */
+export type HookFormat =
+  | "list"
+  | "mistakes"
+  | "tip"
+  | "transformation"
+  | "pov"
+  | "question"
+  | "story"
+  | "other";
+
+export const HOOK_FORMATS: HookFormat[] = [
+  "list",
+  "mistakes",
+  "tip",
+  "transformation",
+  "pov",
+  "question",
+  "story",
+  "other",
+];
+
+/** A spied hook's evidence: the post it came from and what that post did. */
+export interface HookSpyStats {
+  postId: string;
+  username: string;
+  url: string;
+  postedAt: string | null;
+  views: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  saves: number;
+  images: SpyPost["images"];
+  /** The hook as that creator wrote it. */
+  original: string;
+  lang: string | null;
+  format: HookFormat | null;
+  /** Median views of that account's spied posts - what "normal" is for it. */
+  accountMedian: number | null;
+  /** Whether the post itself was rebuilt, set aside, or is still waiting. */
+  postStatus: SpyPostStatus;
+}
+
+/** A hook as the pages show it: with its evidence when it came from the spy. */
+export interface HookView extends Hook {
+  spy: HookSpyStats | null;
 }
 
 /** One pass of the spy script. */

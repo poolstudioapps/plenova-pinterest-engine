@@ -113,6 +113,18 @@ export interface EngineStore {
     status: SpyPostStatus,
     carouselId: string | null,
   ): Promise<void>;
+  /**
+   * Reserves a post's cover for reading, for a few minutes. False when it is
+   * already read, or another reader - the app or the script - holds it.
+   */
+  claimSpyPostHook(id: string): Promise<boolean>;
+  /** Gives a reserved cover back, after a reading that failed. */
+  releaseSpyPostHook(id: string): Promise<void>;
+  /** Records the hook read on a post's first slide ("" when there was none). */
+  setSpyPostHook(
+    id: string,
+    hook: { text: string; lang: string | null; format: string | null; fr: string | null },
+  ): Promise<void>;
   latestSpyRun(): Promise<SpyRun | null>;
 }
 

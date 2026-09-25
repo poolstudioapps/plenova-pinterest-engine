@@ -3,15 +3,21 @@
 import { useState } from "react";
 import Link from "next/link";
 import { HookSuggestions } from "@/components/hooks/HookSuggestions";
+import { HookThumb, TierBadge } from "@/components/hooks/parts";
 import { Spinner } from "@/components/ui";
 import type { PlantIdentity } from "@/lib/data/localize";
+import { assignTiers, type Tier } from "@/lib/hook-tiers";
 import { translator } from "@/lib/i18n";
-import type { Hook } from "@/lib/types";
+import { compactNumber } from "@/lib/spy-format";
+import type { HookView } from "@/lib/types";
+
+const SHOWN = 24;
 
 /**
- * Under the theme field of a new carousel: the ideas kept in the bank, and
- * fresh ones from Gemini. Picking one writes it into the field; the carousel
- * marks it used when it starts, so it is never suggested again.
+ * Under the theme field of a new carousel: the ideas kept in the bank - the
+ * ones proven on the watched accounts first, best tier on top - and fresh ones
+ * from Gemini. Picking one writes it into the field; the carousel marks it
+ * used when it starts, so it is never suggested again.
  *
  * Opens inline rather than as a floating menu - it holds a form, and the card
  * it sits in clips anything that floats.
@@ -25,16 +31,34 @@ export function HookPicker({
 }) {
   const t = translator();
   const [open, setOpen] = useState(false);
-  const [ideas, setIdeas] = useState<Hook[] | null>(null);
+  const [ideas, setIdeas] = useState<HookView[] | null>(null);
+  const [tiers, setTiers] = useState<Map<string, Tier>>(new Map());
 
+  /*
+   * Fetched on every opening, never kept: a carousel started since marked its
+   * hook used, and offering it again is exactly what the bank is for.
+   */
   async function toggle() {
     const next = !open;
     setOpen(next);
-    if (next && ideas === null) {
+    if (next) {
+      setIdeas(null);
       try {
-        const res = await fetch("/api/hooks");
-        const data = (await res.json()) as { hooks?: Hook[] };
-        setIdeas((data.hooks ?? []).filter((h) => h.status === "idea"));
+        const res = await fetch("/api/hooks", { cache: "no-store" });
+        if (!res.ok) throw new Error();
+        const data = (await res.json()) as { hooks?: HookView[] };
+        const all = data.hooks ?? [];
+        setTiers(assignTiers(all));
+        setIdeas(
+          all
+            .filter((h) => h.status === "idea")
+            // Proven first, by the views they brought; then the newest of ours.
+            .sort(
+              (a, b) =>
+                (b.spy?.views ?? -1) - (a.spy?.views ?? -1) ||
+                b.createdAt.localeCompare(a.createdAt),
+            ),
+        );
       } catch {
         setIdeas([]);
       }
@@ -43,6 +67,7 @@ export function HookPicker({
 
   function pick(text: string) {
     onPick(text);
+    setIdeas((current) => (current ? current.filter((h) => h.text !== text) : current));
     setOpen(false);
   }
 
@@ -69,24 +94,45 @@ export function HookPicker({
             ) : ideas.length === 0 ? (
               <p className="text-[12.5px] text-[var(--color-ink-faint)]">{t("carousels.hooksNoIdeas")}</p>
             ) : (
-              <div className="flex flex-wrap gap-2">
-                {ideas.slice(0, 20).map((hook) => (
-                  <button
-                    key={hook.id}
-                    type="button"
-                    onClick={() => pick(hook.text)}
-                    className="rounded-full border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-3 py-1.5 text-left text-[13px] transition-colors hover:border-[var(--color-accent)]"
-                  >
-                    {hook.text}
-                  </button>
-                ))}
-              </div>
+              <ul className="grid max-h-[340px] gap-1.5 overflow-y-auto pr-1 sm:grid-cols-2">
+                {ideas.slice(0, SHOWN).map((hook) => {
+                  const tier = tiers.get(hook.id);
+                  return (
+                    <li key={hook.id}>
+                      <button
+                        type="button"
+                        onClick={() => pick(hook.text)}
+                        className="flex w-full items-center gap-2.5 rounded-[11px] border border-[var(--color-line)] bg-[var(--color-surface)] p-1.5 pr-3 text-left transition-colors hover:border-[var(--color-accent)]"
+                      >
+                        {hook.spy ? (
+                          <HookThumb src={hook.spy.images[0]?.url} className="h-[52px] w-[39px]" />
+                        ) : null}
+                        <span className="min-w-0 flex-1">
+                          <span className="line-clamp-2 text-[13px] leading-snug font-medium">{hook.text}</span>
+                          {hook.spy ? (
+                            <span className="mt-0.5 flex items-center gap-1.5 text-[11.5px] text-[var(--color-ink-faint)]">
+                              {tier ? <TierBadge tier={tier} /> : null}
+                              <span className="tabular-nums">
+                                {compactNumber(hook.spy.views)} {t("hooks.views")}
+                              </span>
+                              <span className="truncate">@{hook.spy.username}</span>
+                            </span>
+                          ) : null}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
           </div>
 
           <HookSuggestions
             plants={plants}
-            onKept={(hook) => setIdeas((current) => [hook, ...(current ?? [])])}
+            // Just kept: on top, where it can be seen, whatever the ranking.
+            onKept={(hook) =>
+              setIdeas((current) => [{ ...hook, spy: null }, ...(current ?? []).filter((h) => h.id !== hook.id)])
+            }
             onUse={pick}
           />
 

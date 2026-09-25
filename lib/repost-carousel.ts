@@ -2,7 +2,7 @@ import "server-only";
 import { fileSlideImage, produceSlideImage } from "@/lib/carousel";
 import { matchPlantSlug } from "@/lib/data/localize";
 import { badRequest, notFound } from "@/lib/errors";
-import { recordHookUsed } from "@/lib/hooks";
+import { markSpyHooksUsed, recordHookUsed } from "@/lib/hooks";
 import type { ContentLocale } from "@/lib/i18n";
 import { defaultOverlay, type OverlayStyle } from "@/lib/overlay";
 import { isPexelsConfigured } from "@/lib/pexels";
@@ -190,13 +190,17 @@ export async function runRepost(id: string, input: RepostInput): Promise<void> {
       updatedAt: new Date().toISOString(),
     });
 
-    // Its cover line is ours now: no hook suggestion may offer it again.
-    if (theme !== "Repost") {
-      await recordHookUsed(theme, {
-        source: input.spyPostId ? "spy" : "carousel",
-        carouselId: id,
-        ...(input.spyPostId ? { spyPostId: input.spyPostId } : {}),
-      });
+    // The spied idea it came from is used now, whatever wording it ended with.
+    if (input.spyPostId) await markSpyHooksUsed(input.spyPostId, id);
+    /*
+     * Its French cover line is ours now: no suggestion may offer it again. As
+     * a carousel hook, never with the spied post's evidence - that belongs to
+     * the idea read from the cover, and filing it twice showed the post twice
+     * in the tier list. The bank is French, so another language is not filed.
+     */
+    const frenchTitle = slides[0]?.text.fr?.title?.trim();
+    if (frenchTitle) {
+      await recordHookUsed(frenchTitle, { source: "carousel", carouselId: id });
     }
   } catch (err) {
     const reason = err instanceof Error ? err.message : "Le repost a échoué.";

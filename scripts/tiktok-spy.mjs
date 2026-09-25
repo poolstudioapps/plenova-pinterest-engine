@@ -5,6 +5,7 @@
  *   npm run spy -- --only=leafjournal  one account
  *   npm run spy -- --dry               read everything, write nothing
  *   npm run spy -- --days=30           look further back than two weeks
+ *   npm run spy -- --hooks-only        only read the covers not read yet
  *
  * Why here and not on a server: TikTok answers a home connection and blocks
  * datacenters, and scraping from the app registered with TikTok for publishing
@@ -28,8 +29,13 @@
  *    processed - belongs to the operator and is never touched.
  * Nothing new means nothing written but the pass itself: no model call, no
  * invented content.
+ *
+ * Then the covers not read yet go to Gemini - the app's own code, loaded
+ * through jiti - and each hook lands in the hook bank as an idea, with its
+ * post's numbers as evidence (lib/spy-hooks.ts).
  */
 import { createClient } from "@supabase/supabase-js";
+import { createJiti } from "jiti";
 import sharp from "sharp";
 import fs from "node:fs";
 import os from "node:os";
@@ -202,11 +208,35 @@ async function copyImage(url, dest, width = 1080) {
   };
 }
 
+// -------------------------------------------------------------------- hooks
+
+/**
+ * Reads the covers not read yet, with the app's own module: one prompt, one
+ * voice, one way of filing - whether the app or this script does it.
+ */
+async function readHooks() {
+  try {
+    const jiti = createJiti(import.meta.url, {
+      alias: { "@": ROOT, "server-only": path.join(ROOT, "scripts", "server-only-shim.mjs") },
+    });
+    const { analyzeSpyHooks } = await jiti.import(path.join(ROOT, "lib", "spy-hooks.ts"));
+    const run = await analyzeSpyHooks({ log });
+    log(`Hooks : ${run.read} couverture(s) lue(s), ${run.filed} idée(s) ajoutée(s), ${run.failed} échec(s), ${run.left} en attente.`);
+  } catch (err) {
+    // The pass itself is already saved; the covers will be read next time.
+    log(`Hooks : lecture impossible - ${err instanceof Error ? err.message : err}`);
+  }
+}
+
 // --------------------------------------------------------------------- main
 
 async function main() {
   const dry = args.has("dry");
   const only = args.get("only");
+  if (args.has("hooks-only")) {
+    await readHooks();
+    return;
+  }
 
   let query = db.from("spy_accounts").select("username").eq("enabled", true).order("username");
   if (only) query = db.from("spy_accounts").select("username").eq("username", only.toLowerCase());
@@ -231,47 +261,88 @@ async function main() {
   log(`Spy : ${accounts.length} compte(s), ${LOOKBACK_DAYS} derniers jours${dry ? " (essai, rien n'est écrit)" : ""}.`);
 
   const cutoff = Date.now() / 1000 - LOOKBACK_DAYS * 86400;
+  // Running totals, so whatever stops the pass, the run record says what it did.
   let found = 0;
   let added = 0;
   const errors = [];
 
-  for (const [i, username] of accounts.entries()) {
-    const now = new Date().toISOString();
-    try {
-      const { profile, ids } = await readProfile(username);
-      const recent = ids.filter((id) => createdAt(id) >= cutoff && !knownVideos.has(id));
+  try {
+    for (const [i, username] of accounts.entries()) {
+      await visit(username, { dry, cutoff, errors, count: (f, a) => ((found += f), (added += a)) });
+      if (i < accounts.length - 1) await sleep(3000 + Math.random() * 3000);
+    }
+  } catch (err) {
+    errors.push({ username: "*", message: `passage interrompu : ${err instanceof Error ? err.message : err}`.slice(0, 300) });
+    throw err;
+  } finally {
+    fs.writeFileSync(videosFile, JSON.stringify([...knownVideos].slice(-5000)));
+    if (runId !== null) {
+      // Always closed, even after a fatal error, so the app never shows an
+      // unfinished pass as a clean one.
+      const { error } = await db
+        .from("spy_runs")
+        .update({ finished_at: new Date().toISOString(), found, added, errors })
+        .eq("id", runId);
+      if (error) log(`Fin du passage non enregistrée : ${error.message}`);
+    }
+    log(`Terminé : ${found} carrousel(s) vus, ${added} nouveau(x), ${errors.length} erreur(s).`);
+  }
+  if (!dry) await readHooks();
+}
 
-      const { data: known, error: knownError } = recent.length
-        ? await db.from("spy_posts").select("id").in("id", recent)
-        : { data: [], error: null };
-      check("lecture des carrousels connus", knownError);
-      const knownIds = new Set((known ?? []).map((r) => r.id));
+/**
+ * One account. A post that fails - unreadable page, an image that will not
+ * copy - is skipped and counted, never the whole account; the account is
+ * marked in error only when TikTok would not show any of its posts.
+ */
+async function visit(username, { dry, cutoff, errors, count }) {
+  const now = new Date().toISOString();
+  try {
+    const { profile, ids } = await readProfile(username);
+    const listed = ids.filter((id) => createdAt(id) >= cutoff && !knownVideos.has(id));
 
-      let carousels = 0;
-      let fresh = 0;
-      for (const id of recent) {
-        await breathe();
-        let post;
-        try {
-          post = await readPost(username, id);
-        } catch (err) {
-          log(`  @${username} ${id} : ${err instanceof Error ? err.message : err}`);
-          continue;
-        }
-        if (!post) {
-          knownVideos.add(id);
-          continue;
-        }
-        carousels += 1;
-        const stats = {
-          views: post.views,
-          likes: post.likes,
-          comments: post.comments,
-          shares: post.shares,
-          saves: post.saves,
-          stats_updated_at: now,
-        };
-        if (dry) continue;
+    // Posts already stored and still in the window, even once they have left
+    // the embed page's short list: their numbers keep being refreshed, so the
+    // tier list never compares a day-old count with a week-old one.
+    const { data: stored, error: storedError } = await db
+      .from("spy_posts")
+      .select("id")
+      .eq("username", username)
+      .gte("posted_at", new Date(cutoff * 1000).toISOString());
+    check("lecture des carrousels connus", storedError);
+    const knownIds = new Set((stored ?? []).map((r) => r.id));
+    const candidates = Array.from(new Set([...listed, ...knownIds]));
+
+    let carousels = 0;
+    let fresh = 0;
+    let unreadable = 0;
+    let failedPosts = 0;
+    for (const id of candidates) {
+      await breathe();
+      let post;
+      try {
+        post = await readPost(username, id);
+      } catch (err) {
+        unreadable += 1;
+        log(`  @${username} ${id} : ${err instanceof Error ? err.message : err}`);
+        continue;
+      }
+      if (!post) {
+        knownVideos.add(id);
+        continue;
+      }
+      carousels += 1;
+      count(1, 0);
+      if (dry) continue;
+      const stats = {
+        views: post.views,
+        likes: post.likes,
+        comments: post.comments,
+        shares: post.shares,
+        saves: post.saves,
+        stats_updated_at: now,
+      };
+      try {
         if (knownIds.has(id)) {
           const { error } = await db.from("spy_posts").update(stats).eq("id", id);
           check("mise à jour des chiffres", error);
@@ -292,59 +363,60 @@ async function main() {
         });
         check("enregistrement d'un carrousel", error);
         fresh += 1;
-      }
-      found += carousels;
-      added += fresh;
-
-      if (!dry) {
-        // The avatar too: TikTok's link to it expires.
-        let avatar = null;
-        if (profile.avatarUrl) {
-          try {
-            avatar = (await copyImage(profile.avatarUrl, `avatars/${username}.jpg`, 200)).url;
-          } catch {
-            avatar = null;
-          }
-        }
-        const { error } = await db
-          .from("spy_accounts")
-          .update({
-            last_checked_at: now,
-            last_status: carousels > 0 ? "ok" : "empty",
-            last_error: null,
-            last_found: carousels,
-            ...(profile.displayName ? { display_name: profile.displayName } : {}),
-            ...(avatar ? { avatar_url: avatar } : {}),
-            ...(profile.followers ? { followers: profile.followers } : {}),
-          })
-          .eq("username", username);
-        check("mise à jour du compte", error);
-      }
-      log(`@${username} : ${carousels} carrousel(s) sur ${LOOKBACK_DAYS} jours, ${fresh} nouveau(x).`);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      errors.push({ username, message: message.slice(0, 300) });
-      log(`@${username} : échec - ${message}`);
-      if (!dry) {
-        await db
-          .from("spy_accounts")
-          .update({ last_checked_at: now, last_status: "error", last_error: message.slice(0, 300) })
-          .eq("username", username);
+        count(0, 1);
+      } catch (err) {
+        // Retried tomorrow: a post not recorded is still new then.
+        failedPosts += 1;
+        log(`  @${username} ${id} : non enregistré - ${err instanceof Error ? err.message : err}`);
       }
     }
-    if (i < accounts.length - 1) await sleep(3000 + Math.random() * 3000);
-  }
 
-  fs.writeFileSync(videosFile, JSON.stringify([...knownVideos].slice(-5000)));
+    // TikTok answering the profile but refusing every post is a block, not
+    // an account that stopped posting - said as such.
+    const blocked = candidates.length > 0 && unreadable === candidates.length;
+    const problems = [
+      blocked ? `TikTok n'a laissé lire aucun des ${unreadable} posts (limite ou vérification anti-robot)` : "",
+      !blocked && unreadable > 0 ? `${unreadable} post(s) illisible(s)` : "",
+      failedPosts > 0 ? `${failedPosts} carrousel(s) non enregistré(s)` : "",
+    ].filter(Boolean);
+    if (problems.length > 0) errors.push({ username, message: problems.join(", ") });
 
-  if (runId !== null) {
-    const { error } = await db
-      .from("spy_runs")
-      .update({ finished_at: new Date().toISOString(), found, added, errors })
-      .eq("id", runId);
-    check("fin du passage", error);
+    if (!dry) {
+      // The avatar too: TikTok's link to it expires.
+      let avatar = null;
+      if (profile.avatarUrl) {
+        try {
+          avatar = (await copyImage(profile.avatarUrl, `avatars/${username}.jpg`, 200)).url;
+        } catch {
+          avatar = null;
+        }
+      }
+      const { error } = await db
+        .from("spy_accounts")
+        .update({
+          last_checked_at: now,
+          last_status: blocked ? "error" : carousels > 0 ? "ok" : "empty",
+          last_error: problems.length > 0 ? problems.join(", ") : null,
+          last_found: carousels,
+          ...(profile.displayName ? { display_name: profile.displayName } : {}),
+          ...(avatar ? { avatar_url: avatar } : {}),
+          ...(profile.followers ? { followers: profile.followers } : {}),
+        })
+        .eq("username", username);
+      check("mise à jour du compte", error);
+    }
+    log(`@${username} : ${carousels} carrousel(s) sur ${LOOKBACK_DAYS} jours, ${fresh} nouveau(x)${problems.length ? ` - ${problems.join(", ")}` : ""}.`);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    errors.push({ username, message: message.slice(0, 300) });
+    log(`@${username} : échec - ${message}`);
+    if (!dry) {
+      await db
+        .from("spy_accounts")
+        .update({ last_checked_at: now, last_status: "error", last_error: message.slice(0, 300) })
+        .eq("username", username);
+    }
   }
-  log(`Terminé : ${found} carrousel(s) vus, ${added} nouveau(x), ${errors.length} erreur(s).`);
 }
 
 main().catch((err) => {

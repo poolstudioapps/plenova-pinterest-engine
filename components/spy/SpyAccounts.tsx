@@ -16,7 +16,7 @@ export function SpyAccounts({
   onChange,
 }: {
   accounts: SpyAccount[];
-  onChange: (accounts: SpyAccount[]) => void;
+  onChange: (update: (accounts: SpyAccount[]) => SpyAccount[]) => void;
 }) {
   const t = translator();
   const [draft, setDraft] = useState("");
@@ -46,7 +46,7 @@ export function SpyAccounts({
         return;
       }
       const added = data.account;
-      onChange([...accounts, added].sort((a, b) => a.username.localeCompare(b.username)));
+      onChange((current) => [...current, added].sort((a, b) => a.username.localeCompare(b.username)));
       setDraft("");
       setInfo(t("spy.accountAdded", { name: added.username }));
     } catch {
@@ -58,8 +58,8 @@ export function SpyAccounts({
 
   async function patch(account: SpyAccount, body: { enabled?: boolean; note?: string }) {
     setError(null);
-    // Shown at once; put back if the server says no.
-    onChange(accounts.map((a) => (a.username === account.username ? { ...a, ...body } : a)));
+    // Shown at once; only this account is put back if the server says no.
+    onChange((current) => current.map((a) => (a.username === account.username ? { ...a, ...body } : a)));
     try {
       const res = await fetch(`/api/spy/accounts/${encodeURIComponent(account.username)}`, {
         method: "PATCH",
@@ -68,7 +68,7 @@ export function SpyAccounts({
       });
       if (!res.ok) throw new Error();
     } catch {
-      onChange(accounts);
+      onChange((current) => current.map((a) => (a.username === account.username ? account : a)));
       setError(t("preview.requestFailed"));
     }
   }
@@ -80,7 +80,7 @@ export function SpyAccounts({
         method: "DELETE",
       });
       if (!res.ok) throw new Error();
-      onChange(accounts.filter((a) => a.username !== account.username));
+      onChange((current) => current.filter((a) => a.username !== account.username));
     } catch {
       setError(t("preview.requestFailed"));
     } finally {

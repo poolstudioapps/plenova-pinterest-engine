@@ -213,7 +213,11 @@ function Row({
   );
 }
 
-/** The floating list. Lives in document.body, so nothing can clip it. */
+/**
+ * The floating list. Lives in document.body, so nothing can clip it, and sits
+ * above every layer - dialogs included: at the same height as the page it
+ * opened behind the dialog it belonged to.
+ */
 function Panel({
   box,
   listId,
@@ -246,7 +250,7 @@ function Panel({
         maxHeight: MAX_PANEL,
         ...(box.above ? { transform: "translateY(-100%)" } : {}),
       }}
-      className="z-50 overflow-y-auto overscroll-contain rounded-[14px] border border-[var(--color-line)] bg-[var(--color-surface)] p-1 shadow-[var(--shadow-raised)]"
+      className="z-[100] overflow-y-auto overscroll-contain rounded-[14px] border border-[var(--color-line)] bg-[var(--color-surface)] p-1 shadow-[var(--shadow-raised)]"
     >
       {children}
     </div>,

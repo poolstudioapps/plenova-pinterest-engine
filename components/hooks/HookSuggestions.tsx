@@ -33,6 +33,7 @@ export function HookSuggestions({
   const [plantSlug, setPlantSlug] = useState("");
   const [suggestions, setSuggestions] = useState<string[] | null>(null);
   const [kept, setKept] = useState<Set<string>>(new Set());
+  const [keeping, setKeeping] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -63,22 +64,35 @@ export function HookSuggestions({
   }
 
   async function keep(text: string) {
+    if (kept.has(text) || keeping.has(text)) return;
     setError(null);
+    setKeeping((current) => new Set(current).add(text));
     try {
       const res = await fetch("/api/hooks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text, source: "gemini" }),
       });
-      const data = (await res.json().catch(() => ({}))) as { hook?: Hook; error?: { message?: string } };
+      const data = (await res.json().catch(() => ({}))) as {
+        hook?: Hook;
+        existed?: boolean;
+        error?: { message?: string };
+      };
       if (!res.ok || !data.hook) {
         setError(data.error?.message ?? t("preview.requestFailed"));
         return;
       }
       setKept((current) => new Set(current).add(text));
-      onKept(data.hook);
+      // Already in the bank: nothing new to add to anyone's list.
+      if (!data.existed) onKept(data.hook);
     } catch {
       setError(t("preview.unreachable"));
+    } finally {
+      setKeeping((current) => {
+        const next = new Set(current);
+        next.delete(text);
+        return next;
+      });
     }
   }
 
@@ -140,7 +154,7 @@ export function HookSuggestions({
                   size="sm"
                   variant="ghost"
                   onClick={() => void keep(text)}
-                  disabled={kept.has(text)}
+                  disabled={kept.has(text) || keeping.has(text)}
                 >
                   {kept.has(text) ? t("hooks.kept") : t("hooks.keep")}
                 </Button>

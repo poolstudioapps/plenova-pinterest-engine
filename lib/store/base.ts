@@ -441,6 +441,32 @@ export abstract class DocumentStore implements EngineStore {
     });
   }
 
+  /** One process holds this document, so a claim is simply "not read yet". */
+  async claimSpyPostHook(id: string): Promise<boolean> {
+    const doc = await this.read();
+    const post = doc.spyPosts?.[id];
+    return Boolean(post && !post.hookCheckedAt);
+  }
+
+  async releaseSpyPostHook(): Promise<void> {
+    // Nothing is held: see claimSpyPostHook.
+  }
+
+  async setSpyPostHook(
+    id: string,
+    hook: { text: string; lang: string | null; format: string | null; fr: string | null },
+  ): Promise<void> {
+    await this.mutate((doc) => {
+      const post = doc.spyPosts?.[id];
+      if (!post) return;
+      post.hookText = hook.text;
+      post.hookLang = hook.lang;
+      post.hookFormat = hook.format as SpyPost["hookFormat"];
+      post.hookFr = hook.fr;
+      post.hookCheckedAt = new Date().toISOString();
+    });
+  }
+
   async latestSpyRun(): Promise<SpyRun | null> {
     const doc = await this.read();
     const runs = [...(doc.spyRuns ?? [])].sort((a, b) =>

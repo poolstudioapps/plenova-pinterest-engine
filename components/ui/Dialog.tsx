@@ -4,6 +4,11 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 
+/** Open dialogs, newest last: Escape only ever closes the one on top. */
+const stack: symbol[] = [];
+/** The page's own overflow, put back when the last dialog closes. */
+let lockedOverflow = "";
+
 /**
  * A dialog over the page.
  *
@@ -29,16 +34,27 @@ export function Dialog({
   close.current = onClose;
 
   useEffect(() => {
+    const me = Symbol("dialog");
+    // The page stays still under a dialog: a list opened from a field in it is
+    // placed against the page, and would drift if the page scrolled.
+    const html = document.documentElement;
+    if (stack.length === 0) {
+      lockedOverflow = html.style.overflow;
+      html.style.overflow = "hidden";
+    }
+    stack.push(me);
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !event.defaultPrevented) {
-        event.preventDefault();
-        close.current();
-      }
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      if (stack[stack.length - 1] !== me) return;
+      event.preventDefault();
+      close.current();
     };
     window.addEventListener("keydown", onKey);
     const previous = document.activeElement as HTMLElement | null;
     panel.current?.focus();
     return () => {
+      stack.splice(stack.indexOf(me), 1);
+      if (stack.length === 0) html.style.overflow = lockedOverflow;
       window.removeEventListener("keydown", onKey);
       previous?.focus?.();
     };

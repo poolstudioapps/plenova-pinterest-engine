@@ -125,6 +125,10 @@ export async function startSpyProcessing(
   const post = await store.getSpyPost(id);
   if (!post) throw notFound("Ce carrousel n'est plus dans le spy.");
   if (post.images.length === 0) throw badRequest("Ce carrousel n'a aucune image enregistrée.");
+  // Twice would make two carousels of it, and lose track of the first.
+  if (post.status === "processed") {
+    throw conflict("Ce carrousel est déjà traité. Remets-le à traiter dans le Spy pour le refaire.");
+  }
 
   const repost = {
     frames: post.images.map((image) => image.url),
@@ -134,6 +138,12 @@ export async function startSpyProcessing(
     ...(input.overlayStyle ? { overlayStyle: input.overlayStyle } : {}),
   };
   const carousel = await startRepost(repost);
-  await store.setSpyPostStatus(post.id, "processed", carousel.id);
+  try {
+    await store.setSpyPostStatus(post.id, "processed", carousel.id);
+  } catch (err) {
+    // Not recorded as processed: no job either, rather than one nobody can find.
+    await store.deleteCarousel(carousel.id).catch(() => undefined);
+    throw err;
+  }
   return { carousel, run: () => runRepost(carousel.id, repost) };
 }
