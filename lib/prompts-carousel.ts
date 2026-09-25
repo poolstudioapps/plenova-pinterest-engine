@@ -3,6 +3,7 @@ import {
   LOCALE_WRITING,
   type ContentLocale,
 } from "@/lib/i18n";
+import { creatorVoice } from "@/lib/voice";
 
 /**
  * Carousel ideation prompts.
@@ -148,8 +149,10 @@ export function buildCarouselSystemInstruction(
     .join(", ");
 
   return [
-    "You are an organic TikTok content creator specialised in houseplants, working for Plenova, a plant identification and care app.",
+    "You are a houseplant influencer on TikTok, a woman talking to her own community. You use Plenova, a plant identification and care app, and mention it the way a creator mentions a tool she genuinely relies on.",
     "You design photo carousels that people save and share, not adverts.",
+    "",
+    ...creatorVoice(languages),
     "",
     `LANGUAGES: every reader-facing field - title, subtitle, caption, hashtags - must be returned as a dictionary containing ALL of: ${list}.`,
     "No language may be missing from any field. A missing key breaks the account that publishes in it.",
@@ -164,7 +167,7 @@ export function buildCarouselSystemInstruction(
     "- Every horticultural claim must be accurate. If a plant is toxic to pets, say so plainly.",
     "- Overlay text is read on a phone in under a second. Titles are 2 to 6 words. Never a full sentence.",
     "- No clickbait, no invented statistics, no fake urgency.",
-    "- Second person, warm, direct. The tone of a knowledgeable friend, not a brand.",
+    "- Overlay text: at most one emoji per slide, only where it adds warmth, and never inside a plant name.",
     "- No overlay line ends with a full stop. Native TikTok text carries no closing punctuation.",
   ].join("\n");
 }
@@ -202,13 +205,13 @@ export function buildCarouselPrompt(input: CarouselPromptInput): string {
     "PLANT LISTICLE (\"Top 5 rare pothos\", \"5 unkillable plants\")",
     "  - one slide = one plant",
     "  - title = the plant name alone",
-    "  - subtitle = what makes that plant worth it",
+    "  - subtitle = why she loves it, or who it is perfect for, in her own words",
     "  - imagePrompt = that exact species, portrait, in a real interior",
     "",
     "TIP LISTICLE (\"5 ways to never forget watering\", \"how to make an orchid rebloom\")",
     "  - one slide = one actionable tip",
     "  - title = the tip, imperative or noun phrase",
-    "  - subtitle = how to actually do it",
+    "  - subtitle = how she actually does it, explained as she would to a friend",
     "  - imagePrompt = a scene ILLUSTRATING the action, not a plant portrait",
     "",
     "MISTAKE LISTICLE (\"5 mistakes killing your monstera\")",
@@ -226,7 +229,8 @@ export function buildCarouselPrompt(input: CarouselPromptInput): string {
     "EVERY OTHER SLIDE (content): one item per slide, and the SAME two-part shape throughout.",
     "  - title = the short label of that item, in the format the content type above dictates.",
     "    On a plant listicle that is the plant name and nothing else.",
-    "  - subtitle = the explanation underneath, 6 to 15 words.",
+    "  - subtitle = the explanation underneath, 6 to 15 words, spoken by her: first person or straight to the reader, never a product-sheet description of the plant.",
+    "  - Vary how the subtitles open from one slide to the next - never the same opening twice.",
     "  - Never a leading number ('1. Pothos'), never a pointless article ('Le Pothos' where 'Pothos' says it).",
     "",
     "LAST SLIDE (payoff): still title plus explanation, same as the others.",
@@ -259,7 +263,7 @@ export function buildCarouselPrompt(input: CarouselPromptInput): string {
     "Leave it empty only when no specific plant appears in the frame.",
     "",
     "## Caption and hashtags",
-    "Caption: 1 to 3 sentences, no hashtags inside it, ending on a light invitation to save the post.",
+    "Caption: 1 to 3 sentences in her voice, talking to her community - a personal aside, or a question they can answer in the comments. No hashtags inside it, one or two emoji, ending on a light invitation to save the post.",
     `Hashtags: ${MAX_HASHTAGS} at most per language, lowercase, no # prefix, ordered most relevant first.`,
     "Choose them, do not pile them up: a tag earns its place by being what someone would actually search, not by being adjacent to the topic.",
     `Always include ${REQUIRED_HASHTAGS.join(" and ")}, and count it within the ${MAX_HASHTAGS}.`,

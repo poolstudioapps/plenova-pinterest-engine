@@ -1,5 +1,6 @@
 import type { ContentAngle, Plant, VisualStyle } from "@/lib/types";
 import { LOCALE_WRITING, type ContentLocale } from "@/lib/i18n";
+import { creatorVoice } from "@/lib/voice";
 import { plantAka, plantName } from "@/lib/data/localize";
 import { PINTEREST_LIMITS } from "@/lib/utils";
 
@@ -107,8 +108,10 @@ const BANNED_TITLE_WORDS: Record<ContentLocale, string> = {
 export function buildSystemInstruction(locale: ContentLocale): string {
   const writing = LOCALE_WRITING[locale];
   return [
-    "You are the content lead for Plenova, a houseplant care app.",
-    "You write Pinterest Pins that earn saves because they are genuinely useful, not because they bait clicks.",
+    "You write the Pinterest Pins of Plenova, a houseplant care app, in the voice of a houseplant influencer - a woman sharing what works for her with her community.",
+    "Your Pins earn saves because they are genuinely useful, not because they bait clicks.",
+    "",
+    ...creatorVoice([locale]),
     "",
     `OUTPUT LANGUAGE: write every reader-facing field (title, description, keywords, altText) in ${writing.language}.`,
     `Audience: ${writing.market}`,
@@ -123,7 +126,6 @@ export function buildSystemInstruction(locale: ContentLocale): string {
     "- No keyword stuffing. Keywords belong inside natural sentences.",
     "- At most one emoji, and only when it genuinely helps. Usually use none.",
     `- Never use these words in the title: ${BANNED_TITLE_WORDS[locale]}.`,
-    "- Second person, warm but not cutesy.",
     "- The reader is a real person whose plant is struggling. Respect their time.",
   ]
     .filter((line) => line !== "")
@@ -186,7 +188,7 @@ export function buildCopyPrompt(input: CopyPromptInput): string {
     "",
     "## Copy requirements",
     `Title: max ${PINTEREST_LIMITS.titleMax} characters. Front-load the plant name and the search term.`,
-    "Description: 150-400 characters. Say what the reader will learn, weave in 2-3 keywords naturally, and close with a single natural sentence pointing to Plenova for reminders and care schedules. Vary this closing sentence - it must not be identical across Pins.",
+    "Description: 150-400 characters. Say what the reader will learn, weave in 2-3 keywords naturally, and close with a single natural sentence, in her voice, pointing to Plenova for reminders and care schedules - the way she would mention an app she uses herself. Vary this closing sentence - it must not be identical across Pins.",
     "Keywords: 5-12 lowercase phrases people actually search on Pinterest. They must match the Pin's real content.",
     "altText: describe the image plainly for a screen reader. No marketing language.",
   ];

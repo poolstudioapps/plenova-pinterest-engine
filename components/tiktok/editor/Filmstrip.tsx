@@ -16,7 +16,7 @@ export interface FilmstripItem {
   words: SlideWords;
   /** New, or changed since the last save. */
   dirty: boolean;
-  /** No title in the language on screen. */
+  /** Words written in another language, not yet in the one on screen. */
   missing: boolean;
   mention: boolean;
 }
@@ -52,6 +52,7 @@ export function Filmstrip({
   return (
     <nav
       aria-label={t("editor.slidesNav")}
+      data-editor-filmstrip
       className="flex gap-2.5 overflow-x-auto p-3 lg:flex-col lg:overflow-x-visible lg:overflow-y-auto"
       onKeyDown={(e) => {
         // The sortable items own the arrow keys (they move the slide);
@@ -154,7 +155,7 @@ const Thumb = memo(function Thumb({
         {missing ? (
           <span
             title={t("editor.thumbMissing")}
-            className="grid size-4 place-items-center rounded-full bg-[var(--color-danger)] text-[10px] font-bold text-white"
+            className="grid size-4 place-items-center rounded-full bg-[var(--color-warn)] text-[10px] font-bold text-white"
           >
             !
           </span>

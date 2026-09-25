@@ -257,10 +257,14 @@ export function EditorCanvas(props: Props) {
     return `gesture:${gestureCount.current}`;
   }
 
-  /** A field still holding the focus would take the arrow keys meant for the block. */
+  /**
+   * Whatever held the focus lets go once the slide is touched: a field would
+   * take the arrow keys meant for the block, and a thumbnail still ringed from
+   * the keyboard would take the Delete meant for it.
+   */
   function releaseFocus() {
     const active = document.activeElement as HTMLElement | null;
-    if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA")) active.blur();
+    if (active && active !== document.body) active.blur();
   }
 
   function startMove(event: React.PointerEvent, key: BlockKey) {

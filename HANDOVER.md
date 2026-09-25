@@ -98,6 +98,23 @@ par langue (les 5). Traduction Gemini des langues vides seulement.
 (`components/ui/Sortable.tsx`, `restBox` = offsetLeft/Top). Mesurer
 `getBoundingClientRect` pendant une transition faisait fuir la vignette.
 
+**Une slide peut n'avoir aucun texte.** Titre retiré, CTA seul, photo nue :
+c'est un choix, rien ne le signale. L'éditeur ne signale qu'une traduction
+manquante (un bloc écrit dans une langue et vide dans une autre). Suppr retire
+le bloc sélectionné dans toutes les langues, ou la slide si sa vignette a le
+focus clavier (anneau visible).
+
+**Après une modification, seules les slides touchées sont réincrustées**, et
+automatiquement, dès que la page Carrousels est ouverte (`compose(c, "stale")`).
+L'ancien message « les slides n'ont pas encore de texte » s'affichait pendant
+cette réincrustation et faisait croire à une erreur.
+
+**La voix des textes générés** (`lib/voice.ts`) : une influenceuse plantes qui
+parle à sa communauté. Première personne, tutoiement (tu, du, tú, tu), accords
+au féminin, jamais de fiche produit. Demandé explicitement par l'utilisateur ;
+partagée par tous les prompts (carrousel, légende, repost, traduction des
+slides prêtes, Pins).
+
 **La plante 3D** (`components/plants/monstera-scene.ts`, three.js en chunk
 chargé à la demande) : aucun fichier téléchargé, tout est modélisé en code.
 

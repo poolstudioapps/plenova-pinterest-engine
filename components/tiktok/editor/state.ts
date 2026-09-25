@@ -163,6 +163,38 @@ export function wordsOf(slide: SlideDraft | undefined, lang: ContentLocale): Sli
   return slide?.text[lang] ?? EMPTY_WORDS;
 }
 
+/**
+ * The other languages a block is written in, while it is empty in this one.
+ *
+ * That is the only missing text worth pointing at: a translation still to
+ * write. A block empty in every language is a choice - a slide may carry only
+ * its photo, or only a CTA - and the editor leaves it alone.
+ */
+export function writtenElsewhere(
+  slide: SlideDraft | undefined,
+  lang: ContentLocale,
+  key: BlockKey,
+): ContentLocale[] {
+  if (!slide || wordsOf(slide, lang)[key].trim()) return [];
+  return (Object.keys(slide.text) as ContentLocale[]).filter(
+    (l) => l !== lang && Boolean(slide.text[l]?.[key].trim()),
+  );
+}
+
+/** The blocks of a slide still to translate into this language. */
+export function untranslated(slide: SlideDraft | undefined, lang: ContentLocale): BlockKey[] {
+  return BLOCKS.filter((key) => writtenElsewhere(slide, lang, key).length > 0);
+}
+
+/** A block taken off the slide: its words go in every language, its place stays. */
+export function withoutBlock(slide: SlideDraft, key: BlockKey): SlideDraft {
+  const text: SlideDraft["text"] = {};
+  for (const [l, words] of Object.entries(slide.text) as [ContentLocale, SlideWords | undefined][]) {
+    text[l] = { ...(words ?? EMPTY_WORDS), [key]: "" };
+  }
+  return { ...slide, text };
+}
+
 export function sameDraft(a: SlideDraft | undefined, b: SlideDraft | undefined): boolean {
   if (a === b) return true;
   return JSON.stringify(a) === JSON.stringify(b);

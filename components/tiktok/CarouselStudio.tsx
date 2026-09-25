@@ -384,8 +384,11 @@ export function CarouselStudio({
    * Client-side because the design relies on CSS no server-side renderer
    * implements - text stroke with paint-order, per-line pill backgrounds - and
    * this browser is the same engine the preview uses.
+   *
+   * "stale" redoes only the images an edit invalidated: after changing one
+   * slide in the editor, that slide is redrawn, not the whole carousel.
    */
-  async function compose(carousel: CarouselRecord) {
+  async function compose(carousel: CarouselRecord, scope: "all" | "stale" = "all") {
     // Only one at a time - the drawing is done by this browser - but the other
     // buttons stay alive and say so, instead of all going dead at once.
     if (composing) {
@@ -394,31 +397,54 @@ export function CarouselStudio({
     }
     setComposing(carousel.id);
     setError(null);
+    const todo = new Map(
+      carousel.languages.map((language) => [
+        language,
+        carousel.slides
+          .map((s, i) => (scope === "all" || !s.composed[language] ? i : -1))
+          .filter((i) => i >= 0),
+      ]),
+    );
     // Twice: once to draw each slide, once to upload it. Reporting the
     // single count first made the counter read "0/6" and then jump to "1/12".
-    const total = carousel.slides.length * carousel.languages.length;
+    const total = [...todo.values()].reduce((n, list) => n + list.length, 0);
+    if (total === 0) {
+      setComposing(null);
+      return;
+    }
     setProgress({ done: 0, total: total * 2 });
 
     try {
       let latest = carousel;
       let done = 0;
+      // Every slide that did not make it, in any language: reported once at
+      // the end, so the second language does not overwrite the first.
+      const missedAll: { index: number; language: ContentLocale; reason: string }[] = [];
 
       for (const language of carousel.languages) {
-        const slides = carousel.slides.map((s, i) => ({
-          // Fetched through the carousel, not the media library: the slide
-          // owns its image, and the library entry may be missing.
-          src: slideImageSrc(carousel.id, i, s),
-          title: s.text[language]?.title ?? "",
-          subtitle: s.text[language]?.subtitle ?? "",
-          cta: s.text[language]?.cta ?? "",
-          // Each slide carries its own layout, so one edited slide does not
-          // drag the rest of the carousel with it.
-          overlay: s.overlay ?? defaultOverlay(overlayStyle),
-        }));
+        const indexes = todo.get(language) ?? [];
+        if (indexes.length === 0) continue;
+        const slides = indexes.map((i) => {
+          const s = carousel.slides[i]!;
+          return {
+            // Fetched through the carousel, not the media library: the slide
+            // owns its image, and the library entry may be missing.
+            src: slideImageSrc(carousel.id, i, s),
+            title: s.text[language]?.title ?? "",
+            subtitle: s.text[language]?.subtitle ?? "",
+            cta: s.text[language]?.cta ?? "",
+            // Each slide carries its own layout, so one edited slide does not
+            // drag the rest of the carousel with it.
+            overlay: s.overlay ?? defaultOverlay(overlayStyle),
+          };
+        });
 
-        const { shots, failures } = await captureSlides(slides, () =>
+        const run = await captureSlides(slides, () =>
           setProgress({ done: ++done, total: total * 2 }),
         );
+        // Positions in the carousel, not in the batch that was drawn.
+        const shots = run.shots.map((shot) => ({ ...shot, index: indexes[shot.index]! }));
+        const failures = run.failures.map((f) => ({ ...f, index: indexes[f.index]! }));
 
         // One request per slide to store the bytes: a whole carousel of base64
         // JPEGs in one body would exceed the platform request limit, and
@@ -478,15 +504,17 @@ export function CarouselStudio({
           latest = data.carousel;
         }
 
-        if (missed.length > 0) {
-          setError(
-            t("carousels.slidesMissed", {
-              slides: missed.map((m) => m.index + 1).join(", "),
-              lang: language.toUpperCase(),
-              reason: missed[0]?.reason ?? "",
-            }),
-          );
-        }
+        for (const m of missed) missedAll.push({ ...m, language });
+      }
+
+      if (missedAll.length > 0) {
+        setError(
+          t("carousels.slidesMissed", {
+            slides: slideList([...new Set(missedAll.map((m) => m.index + 1))].sort((a, b) => a - b)),
+            lang: [...new Set(missedAll.map((m) => m.language.toUpperCase()))].join(", "),
+            reason: missedAll[0]?.reason ?? "",
+          }),
+        );
       }
 
       setCarousels((current) =>
@@ -511,14 +539,15 @@ export function CarouselStudio({
     if (composing) return;
     const pending = visible.find(
       (c) =>
-        (c.status === "draft" || c.status === "failed") &&
+        c.status !== "generating" &&
+        c.status !== "publishing" &&
         c.slides.length > 0 &&
         !autoComposed.current.has(c.id) &&
-        c.slides.some((s) => c.languages.some((l) => !s.composed[l])),
+        staleSlides(c).length > 0,
     );
     if (!pending) return;
     autoComposed.current.add(pending.id);
-    void compose(pending);
+    void compose(pending, "stale");
     // compose is stable enough for this: it only reads state it is given.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [carousels, composing]);
@@ -753,9 +782,9 @@ export function CarouselStudio({
             const lang = carousel.languages.includes(previewLang)
               ? previewLang
               : (carousel.languages[0] ?? ("en" as ContentLocale));
-            const missingComposites = carousel.slides.some((s) =>
-              carousel.languages.some((l) => !s.composed[l]),
-            );
+            const stale = staleSlides(carousel);
+            const missingComposites = stale.length > 0;
+            const composingThis = composing === carousel.id;
 
             return (
               <Card key={carousel.id} className="overflow-hidden">
@@ -838,7 +867,7 @@ export function CarouselStudio({
                     {missingComposites && !inFlight ? (
                       <Button
                         size="sm"
-                        onClick={() => void compose(carousel)}
+                        onClick={() => void compose(carousel, "stale")}
                         loading={composing === carousel.id}
                         disabled={composing === carousel.id}
                       >
@@ -864,9 +893,11 @@ export function CarouselStudio({
                         title={
                           accounts.length === 0
                             ? t("carousels.publishNeedsAccount")
-                            : missingComposites
-                              ? t("carousels.publishNeedsCompose")
-                              : undefined
+                            : composingThis
+                              ? t("carousels.publishComposing")
+                              : missingComposites
+                                ? t("carousels.publishNeedsCompose")
+                                : undefined
                         }
                       >
                         {t("carousels.publish")}
@@ -907,12 +938,12 @@ export function CarouselStudio({
                     line under the title rather than stretching the row from
                     inside it.
                   */}
-                  {composing === carousel.id ||
+                  {composingThis ||
                   carousel.error ||
                   (missingComposites && !inFlight) ||
                   carousel.posts.some((p) => p.error) ? (
                     <div className="col-start-2 col-end-4 -mt-1 space-y-1">
-                      {composing === carousel.id ? (
+                      {composingThis ? (
                         <p className="text-[12px] text-[var(--color-ink-soft)]">
                           {t("carousels.composingCount", {
                             done: progress.done,
@@ -920,9 +951,10 @@ export function CarouselStudio({
                           })}
                         </p>
                       ) : null}
-                      {missingComposites && !inFlight ? (
+                      {/* Not while they are being redone: the counter above says so. */}
+                      {missingComposites && !inFlight && !composingThis ? (
                         <p className="text-[12px] text-[var(--color-warn)]">
-                          {t("carousels.notComposed")}
+                          {t("carousels.notComposed", { slides: slideList(stale) })}
                         </p>
                       ) : null}
                       {carousel.error ? (
@@ -1125,4 +1157,20 @@ export function CarouselStudio({
       ) : null}
     </div>
   );
+}
+
+/**
+ * The slides, by number, whose image is missing in at least one language -
+ * never made, or dropped because an edit changed its words, layout or photo.
+ */
+function staleSlides(carousel: CarouselRecord): number[] {
+  return carousel.slides
+    .map((s, i) => (carousel.languages.some((l) => !s.composed[l]) ? i + 1 : 0))
+    .filter((n) => n > 0);
+}
+
+/** "la slide 4", "les slides 4 et 5", "les slides 2, 4 et 5". */
+function slideList(numbers: number[]): string {
+  if (numbers.length === 1) return `la slide ${numbers[0]}`;
+  return `les slides ${numbers.slice(0, -1).join(", ")} et ${numbers[numbers.length - 1]}`;
 }

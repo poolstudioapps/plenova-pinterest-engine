@@ -22,6 +22,7 @@ import {
 import type { ContentLocale } from "@/lib/i18n";
 import { PINTEREST_LIMITS, truncate } from "@/lib/utils";
 import type { VisualStyle } from "@/lib/types";
+import { voiceRegister } from "@/lib/voice";
 
 /**
  * Gemini access layer (spec §24). Responsibilities: client init, structured
@@ -528,6 +529,8 @@ export async function translateSlideCopy(input: {
       .map((l) => `${LANGUAGE_NAMES[l]} (key "${l}")`)
       .join(", ")}.`,
     "Write each one the way a native TikTok creator in that language would say it: natural, spoken, as short as the original - never longer.",
+    "The voice is a plant influencer, a woman, talking to her community - keep that friendly, informal register:",
+    ...voiceRegister(targets),
     'Keep the brand name "Plenova" exactly as it is. Keep line breaks where the original has them. Keep emoji. A field that is empty in the original stays empty.',
     "",
     JSON.stringify(input.text),

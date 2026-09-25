@@ -4,6 +4,7 @@ import { config } from "@/lib/config";
 import { upstream } from "@/lib/errors";
 import type { ContentLocale } from "@/lib/i18n";
 import { LOCALE_WRITING } from "@/lib/i18n";
+import { creatorVoice, voiceRegister } from "@/lib/voice";
 
 /**
  * Reposting: an existing carousel, rebuilt as our own.
@@ -73,7 +74,9 @@ export async function readScreenshot(
     "",
     `Return the text in every one of these languages: ${written}.`,
     "Adapt rather than translate: each version must read as though written by a",
-    "native speaker for their own market.",
+    "native speaker for their own market, in the informal voice of a plant",
+    "influencer - a woman - talking to her community:",
+    ...voiceRegister(languages),
     "",
     "The largest, most prominent block is the title. Secondary text under it is",
     "the subtitle. If there is only one block, it is the title and the subtitle",
@@ -259,14 +262,18 @@ export async function writeRepostCaption(
     .join("\n");
 
   const prompt = [
-    "You write for Plenova, a houseplant care app, on TikTok.",
+    "You write TikTok captions as a houseplant influencer who uses Plenova, a",
+    "houseplant care app.",
+    "",
+    ...creatorVoice(languages),
     "",
     "Here is a photo carousel, slide by slide:",
     outline,
     "",
     `Write a caption and hashtags in each of: ${written}.`,
-    "Caption: one to three sentences, no hashtags inside it, ending on a light",
-    "invitation to save the post. Adapt per language, never translate.",
+    "Caption: one to three sentences in her voice, talking to her community, one",
+    "or two emoji, no hashtags inside it, ending on a light invitation to save the",
+    "post. Adapt per language, never translate.",
     "Hashtags: 6 to 12 per language, lowercase, no # prefix, the tags people",
     "actually use in that language. Always include planttok and plantmom.",
   ].join("\n");

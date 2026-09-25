@@ -31,9 +31,12 @@ import {
   initialEditorState,
   photoChanged,
   sameContent,
+  untranslated,
   withLayoutOf,
   withStyleOf,
+  withoutBlock,
   wordsOf,
+  writtenElsewhere,
   type BlockKey,
   type SlideDraft,
 } from "@/components/tiktok/editor/state";
@@ -83,6 +86,7 @@ const SHORTCUTS: [string, TranslationKey][] = [
   ["Page préc. / suiv. · Alt ← →", "editor.keySlides"],
   ["Ctrl Z · Ctrl Maj Z", "editor.keyUndo"],
   ["Ctrl S", "editor.keySave"],
+  ["Suppr", "editor.keyDelete"],
   ["R", "editor.keyCrop"],
   ["T · G", "editor.keyGuides"],
   ["Échap", "editor.keyEscape"],
@@ -371,11 +375,31 @@ export function SlideEditor({
   }
 
   function removeSlide() {
-    if (savingRef.current || total <= 1) return;
-    dispatch({ type: "remove", key: `remove:${active}`, at: Date.now(), index: active });
+    removeSlideAt(stateRef.current.active);
+  }
+
+  /** Keyed by the slide, so two removals in a row stay two undo steps. */
+  function removeSlideAt(index: number) {
+    const target = stateRef.current.slides[index];
+    if (savingRef.current || !target || stateRef.current.slides.length <= 1) return;
+    dispatch({ type: "remove", key: `remove:${target.uid}`, at: Date.now(), index });
     setEditing(null);
     setMode("layout");
     flash(t("editor.slideRemoved"));
+  }
+
+  /**
+   * The selected block off the slide. Its words go in every language - the
+   * layout is shared, so a title removed in French only would still sit on
+   * the English slide - and its place stays, for words typed into it later.
+   */
+  function deleteBlock(key: BlockKey) {
+    const current = stateRef.current.slides[stateRef.current.active];
+    if (savingRef.current || !current) return;
+    if (!Object.values(current.text).some((w) => w?.[key].trim())) return;
+    setEditing(null);
+    edit(`delete:${key}:${current.uid}:${Date.now()}`, (s) => withoutBlock(s, key));
+    flash(t("editor.blockDeleted", { block: t(BLOCK_LABELS[key]) }));
   }
 
   function reorder(uids: string[]) {
@@ -644,6 +668,37 @@ export function SlideEditor({
     }
     if (mod || event.altKey) return;
 
+    /*
+     * Delete takes off what is shown as selected: a thumbnail reached from
+     * the keyboard - its focus ring is on screen - removes that slide;
+     * otherwise the block outlined on the slide goes. A thumbnail that was
+     * only clicked shows no ring, so it never wins over the outlined block.
+     */
+    if (key === "Delete" || key === "Backspace") {
+      const thumb = target?.closest<HTMLElement>('[role="listitem"]');
+      if (thumb?.matches(":focus-visible")) {
+        const at = Number(thumb.querySelector<HTMLElement>("[data-slide-index]")?.dataset.slideIndex);
+        if (!Number.isInteger(at)) return;
+        event.preventDefault();
+        removeSlideAt(at);
+        // The ring moves on to the thumbnail now in that place, so Delete can go
+        // again. A timeout rather than a frame: it runs once React has drawn
+        // the shorter list, and frames stall while the window is hidden.
+        window.setTimeout(() => {
+          const left = document.querySelectorAll<HTMLElement>(
+            '[data-editor-filmstrip] [role="listitem"]',
+          );
+          left[Math.min(at, left.length - 1)]?.focus();
+        }, 0);
+        return;
+      }
+      if (mode === "layout" && selected) {
+        event.preventDefault();
+        deleteBlock(selected);
+      }
+      return;
+    }
+
     if (key === "?") return setHelpOpen(true);
     if (lower === "g") return setShowGrid((v) => !v);
     if (lower === "t") return setShowZones((v) => !v);
@@ -712,8 +767,10 @@ export function SlideEditor({
   const stored = baseline.find((b) => b.uid === slide.uid);
   const photoIsNew = !stored || photoChanged(slide, stored);
   const plant = plants.find((p) => p.slug === carousel.plantSlug) ?? null;
+  // Only words written in one language and not yet in another are flagged: a
+  // slide with no title, or no text at all, is the operator's call.
   const missingIn = (l: ContentLocale) =>
-    state.slides.filter((s) => !wordsOf(s, l).title.trim()).length;
+    state.slides.filter((s) => untranslated(s, l).length > 0).length;
 
   const items: FilmstripItem[] = state.slides.map((s, i) => ({
     uid: s.uid,
@@ -721,7 +778,7 @@ export function SlideEditor({
     overlay: s.overlay,
     words: wordsOf(s, lang),
     dirty: changes.dirty[i] ?? false,
-    missing: !wordsOf(s, lang).title.trim(),
+    missing: untranslated(s, lang).length > 0,
     mention: s.mention,
   }));
 
@@ -829,7 +886,7 @@ export function SlideEditor({
                 >
                   {l}
                   {missing > 0 ? (
-                    <span className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-[var(--color-danger)]" />
+                    <span className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-[var(--color-warn)]" />
                   ) : null}
                 </button>
               );
@@ -1050,6 +1107,11 @@ export function SlideEditor({
           <TextSection
             words={words}
             lang={lang}
+            elsewhere={{
+              title: writtenElsewhere(slide, lang, "title"),
+              subtitle: writtenElsewhere(slide, lang, "subtitle"),
+              cta: writtenElsewhere(slide, lang, "cta"),
+            }}
             selected={selected}
             isMention={slide.mention}
             onSelect={setSelected}
@@ -1065,6 +1127,13 @@ export function SlideEditor({
             }}
             onCenter={centre}
             onResetBlock={resetBlock}
+            onDeleteBlock={() => {
+              if (selected) deleteBlock(selected);
+            }}
+            canDelete={
+              selected !== null &&
+              Object.values(slide.text).some((w) => w?.[selected].trim())
+            }
           />
           <SlideSection
             slideStyle={slide.overlay.style}

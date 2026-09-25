@@ -297,6 +297,7 @@ function ColorSwatches({
 export function TextSection({
   words,
   lang,
+  elsewhere,
   selected,
   isMention,
   onSelect,
@@ -304,6 +305,8 @@ export function TextSection({
 }: {
   words: SlideWords;
   lang: ContentLocale;
+  /** Per block, the other languages it is written in while empty in this one. */
+  elsewhere: Record<BlockKey, ContentLocale[]>;
   selected: BlockKey | null;
   isMention: boolean;
   onSelect: (key: BlockKey) => void;
@@ -346,9 +349,12 @@ export function TextSection({
                   : "border-[var(--color-line-strong)]",
               )}
             />
-            {key === "title" && !value.trim() ? (
-              <p className="mt-1 text-[11.5px] text-[var(--color-danger)]">
-                {t("editor.empty", { lang: CONTENT_LOCALE_LABELS[lang] })}
+            {elsewhere[key].length > 0 ? (
+              <p className="mt-1 text-[11.5px] text-[var(--color-warn-ink)]">
+                {t("editor.untranslated", {
+                  langs: elsewhere[key].map((l) => CONTENT_LOCALE_LABELS[l]).join(", "),
+                  lang: CONTENT_LOCALE_LABELS[lang],
+                })}
               </p>
             ) : null}
             {key === "cta" ? (
@@ -371,6 +377,8 @@ export function BlockSection({
   onBlock,
   onCenter,
   onResetBlock,
+  onDeleteBlock,
+  canDelete,
 }: {
   selected: BlockKey | null;
   block: OverlayBlock | null;
@@ -379,6 +387,9 @@ export function BlockSection({
   onBlock: (patch: Partial<OverlayBlock>, field: string) => void;
   onCenter: (axis: "x" | "y") => void;
   onResetBlock: () => void;
+  /** Takes the selected block's words off the slide, in every language. */
+  onDeleteBlock: () => void;
+  canDelete: boolean;
 }) {
   const t = translator();
   const effective = block ? (block.style ?? slideStyle) : slideStyle;
@@ -547,6 +558,14 @@ export function BlockSection({
             </ToolButton>
             <ToolButton icon={<Icon.Reset />} onClick={onResetBlock}>
               {t("editor.resetBlock")}
+            </ToolButton>
+            <ToolButton
+              icon={<Icon.Trash />}
+              onClick={onDeleteBlock}
+              disabled={!canDelete}
+              title={t("editor.deleteBlockHint")}
+            >
+              {t("editor.deleteBlock")}
             </ToolButton>
           </div>
         </div>
