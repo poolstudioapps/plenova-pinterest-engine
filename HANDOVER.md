@@ -31,12 +31,10 @@ de travail de la session) ni à l'ancien projet Plenova. Seul
 
 ## 3. Ce qui reste
 
-- **Côté utilisateur, pas côté code** : dans Supabase > Authentication > URL
-  Configuration, mettre le Site URL sur `https://studio.latelierugc.com` et
-  ajouter les Redirect URLs `https://studio.latelierugc.com/**` et
-  `http://localhost:3000/**`. Tant que ce n'est pas fait, le lien du mail de
-  connexion renvoie vers localhost (Supabase retombe sur son Site URL par
-  défaut). Le code applicatif envoie déjà la bonne adresse.
+- ~~Site URL Supabase~~ : réglé par l'utilisateur le 25/09 (le lien du mail
+  pointe sur `studio.latelierugc.com`, vérifié dans les `edge_logs`). Si le
+  lien repart vers localhost, c'est ce réglage (Authentication > URL
+  Configuration), pas le code.
 - Régénérer les secrets passés dans le chat (TikTok client secret, PAT
   Supabase). Supprimer éventuellement le projet Vercel en double
   `plenova-pinterest-engine` (le vrai est `-9htq`).
