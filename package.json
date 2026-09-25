@@ -9,8 +9,7 @@
     "typecheck": "tsc --noEmit",
     "check": "tsc --noEmit && next build",
     "dev:offline": "node scripts/dev-offline.mjs",
-    "spy": "node scripts/tiktok-spy.mjs",
-    "spy:install": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-spy-task.ps1"
+    "spy:kit": "node scripts/build-spy-kit.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.21.0",
@@ -29,8 +28,6 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@types/three": "^0.186.0",
-    "jiti": "^2.7.0",
-    "sharp": "^0.35.4",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3"
   }

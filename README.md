@@ -52,6 +52,26 @@ The engine degrades feature-by-feature rather than refusing to start.
 
 ---
 
+## TikTok spy (runs on a PC, not on the server)
+
+TikTok blocks datacenter traffic, so the spy runs on ordinary computers and
+reports to the app over `/api/spy/agent/*` with a per-computer access code
+(created and revoked in **Spy > Comptes > Ordinateurs**; only its hash is stored).
+
+```bash
+npm run spy:kit
+```
+
+builds `dist/Plenova Spy/` and `dist/Plenova Spy.zip`: the script, its own
+`node.exe`, a one-click `Lancer le spy.bat` and a French `LISEZ-MOI.txt`. The kit
+holds no database key. Accounts are managed in the app only; the spy re-reads the
+list on every run (competitors in Spy > Comptes, our own accounts on the Versus
+page). A run fetches the posts it does not have yet and refreshes the numbers of
+the ones published in the week before the last run. See `HANDOVER.md` for the
+details, including the one-off import of an account's history.
+
+---
+
 ## Environment variables
 
 See `.env.example` for the full annotated list. Generate the encryption key with:

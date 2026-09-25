@@ -358,7 +358,9 @@ export function SlideEditor({
 
   function addFromTemplate(template: SlideTemplate) {
     setPicker(null);
-    const missing = carousel.languages.filter((l) => !writtenIn(template.text).includes(l));
+    // A slide saved with its photo only is meant that way: nothing is missing.
+    const written = writtenIn(template.text);
+    const missing = written.length > 0 ? carousel.languages.filter((l) => !written.includes(l)) : [];
     insert(
       draftFromTemplate(template, carousel.languages),
       missing.length > 0

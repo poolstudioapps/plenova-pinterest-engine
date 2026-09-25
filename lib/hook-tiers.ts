@@ -6,7 +6,7 @@ import type { HookSpyStats, HookView } from "@/lib/types";
  * Tiers are shares of the ranking rather than fixed view counts - the watched
  * accounts range from a few hundred followers to tens of thousands, and a
  * fixed "100k = S" would leave most tiers empty. S is the top tenth, D the
- * bottom sixth, whatever the numbers are this week.
+ * bottom 15 %, whatever the numbers are this week.
  */
 export type Tier = "S" | "A" | "B" | "C" | "D";
 export const TIERS: Tier[] = ["S", "A", "B", "C", "D"];

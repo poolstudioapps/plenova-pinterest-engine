@@ -12,11 +12,11 @@ import type { Hook, SpyPost } from "@/lib/types";
  * voice - with the post it came from as evidence. That evidence is what ranks
  * the bank: a hook is worth what its carousel did.
  *
- * Runs at the end of each spy pass (scripts/tiktok-spy.mjs), and on demand
- * from the hooks page. Only posts never read are sent to Gemini, so a day with
+ * Runs after each spy pass (POST /api/spy/agent/runs/[id], once the pass is
+ * closed) and on demand from the hooks page (POST /api/spy/hooks). Only posts never read are sent to Gemini, so a day with
  * nothing new costs nothing.
  *
- * The app and the script can run this at the same moment, so each post is
+ * Two passes, or a pass and the hooks page, can run this at the same moment, so each post is
  * claimed in the database before it is read, and a post is marked read only
  * once its idea is safely filed - a failure anywhere gives it back for the
  * next run.
@@ -32,9 +32,21 @@ export interface SpyHookRun {
 
 const PARALLEL = 4;
 
+/**
+ * Covers worth reading: competitors' carousels not read yet. Our own accounts
+ * are measured, not mined for ideas.
+ */
+export async function unreadSpyPosts(): Promise<SpyPost[]> {
+  const store = getStore();
+  const [posts, accounts] = await Promise.all([store.listSpyPosts(), store.listSpyAccounts()]);
+  const ours = new Set(accounts.filter((a) => a.team).map((a) => a.username));
+  return posts.filter(
+    (p) => !p.hookCheckedAt && p.images.length > 0 && p.mediaType === "carousel" && !ours.has(p.username),
+  );
+}
+
 export async function countUnreadSpyHooks(): Promise<number> {
-  const posts = await getStore().listSpyPosts();
-  return posts.filter((p) => !p.hookCheckedAt && p.images.length > 0).length;
+  return (await unreadSpyPosts()).length;
 }
 
 export async function analyzeSpyHooks(
@@ -42,8 +54,7 @@ export async function analyzeSpyHooks(
 ): Promise<SpyHookRun> {
   const store = getStore();
   const log = options.log ?? (() => {});
-  const posts = await store.listSpyPosts();
-  const unread = posts.filter((p) => !p.hookCheckedAt && p.images.length > 0);
+  const [posts, unread] = await Promise.all([store.listSpyPosts(), unreadSpyPosts()]);
   const todo = unread.slice(0, options.limit ?? unread.length);
   const views = new Map(posts.map((p) => [p.id, p.views]));
   const vetoes = plantVetoes();

@@ -13,6 +13,14 @@ import { translator } from "@/lib/i18n";
  * server answers the same either way, and so does this screen. Saying "unknown
  * address" would turn the form into a way of enumerating who has access.
  */
+/**
+ * Where to go once signed in: a path of this site only. "//other.site" and
+ * "/\\other.site" start with a slash too, and a browser follows them off-site.
+ */
+function safeNext(next: string | null | undefined): string {
+  return next && next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\") ? next : "/";
+}
+
 export function LoginForm() {
   const t = translator();
   const router = useRouter();
@@ -69,7 +77,7 @@ export function LoginForm() {
           return;
         }
         const next = params.get("next");
-        router.replace(next && next.startsWith("/") ? next : "/");
+        router.replace(safeNext(next));
         router.refresh();
       } catch {
         setError(t("login.unreachable"));
@@ -129,7 +137,7 @@ export function LoginForm() {
       // Only same-origin destinations, so ?next= cannot bounce someone to
       // another site after a successful sign-in.
       const next = params.get("next");
-      router.replace(next && next.startsWith("/") ? next : "/");
+      router.replace(safeNext(next));
       router.refresh();
     } catch {
       setError(t("login.unreachable"));

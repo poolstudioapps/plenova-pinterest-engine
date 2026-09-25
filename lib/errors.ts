@@ -13,6 +13,7 @@ export type ErrorCode =
   | "duplicate"
   | "not_found"
   | "conflict"
+  | "unauthorized"
   | "internal";
 
 export class AppError extends Error {
@@ -47,6 +48,7 @@ export const duplicate = (m: string, d?: unknown) =>
   new AppError("duplicate", m, 409, d);
 /** The thing changed elsewhere since the request was prepared. */
 export const conflict = (m: string) => new AppError("conflict", m, 409);
+export const unauthorized = (m: string) => new AppError("unauthorized", m, 401);
 
 /** Strings that must never reach a log line or an HTTP response body. */
 const SECRET_ENV_KEYS = [

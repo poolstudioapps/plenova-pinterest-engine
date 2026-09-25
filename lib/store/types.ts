@@ -99,7 +99,11 @@ export interface EngineStore {
   /** Accounts the local spy script visits. */
   listSpyAccounts(): Promise<SpyAccount[]>;
   saveSpyAccount(account: SpyAccount): Promise<void>;
+  /** Writes only the given fields, so two changes at once never undo each other. */
+  updateSpyAccountFields(username: string, fields: Partial<Pick<SpyAccount, "enabled" | "note" | "team">>): Promise<void>;
   deleteSpyAccount(username: string): Promise<void>;
+  /** Every post of one account - when one of ours stops being followed. */
+  deleteSpyPostsOf(username: string): Promise<void>;
 
   /** Carousels the spy found, newest post first. */
   listSpyPosts(): Promise<SpyPost[]>;
@@ -115,7 +119,7 @@ export interface EngineStore {
   ): Promise<void>;
   /**
    * Reserves a post's cover for reading, for a few minutes. False when it is
-   * already read, or another reader - the app or the script - holds it.
+   * already read, or another reader - an end-of-pass reading or the hooks page - holds it.
    */
   claimSpyPostHook(id: string): Promise<boolean>;
   /** Gives a reserved cover back, after a reading that failed. */

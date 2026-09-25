@@ -63,8 +63,14 @@ export async function listHooks(): Promise<Hook[]> {
  */
 export async function listHookViews(): Promise<{ hooks: HookView[]; unread: number }> {
   const store = getStore();
-  const [hooks, posts] = await Promise.all([store.listHooks(), store.listSpyPosts()]);
+  const [hooks, posts, accounts] = await Promise.all([
+    store.listHooks(),
+    store.listSpyPosts(),
+    store.listSpyAccounts(),
+  ]);
   const byId = new Map(posts.map((p) => [p.id, p]));
+  // Our own accounts are measured on the versus page, never ranked here.
+  const ours = new Set(accounts.filter((a) => a.team).map((a) => a.username));
 
   const perAccount = new Map<string, number[]>();
   for (const post of posts) {
@@ -75,7 +81,8 @@ export async function listHookViews(): Promise<{ hooks: HookView[]; unread: numb
   const medians = new Map([...perAccount].map(([name, views]) => [name, median(views)]));
 
   const views: HookView[] = hooks.map((hook) => {
-    const post: SpyPost | undefined = hook.spyPostId ? byId.get(hook.spyPostId) : undefined;
+    const found: SpyPost | undefined = hook.spyPostId ? byId.get(hook.spyPostId) : undefined;
+    const post = found && !ours.has(found.username) ? found : undefined;
     return {
       ...hook,
       spy: post
@@ -95,11 +102,14 @@ export async function listHookViews(): Promise<{ hooks: HookView[]; unread: numb
             format: post.hookFormat,
             accountMedian: medians.get(post.username) ?? null,
             postStatus: post.status,
+            fromHistory: Boolean(post.fromHistory),
           }
         : null,
     };
   });
-  const unread = posts.filter((p) => !p.hookCheckedAt && p.images.length > 0).length;
+  const unread = posts.filter(
+    (p) => !p.hookCheckedAt && p.images.length > 0 && p.mediaType === "carousel" && !ours.has(p.username),
+  ).length;
   return { hooks: views, unread };
 }
 

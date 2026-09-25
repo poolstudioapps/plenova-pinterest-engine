@@ -139,7 +139,7 @@ export function TemplateGrid({
       {shown.map((template) => {
         const written = writtenIn(template.text);
         const preview = written.includes(lang) ? lang : (written[0] ?? lang);
-        const missing = (needed ?? []).filter((l) => !written.includes(l));
+        const missing = written.length > 0 ? (needed ?? []).filter((l) => !written.includes(l)) : [];
         return (
           <div
             key={template.id}

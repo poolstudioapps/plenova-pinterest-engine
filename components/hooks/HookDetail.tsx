@@ -63,7 +63,7 @@ export function HookDetail({
             <Button size="sm" variant="ghost" onClick={() => onToggleStatus(hook)}>
               {hook.status === "idea" ? t("hooks.markUsed") : t("hooks.markIdea")}
             </Button>
-            {spy && spy.postStatus === "new" ? (
+            {spy && spy.postStatus === "new" && !spy.fromHistory ? (
               <Button size="sm" onClick={() => setRebuilding(true)}>
                 {t("hooks.rebuild")}
               </Button>

@@ -409,9 +409,27 @@ export abstract class DocumentStore implements EngineStore {
     });
   }
 
+  async updateSpyAccountFields(
+    username: string,
+    fields: Partial<Pick<SpyAccount, "enabled" | "note" | "team">>,
+  ): Promise<void> {
+    await this.mutate((doc) => {
+      const account = doc.spyAccounts?.[username];
+      if (account) doc.spyAccounts![username] = { ...account, ...fields };
+    });
+  }
+
   async deleteSpyAccount(username: string): Promise<void> {
     await this.mutate((doc) => {
       delete doc.spyAccounts?.[username];
+    });
+  }
+
+  async deleteSpyPostsOf(username: string): Promise<void> {
+    await this.mutate((doc) => {
+      for (const [id, post] of Object.entries(doc.spyPosts ?? {})) {
+        if (post.username === username) delete doc.spyPosts![id];
+      }
     });
   }
 

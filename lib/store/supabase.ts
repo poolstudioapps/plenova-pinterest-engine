@@ -42,6 +42,11 @@ import {
  */
 let client: SupabaseClient | null = null;
 
+/** The service-role client, for server modules that need tables the store does not model. */
+export function supabaseService(): SupabaseClient {
+  return db();
+}
+
 function db(): SupabaseClient {
   if (client) return client;
   const { url, serviceKey } = config.supabase;
@@ -484,14 +489,33 @@ export class SupabaseStore implements EngineStore {
       username: account.username,
       enabled: account.enabled,
       note: account.note,
+      team: account.team,
       added_at: account.addedAt,
     });
     check("enregistrement d'un compte espionné", error);
   }
 
+  async updateSpyAccountFields(
+    username: string,
+    fields: Partial<Pick<SpyAccount, "enabled" | "note" | "team">>,
+  ): Promise<void> {
+    const { error } = await db().from("spy_accounts").update(fields).eq("username", username);
+    check("mise à jour d'un compte espionné", error);
+  }
+
   async deleteSpyAccount(username: string): Promise<void> {
     const { error } = await db().from("spy_accounts").delete().eq("username", username);
     check("suppression d'un compte espionné", error);
+  }
+
+  async deleteSpyPostsOf(username: string): Promise<void> {
+    const { error } = await db().from("spy_posts").delete().eq("username", username);
+    check("suppression des posts d'un compte", error);
+    // Its history queue and its daily numbers go with it.
+    const { error: queueError } = await db().from("spy_backfill").delete().eq("username", username);
+    check("suppression de l'historique à récupérer", queueError);
+    const { error: statsError } = await db().from("spy_account_stats").delete().eq("username", username);
+    check("suppression de l'historique des chiffres", statsError);
   }
 
   async listSpyPosts(): Promise<SpyPost[]> {
@@ -610,6 +634,8 @@ function spyAccountFromRow(row: Record<string, unknown>): SpyAccount {
   return {
     username: row.username as string,
     enabled: row.enabled !== false,
+    team: row.team === "stark" || row.team === "mousk" ? row.team : null,
+    likesTotal: row.likes_total == null ? null : Number(row.likes_total),
     note: (row.note as string | null) ?? null,
     displayName: (row.display_name as string | null) ?? null,
     avatarUrl: (row.avatar_url as string | null) ?? null,
@@ -626,6 +652,7 @@ function spyPostFromRow(row: Record<string, unknown>): SpyPost {
   return {
     id: row.id as string,
     username: row.username as string,
+    mediaType: row.media_type === "video" ? "video" : "carousel",
     url: row.url as string,
     caption: (row.caption as string) ?? "",
     postedAt: (row.posted_at as string | null) ?? null,
@@ -645,6 +672,7 @@ function spyPostFromRow(row: Record<string, unknown>): SpyPost {
     hookFormat: (row.hook_format as SpyPost["hookFormat"]) ?? null,
     hookFr: (row.hook_fr as string | null) ?? null,
     hookCheckedAt: (row.hook_checked_at as string | null) ?? null,
+    fromHistory: row.from_history === true,
   };
 }
 

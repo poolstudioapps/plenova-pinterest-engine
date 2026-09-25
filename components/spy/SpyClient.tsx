@@ -83,6 +83,8 @@ export function SpyClient({
   // What the page says about the script.
   const stale = !run || Date.now() - Date.parse(run.startedAt) > STALE_MS;
   const running = run && !run.finishedAt && Date.now() - Date.parse(run.startedAt) < 3600 * 1000;
+  // Never closed and long over: the window was closed mid-pass.
+  const interrupted = Boolean(run && !run.finishedAt && !running) || Boolean(run?.errors.some((e) => e.username === "*"));
 
   return (
     <div className="space-y-6">
@@ -95,9 +97,15 @@ export function SpyClient({
           {running
             ? t("spy.lastRunRunning", { when: relativeTime(run.startedAt) })
             : t("spy.lastRun", { when: relativeTime(run.startedAt), found: run.found, added: run.added })}
-          {run.errors.length > 0
-            ? ` ${t("spy.lastRunErrors", { names: run.errors.map((e) => `@${e.username}`).join(", ") })}`
+          {run.errors.some((e) => e.username !== "*")
+            ? ` ${t("spy.lastRunErrors", {
+                names: run.errors
+                  .filter((e) => e.username !== "*")
+                  .map((e) => `@${e.username}`)
+                  .join(", "),
+              })}`
             : ""}
+          {interrupted ? ` ${t("spy.lastRunInterrupted")}` : ""}
         </Notice>
       )}
 
@@ -161,7 +169,7 @@ export function SpyClient({
           </div>
         ) : (
           <div className="p-4 md:p-5">
-            <SpyAccounts accounts={accounts} onChange={setAccounts} />
+            <SpyAccounts accounts={accounts} onChange={setAccounts} mode="competitors" />
           </div>
         )}
       </Card>

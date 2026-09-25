@@ -419,7 +419,7 @@ export function HooksClient({
               onChange={setAccount}
             />
           </div>
-          <div className="w-40">
+          <div className="w-44">
             <Picker
               options={[
                 { value: "", label: t("hooks.allFormats") },

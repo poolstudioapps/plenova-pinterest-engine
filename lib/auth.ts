@@ -46,6 +46,8 @@ const PUBLIC_PREFIXES = [
   "/login",
   "/api/auth",
   "/api/cron",
+  // The spy agent carries its own token, checked in each route (lib/spy-agent.ts).
+  "/api/spy/agent",
   "/api/pinterest/callback",
   "/api/tiktok/callback",
 ];

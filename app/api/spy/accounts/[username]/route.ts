@@ -9,7 +9,7 @@ type Params = { params: Promise<{ username: string }> };
 export async function PATCH(request: Request, { params }: Params) {
   return handle(async () => {
     const username = normaliseUsername(decodeURIComponent((await params).username));
-    let body: { enabled?: unknown; note?: unknown };
+    let body: { enabled?: unknown; note?: unknown; team?: unknown };
     try {
       body = (await request.json()) as typeof body;
     } catch {
@@ -19,7 +19,7 @@ export async function PATCH(request: Request, { params }: Params) {
   });
 }
 
-/** Stops watching the account. The carousels already found stay. */
+/** Stops watching the account: a competitor's carousels stay, one of ours takes its posts with it. */
 export async function DELETE(_request: Request, { params }: Params) {
   return handle(async () => {
     const username = normaliseUsername(decodeURIComponent((await params).username));

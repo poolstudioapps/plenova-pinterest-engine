@@ -5,8 +5,10 @@ import { badRequest, notFound } from "@/lib/errors";
 import { markSpyHooksUsed, recordHookUsed } from "@/lib/hooks";
 import type { ContentLocale } from "@/lib/i18n";
 import { defaultOverlay, type OverlayStyle } from "@/lib/overlay";
+import { leastUsed } from "@/lib/media";
 import { isPexelsConfigured } from "@/lib/pexels";
 import { cleanScreenshot, readScreenshot, writeRepostCaption } from "@/lib/repost";
+import { MAX_CAROUSEL_SLIDES } from "@/lib/slide-text";
 import { getStore } from "@/lib/store";
 import type { CarouselRecord, CarouselSlide, SlideText } from "@/lib/types";
 
@@ -36,6 +38,79 @@ export interface RepostInput {
 }
 
 export type RepostImageMode = NonNullable<RepostInput["imageMode"]>;
+
+/**
+ * The Plenova line of a rebuilt spied carousel - generic on purpose, since it
+ * sits on its own slide whatever the carousel is about. Written, not
+ * translated by a model: it is the one sentence that must never drift.
+ */
+export const PLENOVA_CTA: Record<ContentLocale, string> = {
+  fr: "Perso, j'utilise l'app Plenova pour prendre soin de mes plantes",
+  en: "Personally, I use the Plenova app to look after my plants",
+  es: "Yo uso la app Plenova para cuidar de mis plantas",
+  de: "Ich nutze die Plenova-App, um mich um meine Pflanzen zu kümmern",
+  it: "Io uso l'app Plenova per prendermi cura delle mie piante",
+};
+
+/** Where the Plenova slide goes: fourth, as the operator's carousels do. */
+const CTA_POSITION = 3;
+
+/** Clear of TikTok's caption, which covers the bottom of the frame. */
+const CTA_Y = 1010;
+
+/**
+ * Adds the Plenova slide to a rebuilt spied carousel: one of the operator's
+ * own CTA pictures (the "CTA" shelf of the library), the generic line in each
+ * language. Without a CTA picture - or with no room left, TikTok stopping at
+ * MAX_CAROUSEL_SLIDES - the line goes on the fourth slide instead.
+ */
+async function withPlenovaSlide(
+  slides: CarouselSlide[],
+  languages: ContentLocale[],
+  style: OverlayStyle,
+): Promise<CarouselSlide[]> {
+  const store = getStore();
+  const at = Math.min(CTA_POSITION, slides.length);
+  const picture =
+    slides.length < MAX_CAROUSEL_SLIDES
+      ? leastUsed((await store.listMedia()).filter((m) => m.role === "cta"))
+      : null;
+
+  if (!picture) {
+    const host = slides[Math.min(CTA_POSITION, slides.length - 1)];
+    if (!host) return slides;
+    for (const language of languages) {
+      const words = host.text[language] ?? { title: "", subtitle: "" };
+      host.text[language] = { ...words, cta: PLENOVA_CTA[language] };
+    }
+    // Out of the caption zone; up top when the slide's own words sit low.
+    const overlay = host.overlay ?? defaultOverlay(style);
+    const low = overlay.subtitle.y >= 900 || overlay.title.y >= 850;
+    host.overlay = { ...overlay, cta: { ...overlay.cta, y: low ? 250 : CTA_Y, height: 150 } };
+    host.hasPlenovaMention = true;
+    return slides;
+  }
+
+  await store.markMediaUsed(picture.id);
+  const overlay = defaultOverlay(style);
+  overlay.cta = { ...overlay.cta, y: CTA_Y, height: 150, fontSize: 48 };
+  const text: Partial<Record<ContentLocale, SlideText>> = {};
+  for (const language of languages) {
+    text[language] = { title: "", subtitle: "", cta: PLENOVA_CTA[language] };
+  }
+  const slide: CarouselSlide = {
+    kind: "content",
+    hasPlenovaMention: true,
+    text,
+    overlay,
+    imagePrompt: picture.prompt,
+    photoQuery: "",
+    mediaId: picture.id,
+    imageUrl: picture.url,
+    composed: {},
+  };
+  return [...slides.slice(0, at), slide, ...slides.slice(at)];
+}
 
 function repostId(): string {
   const time = Date.now().toString(36);
@@ -178,9 +253,12 @@ export async function runRepost(id: string, input: RepostInput): Promise<void> {
 
     const theme =
       input.theme?.trim() || slides[0]?.text[input.languages[0]!]?.title || "Repost";
+    const finalSlides = input.spyPostId
+      ? await withPlenovaSlide(slides, input.languages, input.overlayStyle ?? "stroke")
+      : slides;
     await store.saveCarousel({
       ...current,
-      slides,
+      slides: finalSlides,
       caption: written.caption,
       hashtags: written.hashtags,
       theme,

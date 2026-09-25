@@ -9,12 +9,16 @@ import type { CarouselRecord, SpyAccount, SpyPost, SpyRun } from "@/lib/types";
 /**
  * The spy, app side.
  *
- * The scraping itself runs on the operator's computer (scripts/tiktok-spy.mjs)
- * and writes straight into Supabase: TikTok only hands its carousels to a real
- * browser, and scraping from this app - the one registered with TikTok for
+ * The scraping itself runs on ordinary computers (the "Plenova Spy" folder,
+ * scripts/spy-agent.mjs), which report through /api/spy/agent: TikTok blocks
+ * datacenters, and scraping from this app - the one registered with TikTok for
  * publishing - would put that registration at risk. What lives here is what
  * the operator decides: which accounts to watch, what to rebuild, what to set
  * aside.
+ *
+ * Two kinds of accounts share the list. Competitors (no team) feed the Spy
+ * page. Ours (team Mr Stark or Mr Mousk) are only measured, on the Versus page,
+ * and never show on the Spy page - asked for by the user.
  */
 
 /** "@Lea.Moreau06", "tiktok.com/@lea.moreau06/photo/…" -> "lea.moreau06". */
@@ -34,6 +38,10 @@ export interface SpyOverview {
   run: SpyRun | null;
 }
 
+/**
+ * The spy page's data: competitors only. Our own accounts, their posts and
+ * their errors belong to the versus page, where they are measured.
+ */
 export async function spyOverview(): Promise<SpyOverview> {
   const store = getStore();
   const [accounts, posts, run] = await Promise.all([
@@ -41,10 +49,22 @@ export async function spyOverview(): Promise<SpyOverview> {
     store.listSpyPosts(),
     store.latestSpyRun(),
   ]);
-  return { accounts, posts, run };
+  const ours = new Set(accounts.filter((a) => a.team).map((a) => a.username));
+  const competitors = new Set(accounts.filter((a) => !a.team).map((a) => a.username));
+  return {
+    accounts: accounts.filter((a) => !a.team),
+    // History imports keep only a cover: they feed the hooks, not these lists.
+    posts: posts.filter((p) => p.mediaType === "carousel" && !p.fromHistory && !ours.has(p.username)),
+    // Only what is still worth a look here: followed competitors, or the pass itself ("*").
+    run: run ? { ...run, errors: run.errors.filter((e) => e.username === "*" || competitors.has(e.username)) } : null,
+  };
 }
 
-export async function addSpyAccount(raw: unknown): Promise<SpyAccount> {
+function cleanTeam(raw: unknown): SpyAccount["team"] {
+  return raw === "stark" || raw === "mousk" ? raw : null;
+}
+
+export async function addSpyAccount(raw: unknown, team?: unknown): Promise<SpyAccount> {
   const username = normaliseUsername(raw);
   const store = getStore();
   const accounts = await store.listSpyAccounts();
@@ -54,6 +74,8 @@ export async function addSpyAccount(raw: unknown): Promise<SpyAccount> {
   const account: SpyAccount = {
     username,
     enabled: true,
+    team: cleanTeam(team),
+    likesTotal: null,
     note: null,
     displayName: null,
     avatarUrl: null,
@@ -70,24 +92,36 @@ export async function addSpyAccount(raw: unknown): Promise<SpyAccount> {
 
 export async function updateSpyAccount(
   username: string,
-  patch: { enabled?: unknown; note?: unknown },
+  patch: { enabled?: unknown; note?: unknown; team?: unknown },
 ): Promise<SpyAccount> {
   const store = getStore();
   const account = (await store.listSpyAccounts()).find((a) => a.username === username);
   if (!account) throw notFound(`@${username} n'est plus dans la liste.`);
-  const next: SpyAccount = {
-    ...account,
+  if (patch.team !== undefined && (account.team === null) !== (cleanTeam(patch.team) === null)) {
+    throw badRequest("Un concurrent ne devient pas un de nos comptes (ni l'inverse) : retire-le puis ajoute-le au bon endroit.");
+  }
+  // Only what was asked: a note and a pause sent a split second apart both stay.
+  const fields: Partial<Pick<SpyAccount, "enabled" | "note" | "team">> = {
     ...(typeof patch.enabled === "boolean" ? { enabled: patch.enabled } : {}),
+    ...(patch.team !== undefined ? { team: cleanTeam(patch.team) } : {}),
     ...(patch.note !== undefined
       ? { note: typeof patch.note === "string" && patch.note.trim() ? patch.note.trim().slice(0, 200) : null }
       : {}),
   };
-  await store.saveSpyAccount(next);
-  return next;
+  if (Object.keys(fields).length > 0) await store.updateSpyAccountFields(username, fields);
+  return { ...account, ...fields };
 }
 
+/**
+ * Stops following an account. A competitor's carousels stay (what was handled
+ * keeps its history). One of ours takes its posts with it: kept, they would
+ * turn up among the competitors' carousels to rebuild.
+ */
 export async function removeSpyAccount(username: string): Promise<void> {
-  await getStore().deleteSpyAccount(username);
+  const store = getStore();
+  const account = (await store.listSpyAccounts()).find((a) => a.username === username);
+  await store.deleteSpyAccount(username);
+  if (account?.team) await store.deleteSpyPostsOf(username);
 }
 
 /** Sets a carousel aside, or brings it back to the ones to look at. */
@@ -124,6 +158,12 @@ export async function startSpyProcessing(
   const store = getStore();
   const post = await store.getSpyPost(id);
   if (!post) throw notFound("Ce carrousel n'est plus dans le spy.");
+  if (post.mediaType !== "carousel") throw badRequest("C'est une vidéo : seuls les carrousels se refont.");
+  if (post.fromHistory) {
+    throw badRequest("Carrousel ancien, importé avec l'historique : seule sa couverture est gardée, il ne se refait pas.");
+  }
+  const owner = (await store.listSpyAccounts()).find((a) => a.username === post.username);
+  if (owner?.team) throw badRequest("Ce post vient d'un de nos comptes : il n'est pas à refaire.");
   if (post.images.length === 0) throw badRequest("Ce carrousel n'a aucune image enregistrée.");
   // Twice would make two carousels of it, and lose track of the first.
   if (post.status === "processed") {

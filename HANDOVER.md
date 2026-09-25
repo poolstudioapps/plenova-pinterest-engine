@@ -120,36 +120,89 @@ chargé à la demande) : aucun fichier téléchargé, tout est modélisé en cod
 la phrase de couverture (le « thème » d'un carrousel). Tout ce qui est dans la
 banque - utilisé, gardé comme idée, venu d'un carrousel du spy - est envoyé à
 Gemini comme liste d'exclusion (`generateHookIdeas`), et recontrôlé après
-coup (`sameHook` : même clé normalisée, ou 80 % de mots en commun). Un
+coup (`sameHook` : même clé normalisée, ou 75 % de mots en commun, mots vides retirés). Un
 carrousel enregistre son hook comme « utilisé » au démarrage.
 
-**Le spy tourne sur le PC de l'utilisateur, pas sur un serveur**
-(`scripts/tiktok-spy.mjs`, tâche Windows « Plenova Spy TikTok » à 9 h,
-installée par `npm run spy:install`, logs dans `.data/spy-logs`). Choix de
-l'utilisateur, et deux raisons mesurées : TikTok bloque les serveurs, et un
-scraping depuis l'app enregistrée chez TikTok pour publier mettrait cet accès en
-danger. **Pas de navigateur piloté** : un Chrome sous Playwright reçoit une
-liste de posts vide (testé headless et visible). Le script lit deux pages
-publiques rendues côté serveur : `/embed/@compte` (derniers posts + profil) et
-la page de chaque post (`webapp.video-detail` : slides, date, vues, likes,
-commentaires, partages, enregistrements). Il écrit directement dans Supabase
-(clé service de `.env.local`) : `spy_posts`, images dans le bucket public
-`spy`, `spy_accounts` (profil, dernier passage), `spy_runs`. Un post connu n'a
-que ses chiffres rafraîchis ; son statut appartient à l'utilisateur. Rien de
-nouveau = aucun appel Gemini.
+**Le spy tourne sur des PC, pas sur un serveur**, via le dossier partageable
+« Plenova Spy » (`npm run spy:kit` → `dist/Plenova Spy/` + `.zip`) :
+`scripts/spy-agent.mjs` sans dépendance, un `node.exe` embarqué, un
+« Lancer le spy.bat » (un double-clic), un `LISEZ-MOI.txt`. Plus aucune tâche
+planifiée (supprimée à la demande de l'utilisateur ; le LISEZ-MOI explique
+comment en créer une). Choix de l'utilisateur, et deux raisons mesurées :
+TikTok bloque les serveurs, et un scraping depuis l'app enregistrée chez TikTok
+pour publier mettrait cet accès en danger. **Pas de navigateur piloté** : un
+Chrome sous Playwright reçoit une liste de posts vide (testé headless et
+visible). Le script lit deux pages publiques rendues côté serveur :
+`/embed/@compte` (derniers posts + profil) et la page de chaque post
+(`webapp.video-detail` : slides, date, vues, likes, commentaires, partages,
+enregistrements).
+
+**Le kit ne contient aucune clé de base** : il parle à l'app
+(`/api/spy/agent/*`, public dans `lib/auth.ts`) avec un code d'accès par
+ordinateur (`spy_…`, table `spy_agents`, seul le sha256 est stocké), créé dans
+Spy > Comptes > Ordinateurs et révocable. `config.json` du kit = `server` +
+`token` ; sans token, le spy le demande au premier lancement. `--code="Nom"`
+sur `spy:kit` crée un code et l'écrit dans le dossier sans l'afficher. Le spy
+relit la liste des comptes (`/plan`) à chaque passage : un compte ajouté dans
+l'app est visité au passage suivant, depuis n'importe quel PC. Les images
+passent par `/images` (bucket public `spy`, chemins contrôlés, type lu dans
+les octets, **jamais réécrites** sauf les avatars), les posts par `/posts` (un
+post connu n'a que ses chiffres rafraîchis ; son statut appartient à
+l'utilisateur ; seulement pour un compte suivi, images de ce post-là
+uniquement), le profil par `/accounts` (+ une ligne par jour dans
+`spy_account_stats`). Un passage (`spy_runs.agent_id`) ne se ferme que par
+l'ordinateur qui l'a ouvert. Rien de nouveau = aucun appel Gemini.
+
+**Ce qu'un passage relit (règle de l'utilisateur)** : les posts qu'il n'a pas
+encore (concurrents : carrousels des 14 derniers jours ; nous : tout ce que le
+profil montre), et, pour leurs chiffres seulement, les posts déjà stockés
+publiés dans les 7 jours avant le dernier passage (`REFRESH_DAYS`, 30 jours pour
+nos comptes, dont les vues comptent sur Versus). Rien d'autre n'est relu.
+`agentPlan` envoie `stored` (à ne pas refaire), `known` (à rafraîchir) et
+`backfill`.
+
+**Historique d'un compte (`spy_backfill`)** : la page embed ne montre que les
+~13 derniers posts, et la grille du profil s'arrête vers 30-50 posts sans
+session TikTok (mesuré ; item_list signé, API officielle sans `video.list`). Pour
+l'historique complet : ids récoltés une fois dans un navigateur **connecté à
+TikTok** (grille du profil qu'on fait défiler), insérés dans `spy_backfill`
+(username, id) ; le passage suivant les récupère (300 par compte et par passage)
+et chaque id sort de la file une fois stocké ou disparu de TikTok. Nos posts
+anciens ne sont ensuite plus relus (chiffres figés à l'import).
+
+**Nos comptes** : `spy_accounts.team` (`stark` = Mr Stark, `mousk` = Mousk,
+vide = concurrent). **Ils n'apparaissent jamais dans le Spy** (demande de
+l'utilisateur) : ni onglet Comptes, ni filtre, ni carrousels à traiter, ni
+erreurs de passage, ni lecture des hooks, ni tier list ; refaire un de leurs
+posts est refusé côté serveur. Ils se gèrent en bas de la page Versus
+(`SpyAccounts mode="ours"`). Vidéos comprises (`spy_posts.media_type`), une
+seule image stockée par post (la couverture). Retirer un de nos comptes efface
+ses posts (sinon ils retomberaient chez les concurrents). Page `/versus` (sous
+Tableau de bord, DA rouge/bleu propre à cet écran, police Anton via
+`--font-versus`, styles `.vs-*` dans `globals.css`) : abonnés et likes
+totaux = profils ; vues, enregistrements, commentaires, partages = somme des
+posts **publiés sur la période** vus par le spy (donc incomplet tant que
+l'historique n'est pas importé) ; « abonnés gagnés » = écart entre deux
+relevés quotidiens de `spy_account_stats`, dès le deuxième jour. « En tête » =
+le score (stats remportées). Les personnages sont fixes, chacun dans sa moitié,
+la déchirure centrée (demande de l'utilisateur).
+
+**Repost d'un carrousel du spy : 4e slide = CTA Plenova**
+(`withPlenovaSlide`, `PLENOVA_CTA` traduit en 5 langues, image de rôle « cta »
+la moins utilisée ; sans image CTA, ou si le carrousel a déjà 35 slides, la
+phrase va sur la 4e slide, hors de la zone de légende TikTok).
 
 **Tier list des hooks** (`lib/spy-hooks.ts`, `lib/hook-tiers.ts`, onglet
-Hooks). À la fin de chaque passage, le script lit la couverture des carrousels
-jamais lus (Gemini vision, `readSpiedHook`) : texte d'origine + langue +
+Hooks). À la fin de chaque passage (`POST /api/spy/agent/runs/[id]`, en `after()`),
+l'app lit la couverture des carrousels concurrents jamais lus (Gemini vision, `readSpiedHook`) : texte d'origine + langue +
 format sur `spy_posts.hook_*`, et une version française dans la voix entre dans
 la banque comme idée (`source = spy`, `spy_post_id`). Doublon d'idée : on garde
 le post le plus vu. Les stats ne sont jamais copiées sur le hook : elles sont
 jointes à la lecture (`listHookViews`), donc toujours celles du jour. Les rangs
-sont des parts du classement par vues (S = top 10 %, D = dernier sixième), pas
+sont des parts du classement par vues (S = top 10 %, D = les 15 % du bas), pas
 des seuils fixes. « ×N » = vues du post / médiane des posts de son compte. Les
 idées gardées du formulaire de carrousel sont triées par vues. Reliquat de
-couvertures non lues : bouton « Les lire maintenant » (`POST /api/spy/hooks`)
-ou `npm run spy -- --hooks-only`.
+couvertures non lues : bouton « Les lire maintenant » (`POST /api/spy/hooks`).
 
 **Les listes flottantes (Picker, Menu) sont en z-[100]**, au-dessus de tout
 dialogue : en z-50 elles s'ouvraient derrière. `Dialog` tient une pile : Échap
@@ -169,7 +222,7 @@ Adresse e-mail sur allowlist, puis le lien du mail (ou le code, 6 à 10 chiffres
 
 - `allowed_emails` dans Supabase (projet `snlehcwteclikxhqgvqs`), **RLS activé
   sans aucune policy** : seul le rôle service y accède, donc le serveur et le
-  propriétaire dans le dashboard. Trois adresses inscrites.
+  propriétaire dans le dashboard. Liste dans la table, pas ici (elle bouge).
 - **Le code appartient à Supabase Auth** : génération, envoi, expiration, usage
   unique, limitation de débit. Pas de fournisseur tiers, pas de table à nous.
   La table `login_codes` a été créée puis supprimée quand on a basculé.
@@ -204,7 +257,7 @@ partagée a déjà écrit 28 Mo d'images en clair et fait tomber le site.
 
 - **Un `next build` pendant que `npm run dev:offline` tourne fait tomber le
   serveur de dev** (même dossier `.next`) : le relancer après chaque build.
-- **Lectures de couvertures concurrentes** (script à 9 h + bouton de l'app) :
+- **Lectures de couvertures concurrentes** (fin de chaque passage du spy, en `after()`, + bouton de l'app) :
   chaque post est réservé en base (`hook_claimed_at`, bail de 10 min) et n'est
   marqué lu qu'après le classement de son idée ; un post ne porte qu'une idée.
 - **Ne pas lancer un serveur avec `| head`** : le pipe ferme stdout et tue le

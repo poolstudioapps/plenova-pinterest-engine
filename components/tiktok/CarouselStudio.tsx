@@ -1038,7 +1038,7 @@ export function CarouselStudio({
                               <div className="aspect-[4/5] w-full rounded-[9px] bg-[var(--color-line)]" />
                             )}
                             <p className="text-[12px] font-medium leading-snug">
-                              {i + 1}. {text?.title ?? "—"}
+                              {i + 1}. {text?.title || "—"}
                               {slide.hasPlenovaMention ? (
                                 <span
                                   title={t("carousels.mentionHint")}

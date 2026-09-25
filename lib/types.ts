@@ -398,11 +398,19 @@ export interface Hook {
 
 /* -------------------------------------------------------------------- spy -- */
 
-/** A TikTok account the local spy script visits every day. */
+/** Our own accounts are split in two teams, pitted against each other. */
+export type Team = "stark" | "mousk";
+export const TEAMS: Team[] = ["stark", "mousk"];
+
+/** A TikTok account the spy visits every day - a competitor, or one of ours. */
 export interface SpyAccount {
   /** Without the @, lowercase. */
   username: string;
   enabled: boolean;
+  /** Null for a competitor; the team for one of our own accounts. */
+  team: Team | null;
+  /** All the likes the account ever received, as its profile shows it. */
+  likesTotal: number | null;
   note: string | null;
   displayName: string | null;
   avatarUrl: string | null;
@@ -417,11 +425,15 @@ export interface SpyAccount {
 
 export type SpyPostStatus = "new" | "processed" | "dismissed";
 
+/** A spied post: a photo carousel, or - for our own accounts only - a video. */
+export type SpyMediaType = "carousel" | "video";
+
 /** One carousel found on a watched account, with its numbers. */
 export interface SpyPost {
   /** TikTok's own post id. */
   id: string;
   username: string;
+  mediaType: SpyMediaType;
   url: string;
   caption: string;
   postedAt: string | null;
@@ -446,6 +458,12 @@ export interface SpyPost {
   hookFr: string | null;
   /** When the first slide was read; null while it has not been. */
   hookCheckedAt: string | null;
+  /**
+   * A competitor's old carousel from the one-off history import: its cover and
+   * numbers only. It feeds the hook tier list, never the Spy page's lists, and
+   * cannot be rebuilt (its slides were not kept).
+   */
+  fromHistory: boolean;
 }
 
 /** What kind of hook it is - for browsing the bank by shape. */
@@ -490,6 +508,8 @@ export interface HookSpyStats {
   accountMedian: number | null;
   /** Whether the post itself was rebuilt, set aside, or is still waiting. */
   postStatus: SpyPostStatus;
+  /** Imported with its history: cover only, so it cannot be rebuilt. */
+  fromHistory: boolean;
 }
 
 /** A hook as the pages show it: with its evidence when it came from the spy. */
@@ -507,4 +527,15 @@ export interface SpyRun {
   added: number;
   errors: { username: string; message: string }[];
   host: string | null;
+}
+
+/** A computer allowed to run the spy, through its own access code. */
+export interface SpyAgent {
+  id: string;
+  name: string;
+  createdAt: string;
+  lastSeenAt: string | null;
+  /** The computer's own name, as it reported it on its last pass. */
+  lastHost: string | null;
+  revokedAt: string | null;
 }

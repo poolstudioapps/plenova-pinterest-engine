@@ -75,7 +75,9 @@ export function Dialog({
         aria-label={title}
         tabIndex={-1}
         className={cn(
-          "flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-line)] bg-[var(--color-surface)] shadow-[var(--shadow-raised)] outline-none",
+          "flex max-h-[90vh] w-full flex-col overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-line)] bg-[var(--color-surface)] shadow-[var(--shadow-raised)] outline-none",
+          // The default width, unless the caller gives its own.
+          !/(^|\s)max-w-/.test(className ?? "") && "max-w-lg",
           className,
         )}
       >

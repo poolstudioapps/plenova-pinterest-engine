@@ -10,8 +10,8 @@ let running = false;
 
 /**
  * Reads the covers of the spied carousels not read yet, in the background.
- * The spy script does this at the end of every pass; this is for the backlog,
- * or a day the script could not. Answers with how many are waiting.
+ * The app does this after every spy pass; this is for the backlog, or a pass
+ * whose reading was cut short. Answers with how many are waiting.
  */
 export async function POST() {
   return handle(async () => {

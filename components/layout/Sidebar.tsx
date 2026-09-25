@@ -23,7 +23,11 @@ const GROUPS: {
 }[] = [
   {
     key: "top",
-    items: [{ href: "/", key: "nav.dashboard" }],
+    items: [
+      { href: "/", key: "nav.dashboard" },
+      // Our own accounts, Mr Stark against Mr Mousk.
+      { href: "/versus", key: "nav.versus" },
+    ],
   },
   // TikTok first: carousels are where most of the work happens now.
   {
