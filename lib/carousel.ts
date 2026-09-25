@@ -369,7 +369,7 @@ async function generateCarousel(
 }
 
 /** Produces one slide image and files it in the media library. */
-async function produceSlideImage(input: {
+export async function produceSlideImage(input: {
   id: string;
   imagePrompt: string;
   photoQuery: string;
@@ -431,6 +431,28 @@ async function produceSlideImage(input: {
   // make that one slide glossier.
   image ??= await generatePinImage(input.imagePrompt, style);
 
+  return fileSlideImage({ ...input, image, referencedFrom });
+}
+
+/**
+ * Hosts a slide picture and files it in the media library, under its plant.
+ *
+ * Every picture the app makes goes through here - generated, reinterpreted, or
+ * a repost's cleaned original - so the library always knows which species it
+ * holds, whatever produced it.
+ */
+export async function fileSlideImage(input: {
+  id: string;
+  image: { data: Buffer; mimeType: string };
+  imagePrompt: string;
+  plantSlug: string;
+  plantName: string;
+  variety: string | null;
+  varietySlug: string | null;
+  theme: string;
+  referencedFrom?: string | null;
+}): Promise<MediaAsset> {
+  const { image } = input;
   const mediaId = `med_${input.id}`;
   const path = mediaPath(
     { plantSlug: input.plantSlug, varietySlug: input.varietySlug, id: mediaId },
@@ -453,7 +475,7 @@ async function produceSlideImage(input: {
     angleSlug: null,
     source: "carousel",
     sourceId: input.id,
-    referencePhotographer: referencedFrom,
+    referencePhotographer: input.referencedFrom ?? null,
     tags: input.theme
       .toLowerCase()
       .split(/\s+/)

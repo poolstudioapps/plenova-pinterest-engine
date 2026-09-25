@@ -11,8 +11,14 @@ import { getStatus } from "@/lib/tiktok";
 
 export const dynamic = "force-dynamic";
 
-export default async function CarouselsPage() {
+export default async function CarouselsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ theme?: string | string[] }>;
+}) {
   const t = translator();
+  const { theme } = await searchParams;
+  const initialTheme = typeof theme === "string" ? theme.slice(0, 200) : undefined;
 
   const [carousels, status] = await Promise.all([
     getStore().listCarousels(),
@@ -39,6 +45,7 @@ export default async function CarouselsPage() {
 
       <CarouselStudio
         initialCarousels={carousels}
+        {...(initialTheme ? { initialTheme } : {})}
         plants={PLANTS.map((p) => plantIdentity({ slug: p.slug }))}
         accounts={status.accounts}
         canGenerate={isGeminiConfigured()}

@@ -116,6 +116,36 @@ slides prêtes, Pins).
 **La plante 3D** (`components/plants/monstera-scene.ts`, three.js en chunk
 chargé à la demande) : aucun fichier téléchargé, tout est modélisé en code.
 
+**Banque de hooks** (`lib/hooks.ts`, table `hooks`, page `/hooks`). Un hook =
+la phrase de couverture (le « thème » d'un carrousel). Tout ce qui est dans la
+banque - utilisé, gardé comme idée, venu d'un carrousel du spy - est envoyé à
+Gemini comme liste d'exclusion (`generateHookIdeas`), et recontrôlé après
+coup (`sameHook` : même clé normalisée, ou 80 % de mots en commun). Un
+carrousel enregistre son hook comme « utilisé » au démarrage.
+
+**Le spy tourne sur le PC de l'utilisateur, pas sur un serveur**
+(`scripts/tiktok-spy.mjs`, tâche Windows « Plenova Spy TikTok » à 9 h,
+installée par `npm run spy:install`, logs dans `.data/spy-logs`). Choix de
+l'utilisateur, et deux raisons mesurées : TikTok bloque les serveurs, et un
+scraping depuis l'app enregistrée chez TikTok pour publier mettrait cet accès en
+danger. **Pas de navigateur piloté** : un Chrome sous Playwright reçoit une
+liste de posts vide (testé headless et visible). Le script lit deux pages
+publiques rendues côté serveur : `/embed/@compte` (derniers posts + profil) et
+la page de chaque post (`webapp.video-detail` : slides, date, vues, likes,
+commentaires, partages, enregistrements). Il écrit directement dans Supabase
+(clé service de `.env.local`) : `spy_posts`, images dans le bucket public
+`spy`, `spy_accounts` (profil, dernier passage), `spy_runs`. Un post connu n'a
+que ses chiffres rafraîchis ; son statut appartient à l'utilisateur. Rien de
+nouveau = aucun appel Gemini.
+
+**Traiter un carrousel du spy = le pipeline repost** (`lib/repost-carousel.ts`) :
+lecture de chaque slide (texte réécrit dans la voix, plante nommée depuis la
+photo ou le texte), image « d'origine nettoyée » (choix de l'utilisateur) ou
+« Pexels + Gemini ». Toute image produite passe par `fileSlideImage` et entre
+dans la bibliothèque avec sa plante (`matchPlantSlug`, sinon `unfiled` avec le
+nom lu). Le post passe « traité » dès le lancement ; il se remet « à traiter »
+depuis « Déjà traités ».
+
 ## 5. Connexion — comment ça marche
 
 Adresse e-mail sur allowlist, puis le lien du mail (ou le code, 6 à 10 chiffres, s'il y en a un). « Se déconnecter » en bas de la barre latérale (POST `/api/auth/logout`).

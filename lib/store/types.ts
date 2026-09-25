@@ -1,10 +1,15 @@
 import type {
   CarouselRecord,
+  Hook,
   MediaAsset,
   PinRecord,
   PinStatus,
   PinterestConnection,
   SlideTemplate,
+  SpyAccount,
+  SpyPost,
+  SpyPostStatus,
+  SpyRun,
   TikTokAccount,
 } from "@/lib/types";
 import { cleanSlideTexts } from "@/lib/slide-text";
@@ -83,6 +88,32 @@ export interface EngineStore {
   getSlideTemplate(id: string): Promise<SlideTemplate | null>;
   saveSlideTemplate(template: SlideTemplate): Promise<void>;
   deleteSlideTemplate(id: string): Promise<void>;
+
+  /** Cover lines, ours and seen elsewhere. Newest first. */
+  listHooks(): Promise<Hook[]>;
+  getHook(id: string): Promise<Hook | null>;
+  findHookByKey(key: string): Promise<Hook | null>;
+  saveHook(hook: Hook): Promise<void>;
+  deleteHook(id: string): Promise<void>;
+
+  /** Accounts the local spy script visits. */
+  listSpyAccounts(): Promise<SpyAccount[]>;
+  saveSpyAccount(account: SpyAccount): Promise<void>;
+  deleteSpyAccount(username: string): Promise<void>;
+
+  /** Carousels the spy found, newest post first. */
+  listSpyPosts(): Promise<SpyPost[]>;
+  getSpyPost(id: string): Promise<SpyPost | null>;
+  /**
+   * Only what the app decides about a post. Its numbers belong to the script,
+   * which rewrites them every day, so the app never writes them back.
+   */
+  setSpyPostStatus(
+    id: string,
+    status: SpyPostStatus,
+    carouselId: string | null,
+  ): Promise<void>;
+  latestSpyRun(): Promise<SpyRun | null>;
 }
 
 /** Shape of the single persisted state document. */
@@ -93,6 +124,11 @@ export interface StateDocument {
   carousels: Record<string, CarouselRecord>;
   /** Absent on documents written before saved slides existed. */
   slideTemplates?: Record<string, SlideTemplate>;
+  /** Local stand-ins for the Supabase tables, for offline development. */
+  hooks?: Record<string, Hook>;
+  spyAccounts?: Record<string, SpyAccount>;
+  spyPosts?: Record<string, SpyPost>;
+  spyRuns?: SpyRun[];
   /** AES-256-GCM envelope produced by lib/crypto.ts, or null when disconnected. */
   connection: string | null;
   /** Same envelope, for the TikTok account. */

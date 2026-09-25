@@ -31,6 +31,8 @@ const GROUPS: {
     labelKey: "nav.groupTikTok",
     items: [
       { href: "/carousels", key: "nav.carousels" },
+      { href: "/hooks", key: "nav.hooks" },
+      { href: "/spy", key: "nav.spy" },
       { href: "/tiktok", key: "nav.accountTikTok" },
     ],
   },

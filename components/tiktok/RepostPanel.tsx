@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Button, Field, FileDropZone, SortableGrid } from "@/components/ui";
 import { WritingOptions } from "@/components/tiktok/WritingOptions";
+import { ImageModeChoice, type ImageMode } from "@/components/spy/ProcessDialog";
+import { SpyInbox } from "@/components/spy/SpyInbox";
 import {
   translator,
   type ContentLocale,
@@ -17,6 +19,7 @@ interface Props {
   overlayStyle: OverlayStyle;
   onOverlayStyle: (style: OverlayStyle) => void;
   canGenerate: boolean;
+  hasPexels: boolean;
   onStarted: (carousel: CarouselRecord) => void;
 }
 
@@ -95,11 +98,12 @@ function toShot(file: File): Shot {
 }
 
 /**
- * Rebuilds someone else's carousel as ours, from screenshots.
+ * Rebuilds someone else's carousel as ours - one the spy found, or one the
+ * operator took screenshots of.
  *
- * Screenshots rather than a link, deliberately: pulling other people's posts
- * down automatically is against TikTok's terms, and this app is in front of
- * their reviewers. A screenshot is something the operator already has.
+ * The app itself never pulls anything from TikTok: this app is in front of
+ * their reviewers. The spy's carousels were collected by the script on the
+ * operator's own computer; screenshots are something the operator already has.
  */
 export function RepostPanel({
   languages,
@@ -107,6 +111,7 @@ export function RepostPanel({
   overlayStyle,
   onOverlayStyle,
   canGenerate,
+  hasPexels,
   onStarted,
 }: Props) {
   const t = translator();
@@ -122,6 +127,7 @@ export function RepostPanel({
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [imageMode, setImageMode] = useState<ImageMode>("clean");
 
   // Preview URLs hold the image in memory until released.
   const shotsRef = useRef(shots);
@@ -197,7 +203,7 @@ export function RepostPanel({
       const res = await fetch("/api/carousels/repost", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ frames: urls, languages, overlayStyle }),
+        body: JSON.stringify({ frames: urls, languages, overlayStyle, imageMode }),
       });
       const data = (await res.json()) as {
         carousel?: CarouselRecord;
@@ -248,6 +254,28 @@ export function RepostPanel({
         parent already pads it. Both were drawn a second time, as a bordered
         white card floating on a bordered white card.
       */}
+      {/* The choices first: they apply to the spy's carousels and to screenshots alike. */}
+      <WritingOptions
+        languages={languages}
+        onToggleLanguage={onToggleLanguage}
+        overlayStyle={overlayStyle}
+        onOverlayStyle={onOverlayStyle}
+      />
+      <ImageModeChoice value={imageMode} onChange={setImageMode} hasPexels={hasPexels} />
+
+      <div className="border-t border-[var(--color-line)] pt-5">
+        <SpyInbox
+          languages={languages}
+          overlayStyle={overlayStyle}
+          imageMode={imageMode}
+          disabled={!canGenerate}
+          onStarted={onStarted}
+        />
+      </div>
+
+      <h3 className="border-t border-[var(--color-line)] pt-5 text-[14px] font-semibold">
+        {t("repost.fromShots")}
+      </h3>
       <Field label={t("repost.pick")} hint={t("repost.pickHint")}>
         <input
           ref={input}
@@ -331,14 +359,7 @@ export function RepostPanel({
         <p className="text-[12.5px] text-[var(--color-danger)]">{error}</p>
       ) : null}
 
-      <WritingOptions
-        languages={languages}
-        onToggleLanguage={onToggleLanguage}
-        overlayStyle={overlayStyle}
-        onOverlayStyle={onOverlayStyle}
-      />
-
-      <div className="border-t border-[var(--color-line)] pt-5">
+      <div>
         <Button variant="primary" onClick={() => void start()} loading={busy} disabled={busy || blocked !== null}>
           {label}
         </Button>

@@ -8,7 +8,9 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "check": "tsc --noEmit && next build",
-    "dev:offline": "node scripts/dev-offline.mjs"
+    "dev:offline": "node scripts/dev-offline.mjs",
+    "spy": "node scripts/tiktok-spy.mjs",
+    "spy:install": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-spy-task.ps1"
   },
   "dependencies": {
     "@google/genai": "^2.21.0",

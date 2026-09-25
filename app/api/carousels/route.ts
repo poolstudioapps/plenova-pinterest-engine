@@ -1,6 +1,7 @@
 import { after } from "next/server";
 import { handle, ok } from "@/lib/api";
 import { runCarouselGeneration, startCarousel } from "@/lib/carousel";
+import { recordHookUsed } from "@/lib/hooks";
 import { getStore } from "@/lib/store";
 import { generateCarouselSchema, parseJsonBody } from "@/lib/validation";
 
@@ -30,6 +31,8 @@ export async function POST(request: Request) {
     const carousel = await startCarousel(input);
 
     after(async () => {
+      // The theme is the cover line: once used, no suggestion may offer it again.
+      await recordHookUsed(carousel.theme, { source: "carousel", carouselId: carousel.id });
       await runCarouselGeneration(carousel.id, input);
     });
 

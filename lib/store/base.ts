@@ -2,10 +2,15 @@ import "server-only";
 import { decryptJson, encryptJson, hasEncryptionKey } from "@/lib/crypto";
 import type {
   CarouselRecord,
+  Hook,
   MediaAsset,
   PinRecord,
   PinterestConnection,
   SlideTemplate,
+  SpyAccount,
+  SpyPost,
+  SpyPostStatus,
+  SpyRun,
   TikTokAccount,
   TikTokAccounts,
 } from "@/lib/types";
@@ -354,6 +359,94 @@ export abstract class DocumentStore implements EngineStore {
     await this.mutate((doc) => {
       delete doc.slideTemplates?.[id];
     });
+  }
+
+  // ----------------------------------------------------------------- hooks
+
+  async listHooks(): Promise<Hook[]> {
+    const doc = await this.read();
+    return Object.values(doc.hooks ?? {}).sort((a, b) =>
+      b.createdAt.localeCompare(a.createdAt),
+    );
+  }
+
+  async getHook(id: string): Promise<Hook | null> {
+    const doc = await this.read();
+    return doc.hooks?.[id] ?? null;
+  }
+
+  async findHookByKey(key: string): Promise<Hook | null> {
+    const doc = await this.read();
+    return Object.values(doc.hooks ?? {}).find((h) => h.key === key) ?? null;
+  }
+
+  async saveHook(hook: Hook): Promise<void> {
+    await this.mutate((doc) => {
+      doc.hooks ??= {};
+      doc.hooks[hook.id] = hook;
+    });
+  }
+
+  async deleteHook(id: string): Promise<void> {
+    await this.mutate((doc) => {
+      delete doc.hooks?.[id];
+    });
+  }
+
+  // ------------------------------------------------------------------- spy
+
+  async listSpyAccounts(): Promise<SpyAccount[]> {
+    const doc = await this.read();
+    return Object.values(doc.spyAccounts ?? {}).sort((a, b) =>
+      a.username.localeCompare(b.username),
+    );
+  }
+
+  async saveSpyAccount(account: SpyAccount): Promise<void> {
+    await this.mutate((doc) => {
+      doc.spyAccounts ??= {};
+      doc.spyAccounts[account.username] = account;
+    });
+  }
+
+  async deleteSpyAccount(username: string): Promise<void> {
+    await this.mutate((doc) => {
+      delete doc.spyAccounts?.[username];
+    });
+  }
+
+  async listSpyPosts(): Promise<SpyPost[]> {
+    const doc = await this.read();
+    return Object.values(doc.spyPosts ?? {}).sort((a, b) =>
+      (b.postedAt ?? b.firstSeenAt).localeCompare(a.postedAt ?? a.firstSeenAt),
+    );
+  }
+
+  async getSpyPost(id: string): Promise<SpyPost | null> {
+    const doc = await this.read();
+    return doc.spyPosts?.[id] ?? null;
+  }
+
+  async setSpyPostStatus(
+    id: string,
+    status: SpyPostStatus,
+    carouselId: string | null,
+  ): Promise<void> {
+    await this.mutate((doc) => {
+      const post = doc.spyPosts?.[id];
+      if (!post) return;
+      post.status = status;
+      post.carouselId = carouselId;
+      post.handledAt = status === "new" ? null : new Date().toISOString();
+    });
+  }
+
+  async latestSpyRun(): Promise<SpyRun | null> {
+    const doc = await this.read();
+    const runs = [...(doc.spyRuns ?? [])].sort((a, b) =>
+      b.startedAt.localeCompare(a.startedAt),
+    );
+    return runs[0] ?? null;
   }
 
 }

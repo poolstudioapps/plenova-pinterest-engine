@@ -24,6 +24,7 @@ export async function POST(request: Request) {
       languages?: unknown;
       theme?: unknown;
       overlayStyle?: unknown;
+      imageMode?: unknown;
     };
     try {
       body = (await request.json()) as typeof body;
@@ -57,6 +58,7 @@ export async function POST(request: Request) {
       languages,
       theme: typeof body.theme === "string" ? body.theme : undefined,
       overlayStyle,
+      imageMode: body.imageMode === "pexels" ? ("pexels" as const) : ("clean" as const),
     };
 
     const carousel = await startRepost(input);

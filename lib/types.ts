@@ -371,3 +371,83 @@ export interface EngineStats {
   failed: number;
   drafts: number;
 }
+
+/* ------------------------------------------------------------------ hooks -- */
+
+/**
+ * A hook: the cover line of a carousel, "Les 6 plus belles Monstera à avoir
+ * chez toi". Kept so the next ones Gemini suggests are never the same again.
+ */
+export type HookStatus = "idea" | "used";
+/** Where a hook came from: typed, suggested, a carousel's, or a spied post's. */
+export type HookSource = "manual" | "gemini" | "carousel" | "spy";
+
+export interface Hook {
+  id: string;
+  text: string;
+  /** The text folded - case, accents, punctuation - so near-copies collide. */
+  key: string;
+  status: HookStatus;
+  source: HookSource;
+  carouselId: string | null;
+  spyPostId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  usedAt: string | null;
+}
+
+/* -------------------------------------------------------------------- spy -- */
+
+/** A TikTok account the local spy script visits every day. */
+export interface SpyAccount {
+  /** Without the @, lowercase. */
+  username: string;
+  enabled: boolean;
+  note: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
+  followers: number | null;
+  addedAt: string;
+  lastCheckedAt: string | null;
+  lastStatus: "ok" | "empty" | "error" | null;
+  lastError: string | null;
+  /** Carousels seen on the last pass. */
+  lastFound: number | null;
+}
+
+export type SpyPostStatus = "new" | "processed" | "dismissed";
+
+/** One carousel found on a watched account, with its numbers. */
+export interface SpyPost {
+  /** TikTok's own post id. */
+  id: string;
+  username: string;
+  url: string;
+  caption: string;
+  postedAt: string | null;
+  views: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  saves: number;
+  /** The slides, copied to our storage: TikTok's own links expire. */
+  images: { url: string; width?: number; height?: number }[];
+  status: SpyPostStatus;
+  /** The carousel it was turned into, once processed. */
+  carouselId: string | null;
+  firstSeenAt: string;
+  statsUpdatedAt: string;
+  handledAt: string | null;
+}
+
+/** One pass of the spy script. */
+export interface SpyRun {
+  id: string;
+  startedAt: string;
+  finishedAt: string | null;
+  accounts: number;
+  found: number;
+  added: number;
+  errors: { username: string; message: string }[];
+  host: string | null;
+}

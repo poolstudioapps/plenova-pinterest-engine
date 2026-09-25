@@ -6,10 +6,15 @@ import { filterMedia, type MediaFilter } from "@/lib/media";
 import type { ContentLocale } from "@/lib/i18n";
 import type {
   CarouselRecord,
+  Hook,
   MediaAsset,
   PinRecord,
   PinterestConnection,
   SlideTemplate,
+  SpyAccount,
+  SpyPost,
+  SpyPostStatus,
+  SpyRun,
   TikTokAccount,
 } from "@/lib/types";
 import {
@@ -402,6 +407,181 @@ export class SupabaseStore implements EngineStore {
     const { error } = await db().from("slide_templates").delete().eq("id", id);
     check("suppression d'une slide prête", error);
   }
+
+  // ----------------------------------------------------------------- hooks
+
+  async listHooks(): Promise<Hook[]> {
+    const { data, error } = await db()
+      .from("hooks")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(2000);
+    check("lecture des hooks", error);
+    return (data ?? []).map(hookFromRow);
+  }
+
+  async getHook(id: string): Promise<Hook | null> {
+    const { data, error } = await db().from("hooks").select("*").eq("id", id).maybeSingle();
+    check("lecture d'un hook", error);
+    return data ? hookFromRow(data) : null;
+  }
+
+  async findHookByKey(key: string): Promise<Hook | null> {
+    const { data, error } = await db().from("hooks").select("*").eq("key", key).maybeSingle();
+    check("recherche d'un hook", error);
+    return data ? hookFromRow(data) : null;
+  }
+
+  async saveHook(hook: Hook): Promise<void> {
+    const { error } = await db().from("hooks").upsert({
+      id: hook.id,
+      text: hook.text,
+      key: hook.key,
+      status: hook.status,
+      source: hook.source,
+      carousel_id: hook.carouselId,
+      spy_post_id: hook.spyPostId,
+      created_at: hook.createdAt,
+      updated_at: hook.updatedAt,
+      used_at: hook.usedAt,
+    });
+    check("enregistrement d'un hook", error);
+  }
+
+  async deleteHook(id: string): Promise<void> {
+    const { error } = await db().from("hooks").delete().eq("id", id);
+    check("suppression d'un hook", error);
+  }
+
+  // ------------------------------------------------------------------- spy
+
+  async listSpyAccounts(): Promise<SpyAccount[]> {
+    const { data, error } = await db().from("spy_accounts").select("*").order("username");
+    check("lecture des comptes espionnés", error);
+    return (data ?? []).map(spyAccountFromRow);
+  }
+
+  async saveSpyAccount(account: SpyAccount): Promise<void> {
+    // The profile fields and the last pass belong to the script: the app only
+    // ever writes what it decides.
+    const { error } = await db().from("spy_accounts").upsert({
+      username: account.username,
+      enabled: account.enabled,
+      note: account.note,
+      added_at: account.addedAt,
+    });
+    check("enregistrement d'un compte espionné", error);
+  }
+
+  async deleteSpyAccount(username: string): Promise<void> {
+    const { error } = await db().from("spy_accounts").delete().eq("username", username);
+    check("suppression d'un compte espionné", error);
+  }
+
+  async listSpyPosts(): Promise<SpyPost[]> {
+    const { data, error } = await db()
+      .from("spy_posts")
+      .select("*")
+      .order("posted_at", { ascending: false, nullsFirst: false })
+      .limit(1000);
+    check("lecture des carrousels espionnés", error);
+    return (data ?? []).map(spyPostFromRow);
+  }
+
+  async getSpyPost(id: string): Promise<SpyPost | null> {
+    const { data, error } = await db().from("spy_posts").select("*").eq("id", id).maybeSingle();
+    check("lecture d'un carrousel espionné", error);
+    return data ? spyPostFromRow(data) : null;
+  }
+
+  async setSpyPostStatus(
+    id: string,
+    status: SpyPostStatus,
+    carouselId: string | null,
+  ): Promise<void> {
+    const { error } = await db()
+      .from("spy_posts")
+      .update({
+        status,
+        carousel_id: carouselId,
+        handled_at: status === "new" ? null : new Date().toISOString(),
+      })
+      .eq("id", id);
+    check("mise à jour d'un carrousel espionné", error);
+  }
+
+  async latestSpyRun(): Promise<SpyRun | null> {
+    const { data, error } = await db()
+      .from("spy_runs")
+      .select("*")
+      .order("started_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    check("lecture du dernier passage du spy", error);
+    if (!data) return null;
+    return {
+      id: String(data.id),
+      startedAt: data.started_at as string,
+      finishedAt: (data.finished_at as string | null) ?? null,
+      accounts: Number(data.accounts ?? 0),
+      found: Number(data.found ?? 0),
+      added: Number(data.added ?? 0),
+      errors: Array.isArray(data.errors) ? (data.errors as SpyRun["errors"]) : [],
+      host: (data.host as string | null) ?? null,
+    };
+  }
+}
+
+function hookFromRow(row: Record<string, unknown>): Hook {
+  return {
+    id: row.id as string,
+    text: row.text as string,
+    key: row.key as string,
+    status: row.status === "used" ? "used" : "idea",
+    source: (row.source as Hook["source"]) ?? "manual",
+    carouselId: (row.carousel_id as string | null) ?? null,
+    spyPostId: (row.spy_post_id as string | null) ?? null,
+    createdAt: row.created_at as string,
+    updatedAt: (row.updated_at as string) ?? (row.created_at as string),
+    usedAt: (row.used_at as string | null) ?? null,
+  };
+}
+
+function spyAccountFromRow(row: Record<string, unknown>): SpyAccount {
+  return {
+    username: row.username as string,
+    enabled: row.enabled !== false,
+    note: (row.note as string | null) ?? null,
+    displayName: (row.display_name as string | null) ?? null,
+    avatarUrl: (row.avatar_url as string | null) ?? null,
+    followers: row.followers == null ? null : Number(row.followers),
+    addedAt: row.added_at as string,
+    lastCheckedAt: (row.last_checked_at as string | null) ?? null,
+    lastStatus: (row.last_status as SpyAccount["lastStatus"]) ?? null,
+    lastError: (row.last_error as string | null) ?? null,
+    lastFound: row.last_found == null ? null : Number(row.last_found),
+  };
+}
+
+function spyPostFromRow(row: Record<string, unknown>): SpyPost {
+  return {
+    id: row.id as string,
+    username: row.username as string,
+    url: row.url as string,
+    caption: (row.caption as string) ?? "",
+    postedAt: (row.posted_at as string | null) ?? null,
+    views: Number(row.views ?? 0),
+    likes: Number(row.likes ?? 0),
+    comments: Number(row.comments ?? 0),
+    shares: Number(row.shares ?? 0),
+    saves: Number(row.saves ?? 0),
+    images: Array.isArray(row.images) ? (row.images as SpyPost["images"]) : [],
+    status: (row.status as SpyPostStatus) ?? "new",
+    carouselId: (row.carousel_id as string | null) ?? null,
+    firstSeenAt: row.first_seen_at as string,
+    statsUpdatedAt: row.stats_updated_at as string,
+    handledAt: (row.handled_at as string | null) ?? null,
+  };
 }
 
 /** A carousel row back into the shape the rest of the app speaks. */

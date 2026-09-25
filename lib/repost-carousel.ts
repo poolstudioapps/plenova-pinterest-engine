@@ -1,8 +1,11 @@
 import "server-only";
+import { fileSlideImage, produceSlideImage } from "@/lib/carousel";
+import { matchPlantSlug } from "@/lib/data/localize";
 import { badRequest, notFound } from "@/lib/errors";
+import { recordHookUsed } from "@/lib/hooks";
 import type { ContentLocale } from "@/lib/i18n";
-import { extensionFor, hostImageAt } from "@/lib/images";
 import { defaultOverlay, type OverlayStyle } from "@/lib/overlay";
+import { isPexelsConfigured } from "@/lib/pexels";
 import { cleanScreenshot, readScreenshot, writeRepostCaption } from "@/lib/repost";
 import { getStore } from "@/lib/store";
 import type { CarouselRecord, CarouselSlide, SlideText } from "@/lib/types";
@@ -21,7 +24,18 @@ export interface RepostInput {
   languages: ContentLocale[];
   theme?: string;
   overlayStyle?: OverlayStyle;
+  /**
+   * Where each slide's picture comes from.
+   *  - "clean":  the original photograph, its text and the app removed.
+   *  - "pexels": a new photograph - a Pexels reference of the same subject,
+   *              reinterpreted by Gemini, as ordinary carousels are made.
+   */
+  imageMode?: "clean" | "pexels";
+  /** The spied carousel this rebuilds, if it came from the spy. */
+  spyPostId?: string;
 }
+
+export type RepostImageMode = NonNullable<RepostInput["imageMode"]>;
 
 function repostId(): string {
   const time = Date.now().toString(36);
@@ -80,13 +94,36 @@ export async function runRepost(id: string, input: RepostInput): Promise<void> {
       // Read first: if the screenshot cannot be understood there is no point
       // spending an image call on it.
       const read = await readScreenshot(source, input.languages);
-      const cleaned = await cleanScreenshot(source);
 
-      const hosted = await hostImageAt(
-        `reposts/${id}/slide-${index + 1}.${extensionFor(cleaned.mimeType)}`,
-        cleaned.data,
-        cleaned.mimeType,
-      );
+      // Filed under the plant the slide shows, named from the photograph or
+      // from the words on it; one nobody could name goes to the unfiled shelf.
+      const plantSlug = (read.plant ? matchPlantSlug(read.plant) : null) ?? "unfiled";
+      const plantName = read.plant || "Plante non identifiée";
+      const theme = input.theme?.trim() || read.title[input.languages[0]!] || "Repost";
+
+      const asset =
+        input.imageMode === "pexels" && isPexelsConfigured()
+          ? await produceSlideImage({
+              id: `${id}_${index}`,
+              imagePrompt: read.imagePrompt || read.visualSummary,
+              photoQuery: read.photoQuery || read.plant || read.visualSummary,
+              source: "photo",
+              plantSlug,
+              plantName,
+              variety: null,
+              varietySlug: null,
+              theme,
+            })
+          : await fileSlideImage({
+              id: `${id}_${index}`,
+              image: await cleanScreenshot(source),
+              imagePrompt: read.imagePrompt || read.visualSummary,
+              plantSlug,
+              plantName,
+              variety: null,
+              varietySlug: null,
+              theme,
+            });
 
       const text: Partial<Record<ContentLocale, SlideText>> = {};
       for (const language of input.languages) {
@@ -112,10 +149,10 @@ export async function runRepost(id: string, input: RepostInput): Promise<void> {
         hasPlenovaMention: false,
         text,
         overlay,
-        imagePrompt: read.visualSummary,
-        photoQuery: read.visualSummary,
-        mediaId: null,
-        imageUrl: hosted.url,
+        imagePrompt: read.imagePrompt || read.visualSummary,
+        photoQuery: read.photoQuery || read.visualSummary,
+        mediaId: asset.id,
+        imageUrl: asset.url,
         composed: {},
       });
 
@@ -139,20 +176,28 @@ export async function runRepost(id: string, input: RepostInput): Promise<void> {
     const current = await store.getCarousel(id);
     if (!current) return;
 
+    const theme =
+      input.theme?.trim() || slides[0]?.text[input.languages[0]!]?.title || "Repost";
     await store.saveCarousel({
       ...current,
       slides,
       caption: written.caption,
       hashtags: written.hashtags,
-      theme:
-        input.theme?.trim() ||
-        slides[0]?.text[input.languages[0]!]?.title ||
-        "Repost",
+      theme,
       status: "draft",
       error: null,
       progress: null,
       updatedAt: new Date().toISOString(),
     });
+
+    // Its cover line is ours now: no hook suggestion may offer it again.
+    if (theme !== "Repost") {
+      await recordHookUsed(theme, {
+        source: input.spyPostId ? "spy" : "carousel",
+        carouselId: id,
+        ...(input.spyPostId ? { spyPostId: input.spyPostId } : {}),
+      });
+    }
   } catch (err) {
     const reason = err instanceof Error ? err.message : "Le repost a échoué.";
     try {

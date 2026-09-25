@@ -15,6 +15,7 @@ import {
   RowMenuItem,
   SortableGrid,
 } from "@/components/ui";
+import { HookPicker } from "@/components/hooks/HookPicker";
 import { PublishDialog } from "@/components/tiktok/PublishDialog";
 import { RepostPanel } from "@/components/tiktok/RepostPanel";
 import { SlideEditor } from "@/components/tiktok/SlideEditor";
@@ -42,6 +43,8 @@ import { cn, relativeTime } from "@/lib/utils";
 
 interface Props {
   initialCarousels: CarouselRecord[];
+  /** A hook chosen on the hooks page, to start from. */
+  initialTheme?: string;
   plants: PlantIdentity[];
   accounts: AccountView[];
   canGenerate: boolean;
@@ -83,6 +86,7 @@ const TABS = [
 
 export function CarouselStudio({
   initialCarousels,
+  initialTheme,
   plants,
   accounts,
   canGenerate,
@@ -91,7 +95,7 @@ export function CarouselStudio({
   const t = translator();
 
   const [carousels, setCarousels] = useState(initialCarousels);
-  const [theme, setTheme] = useState("");
+  const [theme, setTheme] = useState(initialTheme ?? "");
   const [plantSlug, setPlantSlug] = useState("");
   // Default to the languages the connected accounts actually publish in - the
   // point of writing several is feeding those accounts, not filling a matrix.
@@ -642,6 +646,9 @@ export function CarouselStudio({
                 onChange={(e) => setTheme(e.target.value)}
               />
             </Field>
+            <div className="-mt-4">
+              <HookPicker plants={plants} onPick={setTheme} />
+            </div>
 
             {/*
               Four menus, always in view.
@@ -758,6 +765,7 @@ export function CarouselStudio({
             overlayStyle={overlayStyle}
             onOverlayStyle={setOverlayStyle}
             canGenerate={canGenerate}
+            hasPexels={hasPexels}
             onStarted={(carousel) => {
               setCarousels((current) => [carousel, ...current]);
               setPreviewLang(carousel.languages[0] ?? previewLang);

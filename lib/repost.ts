@@ -46,6 +46,12 @@ export interface ReadSlide {
   /** What the photograph shows, in English, for filing and for prompts. */
   visualSummary: string;
   hasPerson: boolean;
+  /** The plant shown, as precisely as it could be named - from the photo or the words on it. */
+  plant: string;
+  /** A few English words to find a similar stock photograph. */
+  photoQuery: string;
+  /** A brief to shoot a new photograph of the same subject. */
+  imagePrompt: string;
 }
 
 function textSchema(languages: ContentLocale[]) {
@@ -56,7 +62,12 @@ function textSchema(languages: ContentLocale[]) {
   };
 }
 
-/** Reads one screenshot: the words, where they sit, and what is in frame. */
+/**
+ * Reads one slide: the words, where they sit, what is in frame and which plant.
+ *
+ * Works on a screenshot of the app as well as on the bare slide image the spy
+ * brings back.
+ */
 export async function readScreenshot(
   image: { data: Buffer; mimeType: string },
   languages: ContentLocale[],
@@ -66,7 +77,7 @@ export async function readScreenshot(
     .join(", ");
 
   const prompt = [
-    "This is a screenshot of one slide of a TikTok photo carousel.",
+    "This is one slide of a TikTok photo carousel - the slide image itself, or a screenshot of it in the app.",
     "",
     "Read the overlay text that was placed on the photograph. Ignore everything",
     "belonging to the app itself: the follow button, the handle, the caption,",
@@ -85,11 +96,24 @@ export async function readScreenshot(
     "",
     "Strip any full stop that ends a line: this text is set on an image.",
     "",
+    "These words become ours. If they name another app, brand, shop or creator -",
+    "a plant identification app, say - put Plenova (our plant identification and",
+    "care app) in its place where the sentence still makes sense, otherwise drop",
+    "that part. Never keep a competitor's name, and never invent one.",
+    "",
     "placement: where the text sits vertically - top, center or bottom.",
     "visualSummary: what the photograph shows, in English, factual, at most 25",
     "words, naming the species if a plant is identifiable. Never mention the",
     "overlay or the app.",
     "hasPerson: whether a person is visible.",
+    "plant: the plant in the photograph, as precisely as you can name it - the",
+    "botanical name if you can tell, otherwise the common English name. The",
+    "overlay text often names it: use it. Empty only if no specific plant shows.",
+    "photoQuery: two to four plain English words that would find a similar scene",
+    "in a stock photo library, e.g. 'monstera living room'.",
+    "imagePrompt: a self-contained English brief to shoot a NEW photograph of the",
+    "same subject - the species and its visible traits, setting, light, framing,",
+    "mood. No text, no people, no hands.",
   ].join("\n");
 
   const response = await ai().models.generateContent({
@@ -120,6 +144,9 @@ export async function readScreenshot(
           placement: { type: "string", enum: ["top", "center", "bottom"] },
           visualSummary: { type: "string" },
           hasPerson: { type: "boolean" },
+          plant: { type: "string" },
+          photoQuery: { type: "string" },
+          imagePrompt: { type: "string" },
         },
         required: [
           "detectedLocale",
@@ -129,6 +156,9 @@ export async function readScreenshot(
           "placement",
           "visualSummary",
           "hasPerson",
+          "plant",
+          "photoQuery",
+          "imagePrompt",
         ],
       },
     },
@@ -163,6 +193,9 @@ export async function readScreenshot(
         : "center",
     visualSummary: (parsed.visualSummary ?? "").trim(),
     hasPerson: Boolean(parsed.hasPerson),
+    plant: (parsed.plant ?? "").trim(),
+    photoQuery: (parsed.photoQuery ?? "").trim(),
+    imagePrompt: (parsed.imagePrompt ?? "").trim(),
   };
 }
 
@@ -274,6 +307,7 @@ export async function writeRepostCaption(
     "Caption: one to three sentences in her voice, talking to her community, one",
     "or two emoji, no hashtags inside it, ending on a light invitation to save the",
     "post. Adapt per language, never translate.",
+    "Never name another app or brand than Plenova.",
     "Hashtags: 6 to 12 per language, lowercase, no # prefix, the tags people",
     "actually use in that language. Always include planttok and plantmom.",
   ].join("\n");

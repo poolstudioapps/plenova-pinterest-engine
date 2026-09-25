@@ -22,7 +22,7 @@ import {
 import type { ContentLocale } from "@/lib/i18n";
 import { PINTEREST_LIMITS, truncate } from "@/lib/utils";
 import type { VisualStyle } from "@/lib/types";
-import { voiceRegister } from "@/lib/voice";
+import { creatorVoice, voiceRegister } from "@/lib/voice";
 
 /**
  * Gemini access layer (spec §24). Responsibilities: client init, structured
@@ -566,5 +566,85 @@ export async function translateSlideCopy(input: {
   } catch (err) {
     if (err && typeof err === "object" && "code" in err) throw err;
     wrapUpstream(err, "la traduction de la slide");
+  }
+}
+
+/**
+ * Fresh hooks - cover lines for carousels - that are none of the ones already
+ * in the bank.
+ *
+ * The whole bank goes into the prompt as a list to stay away from, ours and
+ * the ones seen on spied accounts alike: a suggestion is only worth something
+ * if it has not been posted already. The caller still filters what comes back,
+ * because a list in a prompt is a request, not a guarantee.
+ */
+export async function generateHookIdeas(input: {
+  count: number;
+  exclude: string[];
+  plantName?: string;
+  direction?: string;
+}): Promise<string[]> {
+  const ai = getClient();
+  const prompt = [
+    `Write ${input.count} new hooks, in French, for TikTok photo carousels about houseplants.`,
+    "A hook is the cover line: the one sentence on the first slide that makes someone stop scrolling and swipe.",
+    "",
+    input.plantName ? `Every hook is about this plant: ${input.plantName}.` : "",
+    input.direction ? `Direction from the operator (highest priority): ${input.direction}` : "",
+    "",
+    "Vary the formats across the list, never the same shape twice in a row:",
+    "- a numbered list ('Les 5 plantes qui...', '7 erreurs que...'): the number sets how many slides follow, so keep it between 3 and 8",
+    "- a mistake or a myth, a care trick, a before/after, a confession ('J'ai arrêté de...'), a POV, a comparison, a question",
+    "",
+    "Rules:",
+    "- 4 to 12 words, spoken French, in her voice. No emoji, no hashtags, no final full stop.",
+    "- Each one must work as a carousel of plant photographs with short text on them.",
+    "- Honest: no invented numbers, no fake urgency, no promise the carousel cannot keep.",
+    "",
+    input.exclude.length > 0
+      ? "## Already used or already seen - never propose any of these, nor the same idea reworded:"
+      : "",
+    ...input.exclude.map((h) => `- ${h}`),
+  ]
+    .filter((l) => l !== "")
+    .join("\n");
+
+  try {
+    const response = await withRetry(() =>
+      ai.models.generateContent({
+        model: config.gemini.textModel,
+        contents: prompt,
+        config: {
+          systemInstruction: [
+            "You write for a houseplant influencer on TikTok, a woman talking to her own community.",
+            ...creatorVoice(["fr"]),
+          ].join("\n"),
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "object",
+            properties: { hooks: { type: "array", items: { type: "string" } } },
+            required: ["hooks"],
+          } as unknown as Record<string, unknown>,
+          temperature: 1.0,
+        },
+      }),
+    );
+    const raw = response.text;
+    if (!raw) throw upstream("Gemini n'a proposé aucun hook.");
+    let parsed: { hooks?: unknown };
+    try {
+      parsed = JSON.parse(raw) as { hooks?: unknown };
+    } catch {
+      throw upstream("Les hooks proposés sont revenus illisibles.");
+    }
+    return Array.isArray(parsed.hooks)
+      ? parsed.hooks
+          .filter((h): h is string => typeof h === "string")
+          .map((h) => h.trim().replace(/[.。]+$/, ""))
+          .filter(Boolean)
+      : [];
+  } catch (err) {
+    if (err && typeof err === "object" && "code" in err) throw err;
+    wrapUpstream(err, "la proposition de hooks");
   }
 }
