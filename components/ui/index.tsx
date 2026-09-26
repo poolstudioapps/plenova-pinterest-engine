@@ -17,6 +17,7 @@ export { Picker, MultiPicker, type PickerOption } from "./Picker";
 export { SortableGrid, FileDropZone } from "./Sortable";
 export { Menu, MenuItem, RowMenu, RowMenuItem } from "./Menu";
 export { Dialog } from "./Dialog";
+export { Pager, paginate, PAGE_SIZE } from "./Pager";
 
 /* --------------------------------------------------------------- layout -- */
 

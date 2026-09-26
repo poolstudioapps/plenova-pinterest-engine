@@ -53,8 +53,9 @@ export async function spyOverview(): Promise<SpyOverview> {
   const competitors = new Set(accounts.filter((a) => !a.team).map((a) => a.username));
   return {
     accounts: accounts.filter((a) => !a.team),
-    // History imports keep only a cover: they feed the hooks, not these lists.
-    posts: posts.filter((p) => p.mediaType === "carousel" && !p.fromHistory && !ours.has(p.username)),
+    // Every competitor carousel, history imports included (their slides are
+    // fetched on the next pass; until then they cannot be rebuilt).
+    posts: posts.filter((p) => p.mediaType === "carousel" && !ours.has(p.username)),
     // Only what is still worth a look here: followed competitors, or the pass itself ("*").
     run: run ? { ...run, errors: run.errors.filter((e) => e.username === "*" || competitors.has(e.username)) } : null,
   };

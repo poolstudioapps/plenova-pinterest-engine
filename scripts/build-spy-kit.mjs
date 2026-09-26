@@ -106,6 +106,13 @@ demande un code d'accès : dans l'app, Spy > Comptes > Ordinateurs >
 Si Windows affiche « Windows a protégé votre ordinateur » : « Informations
 complémentaires » puis « Exécuter quand même » (une seule fois).
 
+LE LANCER DEPUIS L'APP
+----------------------
+Après ce premier double-clic, le bouton « Lancer le spy » de l'app (page Spy)
+ouvre ce dossier tout seul : le navigateur demande « Ouvrir Plenova Spy ? »,
+accepte. Si tu déplaces le dossier, refais un double-clic ici pour que le
+bouton le retrouve.
+
 AJOUTER OU RETIRER DES COMPTES
 ------------------------------
 Dans l'app uniquement : Spy > Comptes pour les concurrents, page Versus pour

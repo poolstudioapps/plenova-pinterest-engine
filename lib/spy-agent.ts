@@ -122,6 +122,8 @@ export interface AgentPlanAccount {
   known: string[];
   /** Older posts to fetch once (the account's history), whatever their age. */
   backfill: string[];
+  /** Stored with their cover only (history import): their slides are fetched now. */
+  complete: string[];
 }
 
 /** Every row of a query, past PostgREST's 1000-row pages. */
@@ -144,9 +146,14 @@ export async function agentPlan(): Promise<AgentPlanAccount[]> {
     .order("username");
   check("lecture des comptes", error);
 
-  const stored = await everyRow<{ id: string; username: string; posted_at: string | null }>(
-    (from, to) => db().from("spy_posts").select("id, username, posted_at").order("id").range(from, to),
+  const stored = await everyRow<{ id: string; username: string; posted_at: string | null; from_history: boolean }>(
+    (from, to) => db().from("spy_posts").select("id, username, posted_at, from_history").order("id").range(from, to),
     "lecture des posts connus",
+  );
+  // Taken out on purpose (the < 50k views clean): never brought back.
+  const removed = await everyRow<{ id: string; username: string }>(
+    (from, to) => db().from("spy_removed").select("id, username").order("id").range(from, to),
+    "lecture des posts retirés",
   );
   const queued = await everyRow<{ id: string; username: string }>(
     (from, to) => db().from("spy_backfill").select("id, username").order("added_at").range(from, to),
@@ -166,7 +173,7 @@ export async function agentPlan(): Promise<AgentPlanAccount[]> {
 
   // Queued posts already stored (the latest ones, harvested with the rest of
   // the grid) leave the queue now: nothing would ever fetch them again.
-  const have = new Set(stored.map((r) => r.id));
+  const have = new Set([...stored.map((r) => r.id), ...removed.map((r) => r.id)]);
   const already = queued.filter((q) => have.has(q.id));
   for (const username of new Set(already.map((q) => q.username))) {
     await dropFromBackfill(username, already.filter((q) => q.username === username).map((q) => q.id));
@@ -188,12 +195,21 @@ export async function agentPlan(): Promise<AgentPlanAccount[]> {
       username,
       ours,
       windowDays,
-      stored: own.filter((r) => at(r) >= windowFrom).map((r) => r.id),
+      stored: [
+        ...own.filter((r) => at(r) >= windowFrom).map((r) => r.id),
+        ...removed.filter((r) => r.username === username).map((r) => r.id),
+      ],
       known: own.filter((r) => at(r) >= refreshFrom).map((r) => r.id),
       backfill: pending
         .filter((q) => q.username === username)
         .slice(0, BACKFILL_PER_PASS)
         .map((q) => q.id),
+      complete: ours
+        ? []
+        : own
+            .filter((r) => r.from_history)
+            .slice(0, BACKFILL_PER_PASS)
+            .map((r) => r.id),
     };
   });
 }
@@ -324,13 +340,6 @@ export async function recordAgentPost(raw: unknown): Promise<{ created: boolean 
 
   const { data: existing, error: readError } = await db().from("spy_posts").select("id").eq("id", id).maybeSingle();
   check("lecture d'un post", readError);
-  if (existing) {
-    const { error } = await db().from("spy_posts").update(stats).eq("id", id);
-    check("mise à jour des chiffres", error);
-    await dropFromBackfill(username, [id]);
-    return { created: false };
-  }
-
   // Only pictures this app stored itself, for this very post.
   const own = `${db().storage.from(BUCKET).getPublicUrl("").data.publicUrl.replace(/\/+$/, "")}/${username}/${id}/`;
   const images = (Array.isArray(p.images) ? p.images : [])
@@ -342,6 +351,19 @@ export async function recordAgentPost(raw: unknown): Promise<{ created: boolean 
       ...(Number(i.width) > 0 ? { width: Number(i.width) } : {}),
       ...(Number(i.height) > 0 ? { height: Number(i.height) } : {}),
     }));
+  if (existing) {
+    // A history import brought in with its cover only: its slides arrive now.
+    const completing = p.complete === true && images.length > 0 && !account.team;
+    const { error } = await db()
+      .from("spy_posts")
+      .update({ ...stats, ...(completing ? { images, from_history: false } : {}) })
+      .eq("id", id)
+      .eq("username", username);
+    check("mise à jour des chiffres", error);
+    await dropFromBackfill(username, [id]);
+    return { created: false };
+  }
+
   if (images.length === 0) throw badRequest("Un nouveau post arrive avec ses images.");
   const mediaType: SpyMediaType = p.mediaType === "video" ? "video" : "carousel";
   const postedAt = typeof p.postedAt === "string" && !Number.isNaN(Date.parse(p.postedAt)) ? p.postedAt : null;

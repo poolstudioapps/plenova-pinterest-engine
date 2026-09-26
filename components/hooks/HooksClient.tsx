@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { HookDetail } from "@/components/hooks/HookDetail";
 import { HookSuggestions } from "@/components/hooks/HookSuggestions";
@@ -15,6 +15,8 @@ import {
   Picker,
   RowMenu,
   RowMenuItem,
+  Pager,
+  paginate,
 } from "@/components/ui";
 import type { PlantIdentity } from "@/lib/data/localize";
 import { HOOK_MAX_LENGTH, hookKey, sameHook } from "@/lib/hook-key";
@@ -55,6 +57,8 @@ export function HooksClient({
   const [unread, setUnread] = useState(initialUnread);
   const [reading, setReading] = useState(false);
   const [view, setView] = useState<"tiers" | "list">("tiers");
+  const [page, setPage] = useState(1);
+  const listTop = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<Status>("all");
   const [source, setSource] = useState<Source>("all");
   const [account, setAccount] = useState("");
@@ -98,6 +102,34 @@ export function HooksClient({
           : Date.parse(h.createdAt);
     return score(b) - score(a);
   });
+
+  // The tier list, flattened in its reading order (S to D, then ours without
+  // numbers), so it can be cut in pages of 20 like everything else.
+  const ranked = [
+    ...TIERS.flatMap((tier) =>
+      shown
+        .filter((h) => tiers.get(h.id) === tier)
+        .sort((a, b) => (b.spy?.views ?? 0) - (a.spy?.views ?? 0))
+        .map((hook) => ({ hook, tier: tier as Tier | null })),
+    ),
+    ...(source !== "spy" && !account && !format
+      ? shown.filter((h) => !h.spy).map((hook) => ({ hook, tier: null as Tier | null }))
+      : []),
+  ];
+  const tierPage = paginate(ranked, page);
+  const listPage = paginate(sorted, page);
+  const current = view === "tiers" ? tierPage : listPage;
+  const total = view === "tiers" ? ranked.length : sorted.length;
+
+  // A new filter, sort or view starts again at page 1.
+  useEffect(() => {
+    setPage(1);
+  }, [view, status, source, account, format, search, sort]);
+
+  function goTo(next: number) {
+    setPage(next);
+    listTop.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   const twin = draft.trim().length > 3 ? hooks.find((h) => sameHook(h.text, draft)) : undefined;
   const open = detail ? hooks.find((h) => h.id === detail) : undefined;
@@ -457,52 +489,48 @@ export function HooksClient({
       {hooks.length === 0 ? (
         <EmptyState title={t("hooks.empty")} description={t("hooks.emptyBody")} />
       ) : view === "tiers" ? (
-        <div className="space-y-4">
+        <div ref={listTop} className="scroll-mt-4 space-y-4">
           <p className="text-[12.5px] leading-relaxed text-[var(--color-ink-faint)]">
             {t("hooks.tierHint")} · {t("hooks.shown", { n: shown.length })}
           </p>
-          {TIERS.map((tier) => {
-            const inTier = shown
-              .filter((h) => tiers.get(h.id) === tier)
-              .sort((a, b) => (b.spy?.views ?? 0) - (a.spy?.views ?? 0));
+          {ranked.length === 0 ? <p className="text-[13px] text-[var(--color-ink-faint)]">{t("hooks.noMatch")}</p> : null}
+          {/* This page's hooks, grouped under their tier (a tier can span pages). */}
+          {[...TIERS, null].map((tier) => {
+            const onPage = tierPage.items.filter((r) => r.tier === tier).map((r) => r.hook);
+            if (onPage.length === 0) return null;
+            if (tier === null) {
+              return (
+                <section key="ours" className="grid gap-3 md:grid-cols-[120px_minmax(0,1fr)]">
+                  <p className="text-[12.5px] font-semibold text-[var(--color-ink-soft)]">{t("hooks.noStats")}</p>
+                  <ul className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">{onPage.map(tierCard)}</ul>
+                </section>
+              );
+            }
             const floor = tierFloor(tier);
-            if (floor === null) return null;
+            const inTier = ranked.filter((r) => r.tier === tier).length;
             return (
               <section key={tier} className="grid gap-3 md:grid-cols-[120px_minmax(0,1fr)]">
                 <div className="flex items-center gap-3 md:flex-col md:items-start">
                   <TierBadge tier={tier} large />
                   <p className="text-[12px] text-[var(--color-ink-faint)]">
-                    {t("hooks.tierFloor", { n: compactNumber(floor) })}
+                    {floor !== null ? t("hooks.tierFloor", { n: compactNumber(floor) }) : null}
                     <br />
-                    {t("hooks.shown", { n: inTier.length })}
+                    {t("hooks.shown", { n: inTier })}
                   </p>
                 </div>
-                {inTier.length === 0 ? (
-                  <p className="self-center text-[12.5px] text-[var(--color-ink-faint)]">{t("hooks.tierEmpty")}</p>
-                ) : (
-                  <ul className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">{inTier.map(tierCard)}</ul>
-                )}
+                <ul className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">{onPage.map(tierCard)}</ul>
               </section>
             );
           })}
-          {source !== "spy" && !account && !format
-            ? (() => {
-                const ours = shown.filter((h) => !h.spy);
-                return ours.length > 0 ? (
-                  <section className="grid gap-3 md:grid-cols-[120px_minmax(0,1fr)]">
-                    <p className="text-[12.5px] font-semibold text-[var(--color-ink-soft)]">{t("hooks.noStats")}</p>
-                    <ul className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">{ours.map(tierCard)}</ul>
-                  </section>
-                ) : null;
-              })()
-            : null}
+          <Pager page={current.page} pages={current.pages} total={total} onChange={goTo} className="pt-2" />
         </div>
       ) : sorted.length === 0 ? (
         <p className="text-[13px] text-[var(--color-ink-faint)]">{t("hooks.noMatch")}</p>
       ) : (
+        <div ref={listTop} className="scroll-mt-4 space-y-3">
         <Card>
           <ul className="divide-y divide-[var(--color-line)]">
-            {sorted.map((hook) => {
+            {listPage.items.map((hook) => {
               const tier = tiers.get(hook.id);
               return (
                 <li key={hook.id} className="flex flex-wrap items-center gap-3 px-4 py-3 md:px-5">
@@ -600,6 +628,8 @@ export function HooksClient({
             })}
           </ul>
         </Card>
+        <Pager page={current.page} pages={current.pages} total={total} onChange={goTo} />
+        </div>
       )}
 
       {open ? (

@@ -20,6 +20,7 @@
  * last pass (a month for ours). Plus, once, an account's history when the app
  * queued it.
  */
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -270,6 +271,28 @@ function init() {
   }
 }
 
+/**
+ * The app's "Lancer le spy" button opens plenova-spy://run. This tells Windows
+ * (for this user only, no admin rights) that the link means "run this
+ * folder's launcher" - from wherever the folder is now, so a folder that
+ * moved is found again on its next double-click. The link carries nothing
+ * through: the launcher always starts the same way.
+ */
+function registerLauncher() {
+  if (process.platform !== "win32") return;
+  const launcher = path.join(KIT, "Lancer le spy.bat");
+  if (!fs.existsSync(launcher)) return;
+  const key = "HKCU\\Software\\Classes\\plenova-spy";
+  const reg = (...args) => execFileSync("reg", ["add", ...args, "/f"], { stdio: "ignore", windowsHide: true });
+  try {
+    reg(key, "/ve", "/d", "URL:Plenova Spy");
+    reg(key, "/v", "URL Protocol", "/d", "");
+    reg(`${key}\\shell\\open\\command`, "/ve", "/d", `"${launcher}"`);
+  } catch {
+    writeLog("Bouton de l'app non activé (registre Windows inaccessible).\n");
+  }
+}
+
 function saveCache() {
   try {
     if (videosFile) fs.writeFileSync(videosFile, JSON.stringify([...knownVideos].slice(-5000)));
@@ -284,6 +307,8 @@ async function visit(api, account, totals) {
   const stored = new Set(account.stored ?? []);
   const refresh = new Set(account.known ?? []);
   const history = (account.backfill ?? []).filter((id) => !stored.has(id) && !refresh.has(id));
+  // Stored with their cover only: this time, all their slides.
+  const completeSet = new Set(ours ? [] : (account.complete ?? []));
   let profile;
   try {
     profile = await readProfile(username);
@@ -300,7 +325,7 @@ async function visit(api, account, totals) {
   const listed = profile.ids.filter(
     (id) => createdAt(id) >= cutoff && !stored.has(id) && !refresh.has(id) && (ours || !knownVideos.has(id)),
   );
-  const candidates = Array.from(new Set([...listed, ...refresh, ...history]));
+  const candidates = Array.from(new Set([...listed, ...refresh, ...history, ...completeSet]));
   const historySet = new Set(history);
   if (history.length > 0) {
     log(`@${username} : ${history.length} post(s) d'historique à récupérer.`, `  ${dim(`@${username} : ${history.length} post(s) d'historique à récupérer, patience…`)}`);
@@ -352,9 +377,10 @@ async function visit(api, account, totals) {
         saves: post.saves,
       };
       if (oldHistory) body.history = true;
-      if (!refresh.has(id)) {
+      if (completeSet.has(id)) body.complete = true;
+      if (!refresh.has(id) || completeSet.has(id)) {
         // Ours are measured, never rebuilt, and old history is only ranked: a cover is enough.
-        const pictures = ours || oldHistory ? post.pictures.slice(0, 1) : post.pictures;
+        const pictures = ours || (oldHistory && !completeSet.has(id)) ? post.pictures.slice(0, 1) : post.pictures;
         const images = [];
         for (const [i, picture] of pictures.entries()) {
           const name = post.mediaType === "video" ? "cover" : String(i + 1).padStart(2, "0");
@@ -442,6 +468,7 @@ async function openSession() {
 async function main() {
   console.log(bold("\nPlenova Spy\n"));
   init();
+  registerLauncher();
   const { api, accounts } = await openSession();
   if (!accounts.length) {
     log("Aucun compte actif : ajoute-en dans l'app, Spy > Comptes.");

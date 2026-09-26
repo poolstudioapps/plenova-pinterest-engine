@@ -161,6 +161,24 @@ nos comptes, dont les vues comptent sur Versus). Rien d'autre n'est relu.
 `agentPlan` envoie `stored` (à ne pas refaire), `known` (à rafraîchir) et
 `backfill`.
 
+**Bouton « Lancer le spy » (page Spy)** : une page web ne peut ni lancer un
+programme ni connaître l'emplacement d'un fichier (le glisser-déposer demandé
+ne donne pas de chemin). Le spy enregistre donc, à chaque lancement, le lien
+`plenova-spy://` pour l'utilisateur Windows (`HKCU\Software\Classes`, sans
+droits admin) vers le « Lancer le spy.bat » de son dossier ; le bouton ouvre
+`plenova-spy://run` et suit ensuite le passage (`GET /api/spy` toutes les 5 puis
+20 s). Rien de l'URL n'est transmis au programme.
+
+**Nettoyage du 26/09/2026 (demande de l'utilisateur)** : carrousels concurrents
+de plus de 7 jours restés sous 50 000 vues supprimés (1 226, avec leurs images et
+les 629 idées de hooks tirées d'eux, jamais utilisées), sauvegarde locale dans
+`.data/backups/`. Leurs ids sont dans `spy_removed` : `agentPlan` les met dans
+`stored`, le spy ne les rapporte jamais. Tous les carrousels concurrents restants
+s'affichent dans le Spy, historique compris ; ceux importés en couverture seule
+(`from_history`) reçoivent leurs slides au passage suivant (`complete` dans le
+plan, `complete: true` sur `/posts`), puis deviennent traitables. Spy et Hooks
+s'affichent par pages de 20 (`components/ui/Pager.tsx`).
+
 **Historique d'un compte (`spy_backfill`)** : la page embed ne montre que les
 ~13 derniers posts, et la grille du profil s'arrête vers 30-50 posts sans
 session TikTok (mesuré ; item_list signé, API officielle sans `video.list`). Pour
