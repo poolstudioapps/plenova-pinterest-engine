@@ -4,7 +4,7 @@ import type { ContentLocale } from "@/lib/i18n";
 import type { OverlayStyle } from "@/lib/overlay";
 import { runRepost, startRepost, type RepostImageMode } from "@/lib/repost-carousel";
 import { getStore } from "@/lib/store";
-import type { CarouselRecord, SpyAccount, SpyPost, SpyRun } from "@/lib/types";
+import type { CarouselRecord, SpyAccount, SpyPost, SpyRun, Team } from "@/lib/types";
 
 /**
  * The spy, app side.
@@ -38,11 +38,20 @@ export interface SpyOverview {
   run: SpyRun | null;
 }
 
+/** Asked of someone who has no team yet (address without one, no choice made). */
+const NO_TEAM = "Choisis d'abord pour quelle équipe tu traites, en haut de la page Spy.";
+
+/** A post as one team sees it: that team's status on top, both teams' in `teams`. */
+export function forTeam(post: SpyPost, team: Team | null): SpyPost {
+  const state = team ? post.teams[team] : { status: "new" as const, carouselId: null, handledAt: null };
+  return { ...post, ...state };
+}
+
 /**
  * The spy page's data: competitors only. Our own accounts, their posts and
  * their errors belong to the versus page, where they are measured.
  */
-export async function spyOverview(): Promise<SpyOverview> {
+export async function spyOverview(team: Team | null): Promise<SpyOverview> {
   const store = getStore();
   const [accounts, posts, run] = await Promise.all([
     store.listSpyAccounts(),
@@ -55,7 +64,9 @@ export async function spyOverview(): Promise<SpyOverview> {
     accounts: accounts.filter((a) => !a.team),
     // Every competitor carousel, history imports included (their slides are
     // fetched on the next pass; until then they cannot be rebuilt).
-    posts: posts.filter((p) => p.mediaType === "carousel" && !p.removed && !ours.has(p.username)),
+    posts: posts
+      .filter((p) => p.mediaType === "carousel" && !p.removed && !ours.has(p.username))
+      .map((p) => forTeam(p, team)),
     // Only what is still worth a look here: followed competitors, or the pass itself ("*").
     run: run ? { ...run, errors: run.errors.filter((e) => e.username === "*" || competitors.has(e.username)) } : null,
   };
@@ -125,16 +136,17 @@ export async function removeSpyAccount(username: string): Promise<void> {
   if (account?.team) await store.deleteSpyPostsOf(username);
 }
 
-/** Sets a carousel aside, or brings it back to the ones to look at. */
-export async function setSpyPostHandled(id: string, status: unknown): Promise<SpyPost> {
+/** Sets a carousel aside for one team, or brings it back to that team's list. */
+export async function setSpyPostHandled(id: string, status: unknown, team: Team | null): Promise<SpyPost> {
   if (status !== "dismissed" && status !== "new") {
     throw badRequest("Statut inconnu pour ce carrousel.");
   }
+  if (!team) throw badRequest(NO_TEAM);
   const store = getStore();
   const post = await store.getSpyPost(id);
   if (!post) throw notFound("Ce carrousel n'est plus dans le spy.");
-  await store.setSpyPostStatus(id, status, status === "new" ? null : post.carouselId);
-  return (await store.getSpyPost(id)) ?? post;
+  await store.setSpyPostState(id, team, status, status === "new" ? null : post.teams[team].carouselId);
+  return forTeam((await store.getSpyPost(id)) ?? post, team);
 }
 
 /**
@@ -170,7 +182,9 @@ export interface ProcessSpyInput {
 export async function startSpyProcessing(
   id: string,
   input: ProcessSpyInput,
+  team: Team | null,
 ): Promise<{ carousel: CarouselRecord; run: () => Promise<void> }> {
+  if (!team) throw badRequest(NO_TEAM);
   const store = getStore();
   const post = await store.getSpyPost(id);
   if (!post) throw notFound("Ce carrousel n'est plus dans le spy.");
@@ -183,7 +197,7 @@ export async function startSpyProcessing(
   if (owner?.team) throw badRequest("Ce post vient d'un de nos comptes : il n'est pas à refaire.");
   if (post.images.length === 0) throw badRequest("Ce carrousel n'a aucune image enregistrée.");
   // Twice would make two carousels of it, and lose track of the first.
-  if (post.status === "processed") {
+  if (post.teams[team].status === "processed") {
     throw conflict("Ce carrousel est déjà traité. Remets-le à traiter dans le Spy pour le refaire.");
   }
 
@@ -196,7 +210,7 @@ export async function startSpyProcessing(
   };
   const carousel = await startRepost(repost);
   try {
-    await store.setSpyPostStatus(post.id, "processed", carousel.id);
+    await store.setSpyPostState(post.id, team, "processed", carousel.id);
   } catch (err) {
     // Not recorded as processed: no job either, rather than one nobody can find.
     await store.deleteCarousel(carousel.id).catch(() => undefined);

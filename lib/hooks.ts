@@ -7,7 +7,7 @@ import { badRequest, conflict, notFound } from "@/lib/errors";
 import { generateHookIdeas } from "@/lib/gemini";
 import { HOOK_MAX_LENGTH, hookKey, sameHook } from "@/lib/hook-key";
 import { getStore } from "@/lib/store";
-import type { Hook, HookSource, HookStatus, HookView, SpyPost } from "@/lib/types";
+import type { Hook, HookSource, HookStatus, HookView, SpyPost, Team } from "@/lib/types";
 
 /**
  * The hook bank: every cover line already used, kept as an idea, or seen on a
@@ -61,7 +61,7 @@ export async function listHooks(): Promise<Hook[]> {
  * it came from - fresh every day, since the spy refreshes them - and how that
  * post did against its own account's usual views.
  */
-export async function listHookViews(): Promise<{ hooks: HookView[]; unread: number }> {
+export async function listHookViews(team: Team | null = null): Promise<{ hooks: HookView[]; unread: number }> {
   const store = getStore();
   const [hooks, posts, accounts] = await Promise.all([
     store.listHooks(),
@@ -101,7 +101,8 @@ export async function listHookViews(): Promise<{ hooks: HookView[]; unread: numb
             lang: post.hookLang,
             format: post.hookFormat,
             accountMedian: medians.get(post.username) ?? null,
-            postStatus: post.status,
+            // Where the viewing team stands with that post.
+            postStatus: team ? post.teams[team].status : "new",
             fromHistory: Boolean(post.fromHistory),
           }
         : null,

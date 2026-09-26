@@ -6,12 +6,14 @@ import { listHookViews } from "@/lib/hooks";
 import { DEFAULT_CONTENT_LOCALE, translator } from "@/lib/i18n";
 import { isPexelsConfigured } from "@/lib/pexels";
 import { getStatus } from "@/lib/tiktok";
+import { viewer } from "@/lib/viewer";
 
 export const dynamic = "force-dynamic";
 
 export default async function HooksPage() {
   const t = translator();
-  const [{ hooks, unread }, status] = await Promise.all([listHookViews(), getStatus()]);
+  const { team } = await viewer();
+  const [{ hooks, unread }, status] = await Promise.all([listHookViews(team), getStatus()]);
   // A spied carousel rebuilt from here is written in the accounts' languages.
   const languages = Array.from(new Set(status.accounts.map((a) => a.language)));
   return (

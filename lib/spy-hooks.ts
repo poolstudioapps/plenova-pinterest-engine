@@ -148,20 +148,21 @@ async function fileSpyHook(
     return false;
   }
 
-  // Used only if the post was rebuilt and its carousel is still there.
-  const carousel = post.status === "processed" && post.carouselId ? await store.getCarousel(post.carouselId) : null;
-  const used = Boolean(carousel && carousel.status !== "failed");
+  // Used only if a team rebuilt the post and its carousel is still there.
+  const done = Object.values(post.teams).find((s) => s.status === "processed" && s.carouselId);
+  const carousel = done?.carouselId ? await store.getCarousel(done.carouselId) : null;
+  const used = Boolean(done && carousel && carousel.status !== "failed");
   const hook: Hook = {
     id: `hk_${randomToken(9)}`,
     text,
     key,
     status: used ? "used" : "idea",
     source: "spy",
-    carouselId: used ? post.carouselId : null,
+    carouselId: used ? (done?.carouselId ?? null) : null,
     spyPostId: post.id,
     createdAt: now,
     updatedAt: now,
-    usedAt: used ? (post.handledAt ?? now) : null,
+    usedAt: used ? (done?.handledAt ?? now) : null,
   };
   await store.saveHook(hook);
   bank.push(hook);

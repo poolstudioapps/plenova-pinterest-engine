@@ -16,6 +16,8 @@ import type {
   SpyPostStatus,
   SpyRun,
   TikTokAccount,
+  SpyTeamState,
+  Team,
 } from "@/lib/types";
 import {
   applyFilter,
@@ -544,7 +546,7 @@ export class SupabaseStore implements EngineStore {
     const rows = await allRows("lecture des carrousels espionnés", (from, to) =>
       db()
         .from("spy_posts")
-        .select("*")
+        .select(SPY_POST_COLUMNS)
         .order("posted_at", { ascending: false, nullsFirst: false })
         .order("id")
         .range(from, to),
@@ -553,24 +555,28 @@ export class SupabaseStore implements EngineStore {
   }
 
   async getSpyPost(id: string): Promise<SpyPost | null> {
-    const { data, error } = await db().from("spy_posts").select("*").eq("id", id).maybeSingle();
+    const { data, error } = await db().from("spy_posts").select(SPY_POST_COLUMNS).eq("id", id).maybeSingle();
     check("lecture d'un carrousel espionné", error);
     return data ? spyPostFromRow(data) : null;
   }
 
-  async setSpyPostStatus(
+  async setSpyPostState(
     id: string,
+    team: Team,
     status: SpyPostStatus,
     carouselId: string | null,
   ): Promise<void> {
-    const { error } = await db()
-      .from("spy_posts")
-      .update({
-        status,
-        carousel_id: carouselId,
-        handled_at: status === "new" ? null : new Date().toISOString(),
-      })
-      .eq("id", id);
+    // "To process" is simply no row for that team.
+    const { error } =
+      status === "new"
+        ? await db().from("spy_post_states").delete().eq("post_id", id).eq("team", team)
+        : await db().from("spy_post_states").upsert({
+            post_id: id,
+            team,
+            status,
+            carousel_id: carouselId,
+            handled_at: new Date().toISOString(),
+          });
     check("mise à jour d'un carrousel espionné", error);
   }
 
@@ -670,6 +676,24 @@ function spyAccountFromRow(row: Record<string, unknown>): SpyAccount {
   };
 }
 
+/** A spied post with where each team stands with it. */
+const SPY_POST_COLUMNS = "*, spy_post_states(team, status, carousel_id, handled_at)";
+
+const UNTOUCHED: SpyTeamState = { status: "new", carouselId: null, handledAt: null };
+
+function spyTeamsFromRow(row: Record<string, unknown>): Record<Team, SpyTeamState> {
+  const teams: Record<Team, SpyTeamState> = { stark: UNTOUCHED, mousk: UNTOUCHED };
+  for (const s of (row.spy_post_states as Record<string, unknown>[] | null) ?? []) {
+    if (s.team !== "stark" && s.team !== "mousk") continue;
+    teams[s.team] = {
+      status: (s.status as SpyPostStatus) ?? "new",
+      carouselId: (s.carousel_id as string | null) ?? null,
+      handledAt: (s.handled_at as string | null) ?? null,
+    };
+  }
+  return teams;
+}
+
 function spyPostFromRow(row: Record<string, unknown>): SpyPost {
   return {
     id: row.id as string,
@@ -684,11 +708,12 @@ function spyPostFromRow(row: Record<string, unknown>): SpyPost {
     shares: Number(row.shares ?? 0),
     saves: Number(row.saves ?? 0),
     images: Array.isArray(row.images) ? (row.images as SpyPost["images"]) : [],
-    status: (row.status as SpyPostStatus) ?? "new",
-    carouselId: (row.carousel_id as string | null) ?? null,
+    // Resolved per team by lib/spy; the old single status columns are no longer read.
+    status: "new",
+    carouselId: null,
     firstSeenAt: row.first_seen_at as string,
     statsUpdatedAt: row.stats_updated_at as string,
-    handledAt: (row.handled_at as string | null) ?? null,
+    handledAt: null,
     hookText: (row.hook_text as string | null) ?? null,
     hookLang: (row.hook_lang as string | null) ?? null,
     hookFormat: (row.hook_format as SpyPost["hookFormat"]) ?? null,
@@ -696,6 +721,7 @@ function spyPostFromRow(row: Record<string, unknown>): SpyPost {
     hookCheckedAt: (row.hook_checked_at as string | null) ?? null,
     fromHistory: row.from_history === true,
     removed: row.removed === true,
+    teams: spyTeamsFromRow(row),
   };
 }
 

@@ -429,6 +429,14 @@ export type SpyPostStatus = "new" | "processed" | "dismissed";
 export type SpyMediaType = "carousel" | "video";
 
 /** One carousel found on a watched account, with its numbers. */
+/** Where one team stands with a spied carousel. */
+export interface SpyTeamState {
+  status: SpyPostStatus;
+  /** The carousel it was turned into, once processed. */
+  carouselId: string | null;
+  handledAt: string | null;
+}
+
 export interface SpyPost {
   /** TikTok's own post id. */
   id: string;
@@ -444,8 +452,11 @@ export interface SpyPost {
   saves: number;
   /** The slides, copied to our storage: TikTok's own links expire. */
   images: { url: string; width?: number; height?: number }[];
+  /**
+   * status, carouselId, handledAt: where the viewing team stands (lib/spy
+   * forTeam). Straight from the store they read "new" - use `teams`.
+   */
   status: SpyPostStatus;
-  /** The carousel it was turned into, once processed. */
   carouselId: string | null;
   firstSeenAt: string;
   statsUpdatedAt: string;
@@ -464,6 +475,8 @@ export interface SpyPost {
    * cannot be rebuilt (its slides were not kept).
    */
   fromHistory: boolean;
+  /** Each team handles the carousel on its own (asked for by the user). */
+  teams: Record<Team, SpyTeamState>;
   /**
    * Deleted by hand from the Spy page: its pictures are gone, it is off the
    * Spy page for good, and the spy never brings it back. Its numbers stay, for

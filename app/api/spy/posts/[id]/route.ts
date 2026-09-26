@@ -1,6 +1,7 @@
 import { handle, ok } from "@/lib/api";
 import { badRequest } from "@/lib/errors";
 import { removeSpyPost, setSpyPostHandled } from "@/lib/spy";
+import { viewer } from "@/lib/viewer";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,7 @@ export async function PATCH(request: Request, { params }: Params) {
     } catch {
       throw badRequest("Le corps de la requête n'est pas du JSON valide.");
     }
-    return ok({ post: await setSpyPostHandled(id, body.status) });
+    return ok({ post: await setSpyPostHandled(id, body.status, (await viewer()).team) });
   });
 }
 

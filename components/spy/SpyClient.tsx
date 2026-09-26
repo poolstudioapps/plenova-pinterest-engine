@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Button,
@@ -19,8 +20,9 @@ import { SpyAccounts } from "@/components/spy/SpyAccounts";
 import { SpyPostCard } from "@/components/spy/SpyPostCard";
 import { translator, type ContentLocale, type TranslationKey } from "@/lib/i18n";
 import { sortSpyPosts, type SpySort } from "@/lib/spy-format";
-import type { SpyAccount, SpyPost, SpyRun } from "@/lib/types";
+import type { SpyAccount, SpyPost, SpyRun, SpyTeamState, Team } from "@/lib/types";
 import { cn, relativeTime } from "@/lib/utils";
+import { TEAM_META } from "@/lib/versus-stats";
 
 /** Over this long without a pass, the page says the script has stopped. */
 const STALE_MS = 36 * 3600 * 1000;
@@ -33,19 +35,34 @@ const STALE_MS = 36 * 3600 * 1000;
 const LAUNCH_URL = "plenova-spy://run";
 const LAUNCH_READY_KEY = "plenova.spyLauncherReady";
 
-const TABS: { key: "inbox" | "done" | "accounts"; label: TranslationKey }[] = [
+type Tab = "inbox" | Team | "accounts";
+
+/** "To process" is the viewer's team's; each team has its own "processed" tab. */
+const TABS: { key: Tab; label: TranslationKey }[] = [
   { key: "inbox", label: "spy.tabInbox" },
-  { key: "done", label: "spy.tabDone" },
+  { key: "stark", label: "spy.tabDoneStark" },
+  { key: "mousk", label: "spy.tabDoneMousk" },
   { key: "accounts", label: "spy.tabAccounts" },
 ];
 
+/** Same name as TEAM_COOKIE in lib/viewer.ts (server side). */
+const TEAM_COOKIE = "plenova_team";
+const UNTOUCHED: SpyTeamState = { status: "new", carouselId: null, handledAt: null };
+
+/** A post as one team sees it: that team's status on top. */
+function asTeam(post: SpyPost, team: Team | null): SpyPost {
+  return { ...post, ...(team ? post.teams[team] : UNTOUCHED) };
+}
+
 /**
- * The spy page: what the watched accounts published, what was done with it,
- * and which accounts are watched.
+ * The spy page: what the watched accounts published, what each team did with
+ * it, and which accounts are watched.
  *
- * A carousel is shown once. Processing it or setting it aside moves it to
- * "Déjà traités" for good - the script never brings back a post it already
- * knows, it only refreshes its numbers.
+ * Mr Stark and Mr Mousk work through the same carousels each on their own
+ * (asked for by the user): what one team processes or sets aside stays "to
+ * process" for the other. The signed-in address says which team is looking;
+ * an address without one picks it here. Each team's handled carousels have
+ * their own tab, and only that team can put them back.
  */
 export function SpyClient({
   initialPosts,
@@ -53,18 +70,25 @@ export function SpyClient({
   run: initialRun,
   defaultLanguages,
   hasPexels,
+  team,
+  teamFixed,
 }: {
   initialPosts: SpyPost[];
   initialAccounts: SpyAccount[];
   run: SpyRun | null;
   defaultLanguages: ContentLocale[];
   hasPexels: boolean;
+  /** Who the viewer processes for; null until chosen. */
+  team: Team | null;
+  /** Set by the signed-in address: shown, not chosen. */
+  teamFixed: boolean;
 }) {
   const t = translator();
+  const router = useRouter();
   const [posts, setPosts] = useState(initialPosts);
   const [accounts, setAccounts] = useState(initialAccounts);
   const [run, setRun] = useState(initialRun);
-  const [tab, setTab] = useState<"inbox" | "done" | "accounts">("inbox");
+  const [tab, setTab] = useState<Tab>("inbox");
   const [sort, setSort] = useState<SpySort>("engagement");
   const [account, setAccount] = useState("");
   const [page, setPage] = useState(1);
@@ -78,11 +102,12 @@ export function SpyClient({
   const listTop = useRef<HTMLDivElement>(null);
 
   const byName = useMemo(() => new Map(accounts.map((a) => [a.username, a])), [accounts]);
-  const inbox = posts.filter((p) => p.status === "new");
-  const done = posts.filter((p) => p.status !== "new");
+  const inbox = team ? posts.filter((p) => p.teams[team].status === "new").map((p) => asTeam(p, team)) : [];
+  const doneBy = (who: Team) => posts.filter((p) => p.teams[who].status !== "new").map((p) => asTeam(p, who));
+  const listed = tab === "inbox" ? inbox : tab === "stark" || tab === "mousk" ? doneBy(tab) : [];
   const shown = sortSpyPosts(
-    (tab === "done" ? done : inbox).filter((p) => !account || p.username === account),
-    tab === "done" ? "recent" : sort,
+    listed.filter((p) => !account || p.username === account),
+    tab === "inbox" ? sort : "recent",
   );
   // Twenty cards a page: a strip of slides each, and a few hundred of them froze the page.
   const current = paginate(shown, page);
@@ -146,12 +171,30 @@ export function SpyClient({
     else setLaunchHelp(true);
   }
 
+  /** Where the viewer's team stands with a post, changed here at once. */
+  function withState(post: SpyPost, state: SpyTeamState): SpyPost {
+    if (!team) return post;
+    return { ...post, teams: { ...post.teams, [team]: state } };
+  }
+
+  function chooseTeam(next: Team) {
+    document.cookie = `${TEAM_COOKIE}=${next}; path=/; max-age=31536000; samesite=lax`;
+    router.refresh();
+  }
+
   async function setStatus(post: SpyPost, status: "new" | "dismissed") {
+    if (!team) return;
     setError(null);
+    const before = posts.find((p) => p.id === post.id) ?? post;
     setPosts((current) =>
       current.map((p) =>
         p.id === post.id
-          ? { ...p, status, handledAt: status === "new" ? null : new Date().toISOString(), ...(status === "new" ? { carouselId: null } : {}) }
+          ? withState(
+              p,
+              status === "new"
+                ? UNTOUCHED
+                : { status, carouselId: p.teams[team].carouselId, handledAt: new Date().toISOString() },
+            )
           : p,
       ),
     );
@@ -164,7 +207,7 @@ export function SpyClient({
       if (!res.ok) throw new Error();
     } catch {
       // Only this post goes back: anything else changed meanwhile stays.
-      setPosts((current) => current.map((p) => (p.id === post.id ? post : p)));
+      setPosts((current) => current.map((p) => (p.id === post.id ? before : p)));
       setError(t("preview.requestFailed"));
     }
   }
@@ -258,10 +301,15 @@ export function SpyClient({
       ) : null}
 
       <Card className="overflow-hidden">
-        <div role="tablist" className="flex border-b border-[var(--color-line)]">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 border-b border-[var(--color-line)]">
+        <div role="tablist" className="-mb-px flex flex-wrap">
           {TABS.map((item) => {
             const count =
-              item.key === "inbox" ? inbox.length : item.key === "done" ? done.length : accounts.length;
+              item.key === "inbox"
+                ? inbox.length
+                : item.key === "accounts"
+                  ? accounts.length
+                  : posts.filter((p) => p.teams[item.key as Team].status !== "new").length;
             return (
               <button
                 key={item.key}
@@ -283,6 +331,37 @@ export function SpyClient({
               </button>
             );
           })}
+        </div>
+          {/* Who the viewer processes for: from the address, or picked here. */}
+          <div className="flex items-center gap-2 px-4 py-2 text-[12.5px] text-[var(--color-ink-soft)]">
+            {teamFixed && team ? (
+              <span className="flex items-center gap-1.5">
+                <span className="size-2 rounded-full" style={{ background: TEAM_META[team].color }} />
+                {t("spy.teamFor", { team: TEAM_META[team].name })}
+              </span>
+            ) : (
+              <>
+                <span>{t("spy.teamPick")}</span>
+                <div className="flex gap-1 rounded-full bg-[var(--color-surface-muted)] p-0.5">
+                  {(["stark", "mousk"] as const).map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => chooseTeam(option)}
+                      aria-pressed={team === option}
+                      className={cn(
+                        "rounded-full px-3 py-1 font-semibold transition-colors",
+                        team === option ? "text-white" : "text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]",
+                      )}
+                      style={team === option ? { background: TEAM_META[option].color } : undefined}
+                    >
+                      {TEAM_META[option].name}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
         {tab !== "accounts" ? (
@@ -325,7 +404,9 @@ export function SpyClient({
       {error ? <Notice tone="danger">{error}</Notice> : null}
       {info ? <Notice tone="info">{info}</Notice> : null}
 
-      {tab === "accounts" ? null : shown.length === 0 ? (
+      {tab === "accounts" ? null : tab === "inbox" && !team ? (
+        <EmptyState title={t("spy.teamNoneTitle")} description={t("spy.teamNoneBody")} />
+      ) : shown.length === 0 ? (
         <EmptyState
           title={tab === "inbox" ? t("spy.inboxEmpty") : t("spy.doneEmpty")}
           description={tab === "inbox" ? t("spy.inboxEmptyBody") : t("spy.doneEmptyBody")}
@@ -370,9 +451,11 @@ export function SpyClient({
                         {t("spy.openCarousel")}
                       </ButtonLink>
                     ) : null}
-                    <Button size="sm" variant="ghost" onClick={() => void setStatus(post, "new")}>
-                      {t("spy.restore")}
-                    </Button>
+                    {tab === team ? (
+                      <Button size="sm" variant="ghost" onClick={() => void setStatus(post, "new")}>
+                        {t("spy.restore")}
+                      </Button>
+                    ) : null}
                     <span className="text-[12px] text-[var(--color-ink-faint)]">
                       {post.handledAt ? relativeTime(post.handledAt) : ""}
                     </span>
@@ -384,7 +467,7 @@ export function SpyClient({
                     >
                       {t("spy.openTikTok")}
                     </a>
-                    {removeMenu(post)}
+                    {tab === team ? removeMenu(post) : null}
                   </>
                 )
               }
@@ -428,7 +511,7 @@ export function SpyClient({
             setPosts((current) =>
               current.map((p) =>
                 p.id === postId
-                  ? { ...p, status: "processed", carouselId: carousel.id, handledAt: new Date().toISOString() }
+                  ? withState(p, { status: "processed", carouselId: carousel.id, handledAt: new Date().toISOString() })
                   : p,
               ),
             )

@@ -13,6 +13,8 @@ import type {
   SpyRun,
   TikTokAccount,
   TikTokAccounts,
+  SpyTeamState,
+  Team,
 } from "@/lib/types";
 import { filterMedia, type MediaFilter } from "@/lib/media";
 import type { ContentLocale } from "@/lib/i18n";
@@ -44,6 +46,18 @@ function delay(ms: number): Promise<void> {
 /** A copy, so what is remembered cannot be mutated by a later caller. */
 function clone(doc: StateDocument): StateDocument {
   return JSON.parse(JSON.stringify(doc)) as StateDocument;
+}
+
+const UNTOUCHED: SpyTeamState = { status: "new", carouselId: null, handledAt: null };
+
+/** A stored post with its per-team states; one saved before them was Mr Stark's. */
+function withTeams(post: SpyPost): SpyPost {
+  if (post.teams) return { ...post, status: "new", carouselId: null, handledAt: null };
+  const legacy: SpyTeamState =
+    post.status && post.status !== "new"
+      ? { status: post.status, carouselId: post.carouselId, handledAt: post.handledAt }
+      : UNTOUCHED;
+  return { ...post, status: "new", carouselId: null, handledAt: null, teams: { stark: legacy, mousk: UNTOUCHED } };
 }
 
 export abstract class DocumentStore implements EngineStore {
@@ -443,27 +457,30 @@ export abstract class DocumentStore implements EngineStore {
 
   async listSpyPosts(): Promise<SpyPost[]> {
     const doc = await this.read();
-    return Object.values(doc.spyPosts ?? {}).sort((a, b) =>
-      (b.postedAt ?? b.firstSeenAt).localeCompare(a.postedAt ?? a.firstSeenAt),
-    );
+    return Object.values(doc.spyPosts ?? {})
+      .map(withTeams)
+      .sort((a, b) => (b.postedAt ?? b.firstSeenAt).localeCompare(a.postedAt ?? a.firstSeenAt));
   }
 
   async getSpyPost(id: string): Promise<SpyPost | null> {
     const doc = await this.read();
-    return doc.spyPosts?.[id] ?? null;
+    const post = doc.spyPosts?.[id];
+    return post ? withTeams(post) : null;
   }
 
-  async setSpyPostStatus(
+  async setSpyPostState(
     id: string,
+    team: Team,
     status: SpyPostStatus,
     carouselId: string | null,
   ): Promise<void> {
     await this.mutate((doc) => {
       const post = doc.spyPosts?.[id];
       if (!post) return;
-      post.status = status;
-      post.carouselId = carouselId;
-      post.handledAt = status === "new" ? null : new Date().toISOString();
+      const teams = withTeams(post).teams;
+      teams[team] =
+        status === "new" ? UNTOUCHED : { status, carouselId, handledAt: new Date().toISOString() };
+      doc.spyPosts![id] = { ...post, teams };
     });
   }
 

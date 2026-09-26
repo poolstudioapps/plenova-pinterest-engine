@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { config } from "@/lib/config";
+import type { Team } from "@/lib/types";
 
 /**
  * Who may sign in, and the code that proves it.
@@ -153,4 +154,20 @@ export async function emailFromAccessToken(token: string): Promise<string | null
   const { data, error } = await supabase.auth.getUser(token);
   if (error || !data.user?.email) return null;
   return data.user.email.trim().toLowerCase();
+}
+
+/** The team an address processes spied carousels for; null when it has none. */
+export async function teamOf(email: string): Promise<Team | null> {
+  const supabase = admin();
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from("allowed_emails")
+    .select("team")
+    .eq("email", email.trim().toLowerCase())
+    .maybeSingle();
+  if (error) {
+    console.error("[auth] the team of an address could not be read:", error.message);
+    return null;
+  }
+  return data?.team === "stark" || data?.team === "mousk" ? data.team : null;
 }

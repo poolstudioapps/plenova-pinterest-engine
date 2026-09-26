@@ -179,6 +179,17 @@ s'affichent dans le Spy, historique compris ; ceux importés en couverture seule
 plan, `complete: true` sur `/posts`), puis deviennent traitables. Spy et Hooks
 s'affichent par pages de 20 (`components/ui/Pager.tsx`).
 
+**Traitement par équipe (demande de l'utilisateur)** : Mr Stark et Mr Mousk traitent
+les mêmes carrousels chacun de leur côté. `allowed_emails.team` dit pour qui traite
+chaque adresse (ienders.pro / ienders38 = stark, dylan.semionoff-bru@ubisoft.com =
+mousk) ; une adresse sans équipe choisit sur la page Spy (cookie `plenova_team`).
+L'état d'un carrousel par équipe est dans `spy_post_states` (pas de ligne = à traiter
+pour cette équipe) ; `SpyPost.teams` le porte, `lib/spy forTeam` le résout pour qui
+regarde (`lib/viewer.ts`). Onglets : « À traiter » (équipe de qui regarde), « Traités ·
+Mr Stark », « Traités · Mr Mousk » (seule l'équipe concernée peut remettre à traiter).
+Les anciennes colonnes `spy_posts.status / carousel_id / handled_at` ne sont plus lues
+(reprises dans `spy_post_states` pour Mr Stark le 26/09).
+
 **Supprimer un carrousel du Spy (menu ⋯ de la carte)** : ses images sont effacées
 du stockage (le but : ne pas remplir Supabase), son id va dans `spy_removed` (le spy
 ne le rapporte jamais), mais sa ligne reste (`spy_posts.removed = true`, `images = []`)

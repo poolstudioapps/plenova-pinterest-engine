@@ -10,6 +10,7 @@ import type {
   SpyPost,
   SpyPostStatus,
   SpyRun,
+  Team,
   TikTokAccount,
 } from "@/lib/types";
 import { cleanSlideTexts } from "@/lib/slide-text";
@@ -115,11 +116,12 @@ export interface EngineStore {
   listSpyPosts(): Promise<SpyPost[]>;
   getSpyPost(id: string): Promise<SpyPost | null>;
   /**
-   * Only what the app decides about a post. Its numbers belong to the script,
-   * which rewrites them every day, so the app never writes them back.
+   * Only what the app decides about a post, for one team. Its numbers belong
+   * to the spy, which rewrites them every day, so the app never writes them.
    */
-  setSpyPostStatus(
+  setSpyPostState(
     id: string,
+    team: Team,
     status: SpyPostStatus,
     carouselId: string | null,
   ): Promise<void>;

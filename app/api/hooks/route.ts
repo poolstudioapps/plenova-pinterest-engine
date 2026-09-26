@@ -1,12 +1,13 @@
 import { handle, ok } from "@/lib/api";
 import { badRequest } from "@/lib/errors";
 import { createHook, listHookViews } from "@/lib/hooks";
+import { viewer } from "@/lib/viewer";
 
 export const dynamic = "force-dynamic";
 
 /** The bank, each spied hook with its post's numbers, and how many covers are still unread. */
 export async function GET() {
-  return handle(async () => ok(await listHookViews()));
+  return handle(async () => ok(await listHookViews((await viewer()).team)));
 }
 
 /** Adds a hook to the bank. Answers with the existing one if it is already there. */
