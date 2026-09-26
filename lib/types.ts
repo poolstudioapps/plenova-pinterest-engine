@@ -464,6 +464,12 @@ export interface SpyPost {
    * cannot be rebuilt (its slides were not kept).
    */
   fromHistory: boolean;
+  /**
+   * Deleted by hand from the Spy page: its pictures are gone, it is off the
+   * Spy page for good, and the spy never brings it back. Its numbers stay, for
+   * the hooks read from it.
+   */
+  removed: boolean;
 }
 
 /** What kind of hook it is - for browsing the bank by shape. */

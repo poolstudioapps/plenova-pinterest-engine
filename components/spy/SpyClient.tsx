@@ -1,7 +1,19 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Button, ButtonLink, Card, Dialog, EmptyState, Notice, Pager, Picker, paginate } from "@/components/ui";
+import {
+  Button,
+  ButtonLink,
+  Card,
+  Dialog,
+  EmptyState,
+  Notice,
+  Pager,
+  Picker,
+  RowMenu,
+  RowMenuItem,
+  paginate,
+} from "@/components/ui";
 import { ProcessDialog } from "@/components/spy/ProcessDialog";
 import { SpyAccounts } from "@/components/spy/SpyAccounts";
 import { SpyPostCard } from "@/components/spy/SpyPostCard";
@@ -58,6 +70,8 @@ export function SpyClient({
   const [page, setPage] = useState(1);
   const [processing, setProcessing] = useState<SpyPost | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<string | null>(null);
   // The launch button: waiting for the pass to show up, then following it.
   const [launch, setLaunch] = useState<"idle" | "waiting" | "running" | "missing">("idle");
   const [launchHelp, setLaunchHelp] = useState(false);
@@ -153,6 +167,39 @@ export function SpyClient({
       setPosts((current) => current.map((p) => (p.id === post.id ? post : p)));
       setError(t("preview.requestFailed"));
     }
+  }
+
+  async function removePost(post: SpyPost) {
+    setError(null);
+    setInfo(null);
+    setConfirming(null);
+    // Gone at once; back in place if the server says no.
+    setPosts((current) => current.filter((p) => p.id !== post.id));
+    try {
+      const res = await fetch(`/api/spy/posts/${encodeURIComponent(post.id)}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      setInfo(t("spy.postRemoved", { name: post.username }));
+    } catch {
+      setPosts((current) => (current.some((p) => p.id === post.id) ? current : [...current, post]));
+      setError(t("preview.requestFailed"));
+    }
+  }
+
+  function removeMenu(post: SpyPost) {
+    return (
+      <RowMenu label={t("hooks.more")} onClose={() => setConfirming(null)}>
+        <RowMenuItem
+          danger
+          keepOpen={confirming !== post.id}
+          onClick={() => {
+            if (confirming === post.id) void removePost(post);
+            else setConfirming(post.id);
+          }}
+        >
+          {confirming === post.id ? t("spy.removePostConfirm") : t("spy.removePost")}
+        </RowMenuItem>
+      </RowMenu>
+    );
   }
 
   // What the page says about the script.
@@ -276,6 +323,7 @@ export function SpyClient({
       </Card>
 
       {error ? <Notice tone="danger">{error}</Notice> : null}
+      {info ? <Notice tone="info">{info}</Notice> : null}
 
       {tab === "accounts" ? null : shown.length === 0 ? (
         <EmptyState
@@ -313,6 +361,7 @@ export function SpyClient({
                     >
                       {t("spy.openTikTok")}
                     </a>
+                    {removeMenu(post)}
                   </>
                 ) : (
                   <>
@@ -335,6 +384,7 @@ export function SpyClient({
                     >
                       {t("spy.openTikTok")}
                     </a>
+                    {removeMenu(post)}
                   </>
                 )
               }

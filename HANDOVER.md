@@ -179,6 +179,13 @@ s'affichent dans le Spy, historique compris ; ceux importés en couverture seule
 plan, `complete: true` sur `/posts`), puis deviennent traitables. Spy et Hooks
 s'affichent par pages de 20 (`components/ui/Pager.tsx`).
 
+**Supprimer un carrousel du Spy (menu ⋯ de la carte)** : ses images sont effacées
+du stockage (le but : ne pas remplir Supabase), son id va dans `spy_removed` (le spy
+ne le rapporte jamais), mais sa ligne reste (`spy_posts.removed = true`, `images = []`)
+pour que les hooks lus dessus gardent leurs chiffres dans l'onglet Hooks (demande de
+l'utilisateur). Il sort du Spy, ne se refait plus, et le plan ne lui rend jamais ses
+slides.
+
 **Historique d'un compte (`spy_backfill`)** : la page embed ne montre que les
 ~13 derniers posts, et la grille du profil s'arrête vers 30-50 posts sans
 session TikTok (mesuré ; item_list signé, API officielle sans `video.list`). Pour

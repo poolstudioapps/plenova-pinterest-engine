@@ -518,6 +518,28 @@ export class SupabaseStore implements EngineStore {
     check("suppression de l'historique des chiffres", statsError);
   }
 
+  async removeSpyPost(id: string, reason: string): Promise<void> {
+    const { data: row, error } = await db().from("spy_posts").select("id, username, images").eq("id", id).maybeSingle();
+    check("lecture du carrousel à supprimer", error);
+    if (!row) return;
+    // The mark first: even if what follows fails half-way, the spy will not bring it back.
+    const { error: markError } = await db()
+      .from("spy_removed")
+      .upsert({ id, username: row.username as string, reason });
+    check("trace du carrousel supprimé", markError);
+    const base = "/storage/v1/object/public/spy/";
+    const files = ((row.images as { url?: unknown }[] | null) ?? [])
+      .map((i) => (typeof i.url === "string" && i.url.includes(base) ? decodeURIComponent(i.url.split(base)[1]!) : null))
+      .filter((path): path is string => Boolean(path));
+    if (files.length > 0) {
+      const { error: filesError } = await db().storage.from("spy").remove(files);
+      check("suppression des images du carrousel", filesError);
+    }
+    // The row stays - without pictures - so its hooks keep their numbers.
+    const { error: updateError } = await db().from("spy_posts").update({ images: [], removed: true }).eq("id", id);
+    check("retrait du carrousel", updateError);
+  }
+
   async listSpyPosts(): Promise<SpyPost[]> {
     const rows = await allRows("lecture des carrousels espionnés", (from, to) =>
       db()
@@ -673,6 +695,7 @@ function spyPostFromRow(row: Record<string, unknown>): SpyPost {
     hookFr: (row.hook_fr as string | null) ?? null,
     hookCheckedAt: (row.hook_checked_at as string | null) ?? null,
     fromHistory: row.from_history === true,
+    removed: row.removed === true,
   };
 }
 

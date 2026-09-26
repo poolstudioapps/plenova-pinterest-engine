@@ -55,7 +55,7 @@ export async function spyOverview(): Promise<SpyOverview> {
     accounts: accounts.filter((a) => !a.team),
     // Every competitor carousel, history imports included (their slides are
     // fetched on the next pass; until then they cannot be rebuilt).
-    posts: posts.filter((p) => p.mediaType === "carousel" && !ours.has(p.username)),
+    posts: posts.filter((p) => p.mediaType === "carousel" && !p.removed && !ours.has(p.username)),
     // Only what is still worth a look here: followed competitors, or the pass itself ("*").
     run: run ? { ...run, errors: run.errors.filter((e) => e.username === "*" || competitors.has(e.username)) } : null,
   };
@@ -137,6 +137,21 @@ export async function setSpyPostHandled(id: string, status: unknown): Promise<Sp
   return (await store.getSpyPost(id)) ?? post;
 }
 
+/**
+ * Deletes a competitor's carousel from the Spy page for good (asked for by the
+ * user, to spare the storage): its pictures go, its id stays noted so the spy
+ * never brings it back. The hooks read from it stay in the Hooks tab with
+ * their numbers - only the pictures are gone.
+ */
+export async function removeSpyPost(id: string): Promise<void> {
+  const store = getStore();
+  const post = await store.getSpyPost(id);
+  if (!post) throw notFound("Ce carrousel n'est plus dans le spy.");
+  const owner = (await store.listSpyAccounts()).find((a) => a.username === post.username);
+  if (owner?.team) throw badRequest("Ce post vient d'un de nos comptes : il se gère sur la page Versus.");
+  await store.removeSpyPost(id, "supprimé à la main");
+}
+
 export interface ProcessSpyInput {
   languages: ContentLocale[];
   imageMode: RepostImageMode;
@@ -160,6 +175,7 @@ export async function startSpyProcessing(
   const post = await store.getSpyPost(id);
   if (!post) throw notFound("Ce carrousel n'est plus dans le spy.");
   if (post.mediaType !== "carousel") throw badRequest("C'est une vidéo : seuls les carrousels se refont.");
+  if (post.removed) throw badRequest("Ce carrousel a été supprimé du Spy : ses images ne sont plus gardées.");
   if (post.fromHistory) {
     throw badRequest("Carrousel ancien, importé avec l'historique : seule sa couverture est gardée, il ne se refait pas.");
   }

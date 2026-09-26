@@ -104,6 +104,12 @@ export interface EngineStore {
   deleteSpyAccount(username: string): Promise<void>;
   /** Every post of one account - when one of ours stops being followed. */
   deleteSpyPostsOf(username: string): Promise<void>;
+  /**
+   * Takes a spied post off the Spy page for good: its stored pictures are
+   * deleted, its id is kept aside so the spy never brings it back. Its row and
+   * numbers stay, for the hooks read from it.
+   */
+  removeSpyPost(id: string, reason: string): Promise<void>;
 
   /** Carousels the spy found, newest post first. */
   listSpyPosts(): Promise<SpyPost[]>;

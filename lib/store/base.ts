@@ -433,6 +433,14 @@ export abstract class DocumentStore implements EngineStore {
     });
   }
 
+  async removeSpyPost(id: string, _reason: string): Promise<void> {
+    // Offline: no spy runs to keep it away from, only the post to set aside.
+    await this.mutate((doc) => {
+      const post = doc.spyPosts?.[id];
+      if (post) doc.spyPosts![id] = { ...post, images: [], removed: true };
+    });
+  }
+
   async listSpyPosts(): Promise<SpyPost[]> {
     const doc = await this.read();
     return Object.values(doc.spyPosts ?? {}).sort((a, b) =>

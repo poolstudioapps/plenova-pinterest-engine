@@ -1,6 +1,6 @@
 import { handle, ok } from "@/lib/api";
 import { badRequest } from "@/lib/errors";
-import { setSpyPostHandled } from "@/lib/spy";
+import { removeSpyPost, setSpyPostHandled } from "@/lib/spy";
 
 export const dynamic = "force-dynamic";
 
@@ -17,5 +17,15 @@ export async function PATCH(request: Request, { params }: Params) {
       throw badRequest("Le corps de la requête n'est pas du JSON valide.");
     }
     return ok({ post: await setSpyPostHandled(id, body.status) });
+  });
+}
+
+/** Deletes the carousel for good; the spy will never bring it back. */
+export async function DELETE(_request: Request, { params }: Params) {
+  return handle(async () => {
+    const { id } = await params;
+    if (!/^\d{5,25}$/.test(id)) throw badRequest("Carrousel inconnu.");
+    await removeSpyPost(id);
+    return ok({ ok: true });
   });
 }

@@ -146,8 +146,15 @@ export async function agentPlan(): Promise<AgentPlanAccount[]> {
     .order("username");
   check("lecture des comptes", error);
 
-  const stored = await everyRow<{ id: string; username: string; posted_at: string | null; from_history: boolean }>(
-    (from, to) => db().from("spy_posts").select("id, username, posted_at, from_history").order("id").range(from, to),
+  const stored = await everyRow<{
+    id: string;
+    username: string;
+    posted_at: string | null;
+    from_history: boolean;
+    removed: boolean;
+  }>(
+    (from, to) =>
+      db().from("spy_posts").select("id, username, posted_at, from_history, removed").order("id").range(from, to),
     "lecture des posts connus",
   );
   // Taken out on purpose (the < 50k views clean): never brought back.
@@ -207,7 +214,8 @@ export async function agentPlan(): Promise<AgentPlanAccount[]> {
       complete: ours
         ? []
         : own
-            .filter((r) => r.from_history)
+            // Deleted by hand: its pictures are not wanted back.
+            .filter((r) => r.from_history && !r.removed)
             .slice(0, BACKFILL_PER_PASS)
             .map((r) => r.id),
     };
@@ -338,7 +346,11 @@ export async function recordAgentPost(raw: unknown): Promise<{ created: boolean 
     stats_updated_at: new Date().toISOString(),
   };
 
-  const { data: existing, error: readError } = await db().from("spy_posts").select("id").eq("id", id).maybeSingle();
+  const { data: existing, error: readError } = await db()
+    .from("spy_posts")
+    .select("id, removed")
+    .eq("id", id)
+    .maybeSingle();
   check("lecture d'un post", readError);
   // Only pictures this app stored itself, for this very post.
   const own = `${db().storage.from(BUCKET).getPublicUrl("").data.publicUrl.replace(/\/+$/, "")}/${username}/${id}/`;
@@ -353,7 +365,7 @@ export async function recordAgentPost(raw: unknown): Promise<{ created: boolean 
     }));
   if (existing) {
     // A history import brought in with its cover only: its slides arrive now.
-    const completing = p.complete === true && images.length > 0 && !account.team;
+    const completing = p.complete === true && images.length > 0 && !account.team && !existing.removed;
     const { error } = await db()
       .from("spy_posts")
       .update({ ...stats, ...(completing ? { images, from_history: false } : {}) })
