@@ -55,23 +55,23 @@ export function UpcomingPanel({
           Aucune fin de période prévue sur ces jours.
         </p>
       ) : (
-        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {upcoming.plans.map((p) => (
             <div
               key={p.plan}
-              className="rounded-[14px] bg-[var(--color-surface-muted)] px-3.5 py-3"
+              className="rounded-[16px] border border-[var(--color-edge)] bg-[var(--color-canvas)] px-4 pt-3.5 pb-3"
             >
-              <p className="text-[12px] font-medium text-[var(--color-ink-soft)]">
+              <p className="text-[12px] font-medium text-[var(--color-ink-faint)]">
                 {p.label} · {n(p.ending)} fin{p.ending >= 1.5 ? "s" : ""} de
                 période
               </p>
-              <p className="mt-1 text-[22px] leading-tight font-semibold tracking-[-0.03em] tabular-nums">
+              <p className="figures mt-2 text-[24px] leading-none font-semibold tracking-[-0.03em]">
                 {n(p.renew)}{" "}
                 <span className="text-[12px] font-medium tracking-normal text-[var(--color-ink-soft)]">
                   renouvellement{p.renew >= 1.5 ? "s" : ""}
                 </span>
               </p>
-              <p className="mt-0.5 text-[12.5px] tabular-nums text-[var(--color-ink-soft)]">
+              <p className="figures mt-1.5 text-[12.5px] text-[var(--color-ink-soft)]">
                 {n(p.cancel)} résiliation{p.cancel >= 1.5 ? "s" : ""}
                 {p.billing >= 0.5
                   ? ` · ${n(p.billing)} en problème de paiement`

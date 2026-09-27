@@ -45,7 +45,7 @@ export default async function PinterestPage({
 
       {/* The trial token's limits are told once, inside the connection panel. */}
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,340px)]">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,340px)]">
         <ConnectionPanel
           configured={configured}
           mode={status.mode}

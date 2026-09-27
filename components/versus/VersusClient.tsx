@@ -76,7 +76,7 @@ export function VersusClient({
   const importing = accounts.reduce((n, a) => n + (pending[a.username] ?? 0), 0);
 
   const manage = (
-    <section className="rounded-[16px] border border-[var(--color-line)] bg-[var(--color-surface)] p-4 md:p-5">
+    <section className="rounded-[var(--radius-card)] border border-[var(--color-edge)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-card)] md:p-6">
       <h2 className="mb-3 text-[15px] font-semibold">Nos comptes</h2>
       <SpyAccounts accounts={accounts} onChange={setAccounts} mode="ours" />
     </section>
@@ -195,7 +195,7 @@ export function VersusClient({
 
       {/* Everyone together. */}
       <section>
-        <h2 className="mb-3 text-[15px] font-semibold">Global · tous nos comptes</h2>
+        <h2 className="mb-3 text-[16px] font-semibold tracking-[-0.015em]">Global · tous nos comptes</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           {(
             [
@@ -207,19 +207,19 @@ export function VersusClient({
               ["Engagement", format(all.engagement, "percent"), `${format(all.avgViews, "number")} vues / post`],
             ] as const
           ).map(([label, value, sub]) => (
-            <div key={label} className="rounded-[16px] border border-[var(--color-line)] bg-[var(--color-surface)] p-4">
-              <p className="text-[12px] text-[var(--color-ink-faint)]">{label}</p>
-              <p className="mt-1 text-[24px] font-semibold tabular-nums">{value}</p>
-              <p className="mt-0.5 text-[11.5px] text-[var(--color-ink-faint)]">{sub}</p>
+            <div key={label} className="rounded-[16px] border border-[var(--color-edge)] bg-[var(--color-surface)] px-4 pt-3.5 pb-3 shadow-[var(--shadow-card)]">
+              <p className="text-[12px] font-medium text-[var(--color-ink-faint)]">{label}</p>
+              <p className="figures mt-2 text-[24px] leading-none font-semibold tracking-[-0.03em]">{value}</p>
+              <p className="figures mt-2 text-[11.5px] text-[var(--color-ink-faint)]">{sub}</p>
             </div>
           ))}
         </div>
       </section>
 
       {/* Account by account. */}
-      <section className="overflow-hidden rounded-[16px] border border-[var(--color-line)] bg-[var(--color-surface)]">
-        <div className="border-b border-[var(--color-line)] px-4 py-3">
-          <h2 className="text-[15px] font-semibold">Compte par compte</h2>
+      <section className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-edge)] bg-[var(--color-surface)] shadow-[var(--shadow-card)]">
+        <div className="border-b border-[var(--color-line)] px-5 py-4">
+          <h2 className="text-[16px] font-semibold tracking-[-0.015em]">Compte par compte</h2>
           <p className="mt-0.5 text-[12px] text-[var(--color-ink-faint)]">
             Depuis toujours : tous les posts relevés du compte. La dernière colonne suit la période choisie.
           </p>

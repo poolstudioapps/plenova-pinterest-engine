@@ -175,7 +175,7 @@ export function PinPreview({ pin, plants, loading, onChange }: Props) {
 
   return (
     <Card className="p-5">
-      <div className="grid gap-6 md:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
         <div>
           {draft.imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element

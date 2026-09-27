@@ -2,7 +2,23 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type ReactNode } from "react";
-import { Button, Card, Input, Notice } from "@/components/ui";
+import {
+  ArrowDownRight,
+  ArrowsClockwise,
+  ArrowUpRight,
+  Broadcast,
+  CalendarBlank,
+  CalendarDots,
+  Coins,
+  CurrencyEur,
+  Database,
+  Funnel,
+  Pulse,
+  Table,
+  UsersThree,
+  type Icon,
+} from "@phosphor-icons/react";
+import { Button, Card, Notice } from "@/components/ui";
 import {
   chartPoints,
   cohortRows,
@@ -89,29 +105,32 @@ function Delta({
   const change = (now - before) / Math.abs(before);
   if (!Number.isFinite(change) || Math.abs(change) < 0.005) {
     return (
-      <span className="text-[11.5px] text-[var(--color-ink-faint)]">
+      <span className="rounded-full bg-[var(--color-surface-muted)] px-1.5 py-px text-[11px] font-medium text-[var(--color-ink-faint)]">
         stable
       </span>
     );
   }
   const good = better === null ? null : change > 0 === (better === "up");
+  // The direction is drawn (the arrow) as well as coloured, so it survives
+  // for someone who cannot tell the green from the red.
+  const Arrow = change > 0 ? ArrowUpRight : ArrowDownRight;
   return (
     <span
       className={cn(
-        "text-[11.5px] font-medium tabular-nums",
+        "figures inline-flex items-center gap-0.5 rounded-full px-1.5 py-px text-[11px] font-semibold",
         good === null
-          ? "text-[var(--color-ink-soft)]"
+          ? "bg-[var(--color-surface-muted)] text-[var(--color-ink-soft)]"
           : good
-            ? "text-[var(--color-accent)]"
-            : "text-[var(--color-danger)]",
+            ? "bg-[var(--color-accent-soft)] text-[var(--color-accent-ink)]"
+            : "bg-[var(--color-danger-soft)] text-[var(--color-danger)]",
       )}
       title="Par rapport à la période de même durée juste avant"
     >
-      {change > 0 ? "▲" : "▼"}{" "}
+      <Arrow aria-hidden size={11} weight="bold" />
       {new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(
         Math.abs(change) * 100,
-      )}{" "}
-      %
+      )}
+      {"\u202f"}%
     </span>
   );
 }
@@ -135,20 +154,20 @@ function Tile({
 }) {
   return (
     <div
-      className="rounded-[14px] bg-[var(--color-surface-muted)] px-3.5 py-3"
+      className="flex flex-col rounded-[16px] border border-[var(--color-edge)] bg-[var(--color-canvas)] px-4 pt-3.5 pb-3"
       title={hint}
     >
-      <p className="text-[12px] font-medium text-[var(--color-ink-soft)]">
+      <p className="text-[12px] leading-snug font-medium text-[var(--color-ink-faint)]">
         {label}
       </p>
-      <p className="mt-1 text-[22px] leading-tight font-semibold tracking-[-0.03em] tabular-nums">
+      <p className="figures mt-2 text-[24px] leading-none font-semibold tracking-[-0.03em]">
         {value}
       </p>
-      <div className="mt-1 flex min-h-[16px] flex-wrap items-center gap-x-2 text-[11.5px] text-[var(--color-ink-faint)]">
-        {sub ? <span className="tabular-nums">{sub}</span> : null}
+      <div className="mt-2.5 flex min-h-[18px] flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] leading-snug text-[var(--color-ink-faint)]">
         {now !== undefined && before !== undefined ? (
           <Delta now={now} before={before} better={better} />
         ) : null}
+        {sub ? <span className="figures">{sub}</span> : null}
       </div>
     </div>
   );
@@ -156,19 +175,24 @@ function Tile({
 
 function Section({
   title,
+  icon: Glyph,
   source,
   children,
   missing,
 }: {
   title: string;
+  icon: Icon;
   source: string;
   children: ReactNode;
   missing?: string | null;
 }) {
   return (
-    <Card className="p-5">
-      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-[16px] font-semibold tracking-[-0.01em]">
+    <Card className="p-5 md:p-6">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <h2 className="flex items-center gap-2.5 text-[16.5px] font-semibold tracking-[-0.015em]">
+          <span className="grid size-8 place-items-center rounded-[10px] bg-[var(--color-surface-muted)] text-[var(--color-accent-ink)]">
+            <Glyph aria-hidden size={17} weight="duotone" />
+          </span>
           {title}
         </h2>
         <span className="text-[12px] text-[var(--color-ink-faint)]">
@@ -176,7 +200,9 @@ function Section({
         </span>
       </div>
       {missing ? (
-        <p className="text-[13px] text-[var(--color-ink-soft)]">{missing}</p>
+        <p className="rounded-[14px] bg-[var(--color-canvas)] px-4 py-3 text-[13px] text-[var(--color-ink-soft)]">
+          {missing}
+        </p>
       ) : (
         children
       )}
@@ -184,7 +210,11 @@ function Section({
   );
 }
 
-const GRID = "grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4";
+const GRID = "grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4";
+
+/* The native date field, stripped to its text inside the range pill. */
+const DATE =
+  "figures w-[7.6rem] rounded-[8px] bg-transparent px-1 py-1 text-[13px] text-[var(--color-ink)] outline-none focus-visible:bg-[var(--color-surface-muted)] [&::-webkit-calendar-picker-indicator]:hidden";
 
 /* -------------------------------------------------------------- page -- */
 
@@ -357,75 +387,81 @@ export function PerformanceClient({
   return (
     <div className="space-y-5">
       {/* ---------------------------------------------------- period bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <div
-            role="group"
-            aria-label="Période"
-            className="flex flex-wrap gap-1 rounded-full bg-[var(--color-surface-muted)] p-1"
-          >
-            {PRESETS.map((x) => (
-              <button
-                key={x.id}
-                type="button"
-                onClick={() => pickPreset(x.id)}
-                aria-pressed={preset === x.id}
-                className={cn(
-                  "rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors",
-                  preset === x.id
-                    ? "bg-[var(--color-surface)] text-[var(--color-ink)] shadow-[var(--shadow-card)]"
-                    : "text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]",
-                )}
-              >
-                {x.label}
-              </button>
-            ))}
-          </div>
-          <div
-            className={cn(
-              "flex max-w-full min-w-0 flex-wrap items-center gap-1.5 rounded-[18px] border px-2 py-1",
-              preset === null
-                ? "border-[var(--color-accent)]"
-                : "border-[var(--color-line)]",
-            )}
-          >
-            <Input
-              type="date"
-              aria-label="Du"
-              value={range.from}
-              min={payload.firstDay}
-              max={payload.today}
-              onChange={(e) =>
-                pickDates({ from: e.target.value, to: range.to })
-              }
-              className="h-8 border-0 bg-transparent px-1.5 py-0 text-[13px] shadow-none"
-            />
-            <span className="text-[12px] text-[var(--color-ink-faint)]">→</span>
-            <Input
-              type="date"
-              aria-label="Au"
-              value={range.to}
-              min={payload.firstDay}
-              max={payload.today}
-              onChange={(e) =>
-                pickDates({ from: range.from, to: e.target.value })
-              }
-              className="h-8 border-0 bg-transparent px-1.5 py-0 text-[13px] shadow-none"
-            />
-          </div>
+      <div className="flex flex-wrap items-center gap-2.5">
+        <div
+          role="group"
+          aria-label="Période"
+          className="flex flex-wrap gap-0.5 rounded-full bg-[var(--color-surface-muted)] p-1 shadow-[var(--shadow-inset)]"
+        >
+          {PRESETS.map((x) => (
+            <button
+              key={x.id}
+              type="button"
+              onClick={() => pickPreset(x.id)}
+              aria-pressed={preset === x.id}
+              className={cn(
+                "rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-[background-color,color,box-shadow,scale] duration-150 active:scale-[0.96]",
+                preset === x.id
+                  ? "bg-[var(--color-surface)] text-[var(--color-ink)] shadow-[var(--shadow-card)]"
+                  : "text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]",
+              )}
+            >
+              {x.label}
+            </button>
+          ))}
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-[12px] text-[var(--color-ink-faint)]">
-            Relevé : {when(lastOk)} · auto à 9 h, 18 h, 22 h
+        {/* A chosen period lights the pill up; a preset leaves it quiet. */}
+        <div
+          className={cn(
+            "flex max-w-full min-w-0 items-center gap-1 rounded-full border bg-[var(--color-surface)] py-1 pr-2 pl-3 transition-[border-color,box-shadow]",
+            preset === null
+              ? "border-[var(--color-accent)] shadow-[0_0_0_3px_var(--color-accent-soft)]"
+              : "border-[var(--color-line-strong)]",
+          )}
+        >
+          <CalendarBlank aria-hidden size={16} className="shrink-0 text-[var(--color-ink-faint)]" />
+          <input
+            type="date"
+            aria-label="Du"
+            value={range.from}
+            min={payload.firstDay}
+            max={payload.today}
+            onChange={(e) => pickDates({ from: e.target.value, to: range.to })}
+            className={DATE}
+          />
+          <span aria-hidden className="text-[12px] text-[var(--color-ink-faint)]">→</span>
+          <input
+            type="date"
+            aria-label="Au"
+            value={range.to}
+            min={payload.firstDay}
+            max={payload.today}
+            onChange={(e) => pickDates({ from: range.from, to: e.target.value })}
+            className={DATE}
+          />
+        </div>
+        <div className="flex items-center gap-3 sm:ml-auto">
+          <span className="text-[12px] leading-tight text-[var(--color-ink-faint)]">
+            Relevé {when(lastOk)}
+            <span className="hidden lg:inline"> · auto à 9 h, 18 h, 22 h</span>
           </span>
-          <Button size="sm" onClick={refresh} loading={refreshing}>
+          <Button size="sm" onClick={refresh} disabled={refreshing}>
+            <ArrowsClockwise
+              aria-hidden
+              size={15}
+              weight="bold"
+              className={cn(refreshing && "animate-spin")}
+            />
             {refreshing ? "Relevé en cours…" : "Actualiser"}
           </Button>
         </div>
       </div>
 
-      <p className="text-[12.5px] text-[var(--color-ink-soft)]">
-        Du {longDay(range.from)} au {longDay(range.to)} ({k.days} j, jours UTC
+      <p className="-mt-1 text-[12.5px] text-[var(--color-ink-faint)]">
+        <span className="font-medium text-[var(--color-ink-soft)]">
+          Du {longDay(range.from)} au {longDay(range.to)}
+        </span>{" "}
+        ({k.days} j, jours UTC
         {range.to === payload.today ? ", aujourd'hui en cours" : ""})
         {previous
           ? ` · comparé au ${shortDay(previous.from)} → ${shortDay(previous.to)}`
@@ -443,8 +479,9 @@ export function PerformanceClient({
       ) : null}
 
       {live ? (
-        <p className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-[12px] border border-[var(--color-line)] px-4 py-2.5 text-[13px] text-[var(--color-ink-soft)]">
-          <span className="font-semibold text-[var(--color-ink)]">
+        <p className="flex flex-wrap items-center gap-x-5 gap-y-1 rounded-[16px] border border-[var(--color-edge)] bg-[var(--color-surface)] px-4 py-3 text-[13px] text-[var(--color-ink-soft)] shadow-[var(--shadow-card)]">
+          <span className="inline-flex items-center gap-1.5 font-semibold text-[var(--color-ink)]">
+            <Broadcast aria-hidden size={16} weight="duotone" className="text-[var(--color-accent)]" />
             En direct · RevenueCat
           </span>
           <span>
@@ -477,6 +514,7 @@ export function PerformanceClient({
       {/* ------------------------------------------------------ revenue */}
       <Section
         title="Revenus"
+        icon={CurrencyEur}
         source="RevenueCat · brut TTC, remboursements déduits"
         missing={rcMissing}
       >
@@ -544,7 +582,7 @@ export function PerformanceClient({
             better="down"
           />
         </div>
-        <div className="mt-5">
+        <div className="mt-6">
           <LineChart
             ariaLabel={
               spending ? "Revenu et dépenses par jour" : "Revenu par jour"
@@ -579,6 +617,7 @@ export function PerformanceClient({
       {upcoming && payload.rc?.ltvInputs ? (
         <Section
           title="Échéances des 10 prochains jours"
+          icon={CalendarDots}
           source="RevenueCat · abonnements en cours"
         >
           <UpcomingPanel upcoming={upcoming} inputs={payload.rc.ltvInputs} />
@@ -588,6 +627,7 @@ export function PerformanceClient({
       {/* -------------------------------------------------- acquisition */}
       <Section
         title="Acquisition"
+        icon={UsersThree}
         source={
           spending
             ? "AppsFlyer · Amplitude · dépenses saisies"
@@ -643,7 +683,7 @@ export function PerformanceClient({
           ) : null}
         </div>
         {spending && cohorts.rows.length > 0 ? (
-          <div className="mt-2.5 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
             {(["d0", "d7", "d30", "lifetime"] as const).map((key) => (
               <Tile
                 key={key}
@@ -662,7 +702,7 @@ export function PerformanceClient({
       </Section>
 
       {/* -------------------------------------------------------- usage */}
-      <Section title="Utilisation" source="Amplitude" missing={ampMissing}>
+      <Section title="Utilisation" icon={Pulse} source="Amplitude" missing={ampMissing}>
         <div className={GRID}>
           <Tile
             label="DAU moyen"
@@ -698,7 +738,7 @@ export function PerformanceClient({
             before={p?.arpuMonthly ?? null}
           />
         </div>
-        <div className="mt-5">
+        <div className="mt-6">
           <LineChart
             ariaLabel="Utilisateurs actifs par jour"
             labels={chart.points.map((x) => x.label)}
@@ -720,6 +760,7 @@ export function PerformanceClient({
       {/* --------------------------------------------------- conversion */}
       <Section
         title={`Conversion · app ${payload.conversionVersions ?? MIN_APP_VERSION}${payload.conversionVersions?.includes("→") ? "" : " et suivantes"}`}
+        icon={Funnel}
         source="Amplitude · RevenueCat · nouveaux utilisateurs, par jour d'arrivée"
         missing={
           ampMissing ??
@@ -769,10 +810,11 @@ export function PerformanceClient({
       {/* ----------------------------------------------- unit economics */}
       <Section
         title="Valeur par client payant"
+        icon={Coins}
         source="RevenueCat · Amplitude"
         missing={rcMissing}
       >
-        <div className="mb-2.5 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+        <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Tile
             label="ARPPU / mois"
             value={money(k.arppuMonthly)}
@@ -798,6 +840,7 @@ export function PerformanceClient({
       {spending ? (
         <Section
           title="Cohortes hebdomadaires"
+          icon={Table}
           source="RevenueCat · nouveaux clients du dimanche au samedi"
           missing={
             rcMissing ??
@@ -911,19 +954,26 @@ export function PerformanceClient({
       />
 
       {/* ------------------------------------------------------ sources */}
-      <Card className="p-5">
-        <h2 className="mb-3 text-[16px] font-semibold tracking-[-0.01em]">
+      <Card className="p-5 md:p-6">
+        <h2 className="mb-4 flex items-center gap-2.5 text-[16.5px] font-semibold tracking-[-0.015em]">
+          <span className="grid size-8 place-items-center rounded-[10px] bg-[var(--color-surface-muted)] text-[var(--color-accent-ink)]">
+            <Database aria-hidden size={17} weight="duotone" />
+          </span>
           Sources
         </h2>
-        <ul className="space-y-2 text-[13px]">
+        <ul className="divide-y divide-[var(--color-line)] text-[13px]">
           {payload.sources.map((s) => (
             <li
               key={s.source}
-              className="flex flex-wrap items-center gap-x-3 gap-y-1"
+              className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5 first:pt-0 last:pb-0"
             >
+              {/* Real state, so a dot - with a ring on it when something is wrong. */}
               <span
                 aria-hidden
-                className="size-1.5 rounded-full"
+                className={cn(
+                  "size-2 rounded-full",
+                  s.configured && s.error && "ring-3 ring-[var(--color-danger-soft)]",
+                )}
                 style={{
                   backgroundColor: !s.configured
                     ? "var(--color-ink-faint)"
@@ -939,7 +989,7 @@ export function PerformanceClient({
                   : `Dernier relevé réussi : ${when(s.lastOk)}`}
               </span>
               {s.error ? (
-                <span className="basis-full pl-[18px] text-[12px] text-[var(--color-danger)]">
+                <span className="basis-full pl-[20px] text-[12px] text-[var(--color-danger)]">
                   Dernier essai ({when(s.lastAttempt)}) : {s.error}
                 </span>
               ) : null}

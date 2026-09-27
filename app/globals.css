@@ -36,11 +36,14 @@
   --color-accent: #2d6b5e;
   --color-accent-soft: #e3ecdf;
   --color-accent-ink: #174238;
+  /* Text on a filled accent: white on the deep green, dark on the light one. */
+  --color-on-accent: #ffffff;
   /* The darkest fill on the site, used for its primary download buttons. */
   --color-ink-fill: #0e1a0c;
 
   --color-danger: #b4402f;
   --color-danger-soft: #fbeae7;
+  --color-on-danger: #ffffff;
   /* The site's warm amber, its only non-green accent. */
   --color-warn: #b07617;
   --color-warn-ink: #7a5210;
@@ -49,6 +52,19 @@
   /* Data series (Performances charts): validated pair, one hue per job - money in, money out. */
   --color-series-revenue: #2a78d6;
   --color-series-spend: #eb6834;
+
+  /*
+   * The app frame: the deeper green the sidebar sits on, around the sheet the
+   * pages are written on (the canvas). Two grounds instead of a white slab
+   * glued to a pale page.
+   */
+  --color-frame: #e4eee0;
+  /*
+   * The edge of a card: the ink at a few per cent rather than a flat green
+   * line, so it reads as the edge of a raised sheet on any ground - the
+   * canvas, the frame, a muted panel - instead of a drawn border.
+   */
+  --color-edge: rgb(14 26 12 / 0.075);
 
   --radius-card: 20px;
   --radius-control: 12px;
@@ -59,8 +75,19 @@
    * Measured from the site: a hairline plus a wide, soft, GREEN-tinted lift.
    * A neutral grey shadow on this canvas reads as dirt.
    */
-  --shadow-card: 0 1px 2px rgb(29 47 27 / 0.04), 0 10px 24px -18px rgb(29 47 27 / 0.45);
-  --shadow-raised: 0 1px 2px rgb(23 66 56 / 0.06), 0 14px 32px -16px rgb(23 66 56 / 0.35);
+  --shadow-card: 0 1px 2px rgb(29 47 27 / 0.05), 0 12px 28px -20px rgb(29 47 27 / 0.5);
+  --shadow-raised: 0 1px 2px rgb(23 66 56 / 0.06), 0 18px 40px -18px rgb(23 66 56 / 0.4);
+  /* What a pressed-in control sits in: a segmented track, a search field. */
+  --shadow-inset: inset 0 1px 2px rgb(29 47 27 / 0.06);
+
+  /*
+   * Motion. The built-in curves are too soft to feel intentional; these start
+   * fast (the moment the eye is on) and settle. One set for the whole app, so
+   * everything moves with the same hand.
+   */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 /*
@@ -99,6 +126,10 @@
   html {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    /* Phones: no grey flash over a tapped control (each has its own pressed
+       state), no text inflation in landscape. */
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
   }
 
   body {
@@ -106,6 +137,34 @@
     color: var(--color-ink);
     font-family: var(--font-sans);
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /*
+   * A control answers the finger at once: no double-tap-zoom wait, and a long
+   * press does not select its label. Text that is content stays selectable.
+   */
+  button,
+  a,
+  [role="button"],
+  [role="tab"],
+  summary {
+    touch-action: manipulation;
+  }
+  button,
+  [role="button"],
+  [role="tab"] {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* Headings break evenly; paragraphs do not leave one word on the last line. */
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
   }
 
   ::selection {
@@ -134,6 +193,8 @@
       --color-ink-soft: #b3c2af;
       --color-ink-faint: #8a9a86;
       --color-ink-fill: #eef5ec;
+      --color-frame: #070e06;
+      --color-edge: rgb(238 245 236 / 0.07);
 
       /*
        * A light-ink shadow is invisible on a dark ground, so the separation
@@ -144,13 +205,17 @@
         inset 0 1px 0 oklch(100% 0 0 / 0.03);
       --shadow-raised: 0 2px 4px oklch(0% 0 0 / 0.5), 0 10px 30px oklch(0% 0 0 / 0.4),
         inset 0 1px 0 oklch(100% 0 0 / 0.04);
+      --shadow-inset: inset 0 1px 2px oklch(0% 0 0 / 0.35);
 
       --color-accent: #5fa693;
       --color-accent-soft: #1c2f26;
       --color-accent-ink: #b9ddd1;
+      /* White on this lighter green reads at under 3:1; the dark ground reads at 6+. */
+      --color-on-accent: #06110a;
 
       --color-danger: #e08a7a;
       --color-danger-soft: #2e1a17;
+      --color-on-danger: #1a0906;
       --color-warn: #dfae62;
       --color-warn-ink: #f0d9ab;
       --color-warn-soft: #2b2113;
@@ -160,7 +225,12 @@
   }
 }
 
-@layer utilities {
+/*
+ * Components, not utilities: a class written next to one of these (w-auto on
+ * an .input, p-0 on a .card) must win, and in the utilities layer these came
+ * after Tailwind's own classes and silently beat them.
+ */
+@layer components {
   /* Pinterest's 2:3 canvas - the preview is the visual focus of the tool. */
   .aspect-pin {
     aspect-ratio: 2 / 3;
@@ -168,9 +238,95 @@
 
   .card {
     background-color: var(--color-surface);
-    border: 1px solid var(--color-line);
+    border: 1px solid var(--color-edge);
     border-radius: var(--radius-card);
     box-shadow: var(--shadow-card);
+  }
+
+  /*
+   * A card you can open: it lifts a little under the pointer and gives under
+   * the finger. Hover only where there is a real pointer - on a phone the
+   * lift would stay stuck after the tap.
+   */
+  .card-link {
+    transition:
+      transform 200ms var(--ease-out),
+      box-shadow 200ms var(--ease-out),
+      border-color 200ms ease;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .card-link:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-raised);
+    }
+  }
+  .card-link:active {
+    transform: scale(0.985);
+    transition-duration: 120ms;
+  }
+
+  /* Numbers that sit in columns or change in place do not jitter. */
+  .figures {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum", "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /*
+   * Things that open over the page - menus, lists, dialogs - arrive rather
+   * than blink in. Entry only (@starting-style): closing stays instant, which
+   * is what an action you repeat all day should feel like.
+   */
+  .pop-in {
+    transition:
+      opacity 150ms var(--ease-out),
+      scale 150ms var(--ease-out);
+    @starting-style {
+      opacity: 0;
+      scale: 0.96;
+    }
+  }
+  .dialog-in {
+    transition:
+      opacity 200ms var(--ease-out),
+      scale 220ms var(--ease-out),
+      translate 220ms var(--ease-out);
+    @starting-style {
+      opacity: 0;
+      scale: 0.97;
+      translate: 0 6px;
+    }
+  }
+  .fade-in {
+    transition: opacity 200ms var(--ease-out);
+    @starting-style {
+      opacity: 0;
+    }
+  }
+
+  /* A page settles into place when you arrive on it. Short: it is seen all day. */
+  @keyframes rise {
+    from {
+      opacity: 0;
+      translate: 0 6px;
+    }
+  }
+  .rise-in {
+    animation: rise 260ms var(--ease-out) backwards;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    /* Still fades - that helps follow what opened - but does not move. */
+    .pop-in,
+    .dialog-in {
+      transition-property: opacity;
+    }
+    .card-link:hover,
+    .card-link:active {
+      transform: none;
+    }
+    .rise-in {
+      animation: none;
+    }
   }
 
   /*
@@ -191,8 +347,17 @@
     transition: border-color 120ms ease, box-shadow 120ms ease;
   }
 
-  .input:hover:not(:disabled) {
-    border-color: var(--color-ink-faint);
+  /* iOS zooms into any field set under 16px, and never zooms back out. */
+  @media (pointer: coarse) {
+    .input {
+      font-size: 16px;
+    }
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .input:hover:not(:disabled):not(:focus) {
+      border-color: var(--color-ink-faint);
+    }
   }
 
   .input:focus {

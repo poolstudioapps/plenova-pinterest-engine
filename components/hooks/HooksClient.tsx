@@ -301,7 +301,7 @@ export function HooksClient({
 
   /** One hook in the tier list: its cover, its words, what it did. */
   const tierCard = (hook: HookView) => (
-    <li key={hook.id} className="flex gap-3 rounded-[12px] border border-[var(--color-line)] bg-[var(--color-surface)] p-2.5">
+    <li key={hook.id} className="card-link flex gap-3 rounded-[14px] border border-[var(--color-edge)] bg-[var(--color-surface)] p-2.5">
       <HookThumb
         src={hook.spy?.images[0]?.url}
         className="h-[92px] w-[69px]"
@@ -357,8 +357,9 @@ export function HooksClient({
 
       <Card className="overflow-hidden">
         <div className="space-y-3 p-4 md:p-5">
-          <form onSubmit={add} className="flex gap-2">
+          <form onSubmit={add} className="flex flex-wrap gap-2">
             <Input
+              className="min-w-0 flex-1 basis-[220px]"
               value={draft}
               maxLength={HOOK_MAX_LENGTH}
               onChange={(e) => setDraft(e.target.value)}
@@ -392,7 +393,7 @@ export function HooksClient({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 border-t border-[var(--color-line)] px-4 py-3 md:px-5">
-          <div role="tablist" className="flex gap-0.5 rounded-full bg-[var(--color-surface-muted)] p-1">
+          <div role="tablist" className="flex gap-0.5 rounded-full bg-[var(--color-surface-muted)] p-1 shadow-[var(--shadow-inset)]">
             {(["tiers", "list"] as const).map((v) => (
               <button
                 key={v}
@@ -411,7 +412,7 @@ export function HooksClient({
               </button>
             ))}
           </div>
-          <div role="tablist" className="flex gap-0.5 rounded-full bg-[var(--color-surface-muted)] p-1">
+          <div role="tablist" className="flex gap-0.5 rounded-full bg-[var(--color-surface-muted)] p-1 shadow-[var(--shadow-inset)]">
             {statusTabs.map((f) => (
               <button
                 key={f.key}
@@ -430,7 +431,7 @@ export function HooksClient({
               </button>
             ))}
           </div>
-          <div className="w-44">
+          <div className="grow basis-[136px] sm:grow-0 sm:basis-44">
             <Picker
               options={[
                 { value: "all", label: t("hooks.sourceAll") },
@@ -441,7 +442,7 @@ export function HooksClient({
               onChange={(v) => setSource(v as Source)}
             />
           </div>
-          <div className="w-44">
+          <div className="grow basis-[136px] sm:grow-0 sm:basis-44">
             <Picker
               options={[
                 { value: "", label: t("hooks.allAccounts") },
@@ -451,7 +452,7 @@ export function HooksClient({
               onChange={setAccount}
             />
           </div>
-          <div className="w-44">
+          <div className="grow basis-[136px] sm:grow-0 sm:basis-44">
             <Picker
               options={[
                 { value: "", label: t("hooks.allFormats") },
@@ -462,7 +463,7 @@ export function HooksClient({
             />
           </div>
           {view === "list" ? (
-            <div className="w-40">
+            <div className="grow basis-[136px] sm:grow-0 sm:basis-40">
               <Picker
                 options={[
                   { value: "views", label: t("hooks.sortViews") },
@@ -500,16 +501,16 @@ export function HooksClient({
             if (onPage.length === 0) return null;
             if (tier === null) {
               return (
-                <section key="ours" className="grid gap-3 md:grid-cols-[120px_minmax(0,1fr)]">
+                <section key="ours" className="grid grid-cols-1 gap-3 md:grid-cols-[120px_minmax(0,1fr)]">
                   <p className="text-[12.5px] font-semibold text-[var(--color-ink-soft)]">{t("hooks.noStats")}</p>
-                  <ul className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">{onPage.map(tierCard)}</ul>
+                  <ul className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">{onPage.map(tierCard)}</ul>
                 </section>
               );
             }
             const floor = tierFloor(tier);
             const inTier = ranked.filter((r) => r.tier === tier).length;
             return (
-              <section key={tier} className="grid gap-3 md:grid-cols-[120px_minmax(0,1fr)]">
+              <section key={tier} className="grid grid-cols-1 gap-3 md:grid-cols-[120px_minmax(0,1fr)]">
                 <div className="flex items-center gap-3 md:flex-col md:items-start">
                   <TierBadge tier={tier} large />
                   <p className="text-[12px] text-[var(--color-ink-faint)]">
@@ -518,7 +519,7 @@ export function HooksClient({
                     {t("hooks.shown", { n: inTier })}
                   </p>
                 </div>
-                <ul className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">{onPage.map(tierCard)}</ul>
+                <ul className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">{onPage.map(tierCard)}</ul>
               </section>
             );
           })}

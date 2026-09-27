@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { CaretLeft, CaretRight } from "@phosphor-icons/react";
 
 /** How many cards a page shows at most - long lists of image cards slowed the browser down. */
 export const PAGE_SIZE = 20;
@@ -58,7 +59,7 @@ export function Pager({
           disabled={page <= 1}
           aria-label="Page précédente"
         >
-          ‹
+          <CaretLeft aria-hidden size={14} weight="bold" />
         </button>
         {visiblePages(page, pages).map((n, i) =>
           n === "…" ? (
@@ -75,7 +76,7 @@ export function Pager({
                 button,
                 "tabular-nums",
                 n === page
-                  ? "bg-[var(--color-accent)] text-white"
+                  ? "bg-[var(--color-accent)] text-[var(--color-on-accent)]"
                   : "text-[var(--color-ink-soft)] hover:bg-[var(--color-surface-muted)]",
               )}
             >
@@ -90,7 +91,7 @@ export function Pager({
           disabled={page >= pages}
           aria-label="Page suivante"
         >
-          ›
+          <CaretRight aria-hidden size={14} weight="bold" />
         </button>
       </div>
     </nav>

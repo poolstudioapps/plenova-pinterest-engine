@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { DotsThree } from "@phosphor-icons/react";
 import { anchorFor, useDismiss, type Box } from "@/components/ui/Picker";
 import { cn } from "@/lib/utils";
 
@@ -29,7 +30,7 @@ import { cn } from "@/lib/utils";
 const CloseMenu = createContext<() => void>(() => {});
 
 const ROW_TRIGGER =
-  "grid size-8 place-items-center rounded-[var(--radius-control)] text-[var(--color-ink-soft)] transition-colors hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-ink)] aria-expanded:bg-[var(--color-surface-muted)] aria-expanded:text-[var(--color-ink)]";
+  "grid size-8 place-items-center rounded-[var(--radius-control)] text-[var(--color-ink-soft)] transition-[background-color,color,scale] duration-150 hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-ink)] active:scale-[0.94] aria-expanded:bg-[var(--color-surface-muted)] aria-expanded:text-[var(--color-ink)]";
 
 /** The "⋯" at the end of a list row. */
 export function RowMenu({
@@ -46,11 +47,7 @@ export function RowMenu({
       label={label}
       onClose={onClose}
       triggerClassName={ROW_TRIGGER}
-      trigger={
-        <span aria-hidden className="text-[16px] leading-none">
-          ⋯
-        </span>
-      }
+      trigger={<DotsThree aria-hidden size={18} weight="bold" />}
     >
       {children}
     </Menu>
@@ -147,8 +144,10 @@ export function Menu({
                   left: box.left + box.width,
                   top: box.top,
                   transform: box.above ? "translate(-100%, -100%)" : "translateX(-100%)",
+                  // It grows out of its button's corner, not out of nowhere.
+                  transformOrigin: box.above ? "bottom right" : "top right",
                 }}
-                className="z-[100] min-w-[200px] overflow-hidden rounded-[12px] border border-[var(--color-line)] bg-[var(--color-surface)] py-1 shadow-[var(--shadow-raised)]"
+                className="pop-in z-[100] min-w-[200px] overflow-hidden rounded-[14px] border border-[var(--color-edge)] bg-[var(--color-surface)] p-1 shadow-[var(--shadow-raised)]"
               >
                 {children}
               </div>
@@ -182,7 +181,7 @@ export function RowMenuItem({
         if (!keepOpen) close();
       }}
       className={cn(
-        "block w-full px-3 py-2 text-left text-[13px] transition-colors outline-none focus-visible:bg-[var(--color-surface-muted)] disabled:cursor-not-allowed disabled:text-[var(--color-ink-faint)]",
+        "block w-full rounded-[9px] px-3 py-2 text-left text-[13px] transition-colors outline-none focus-visible:bg-[var(--color-surface-muted)] disabled:cursor-not-allowed disabled:text-[var(--color-ink-faint)]",
         danger
           ? "text-[var(--color-danger)] hover:bg-[var(--color-danger-soft)]"
           : "text-[var(--color-ink)] hover:bg-[var(--color-surface-muted)]",

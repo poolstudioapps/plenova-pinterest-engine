@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Sparkle } from "@phosphor-icons/react";
 import Link from "next/link";
 import { HookSuggestions } from "@/components/hooks/HookSuggestions";
 import { HookThumb, TierBadge } from "@/components/hooks/parts";
@@ -79,7 +80,7 @@ export function HookPicker({
         aria-expanded={open}
         className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-line-strong)] px-3 py-1 text-[12.5px] font-medium text-[var(--color-ink-soft)] transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-ink)] aria-expanded:border-[var(--color-accent)] aria-expanded:text-[var(--color-accent-ink)]"
       >
-        <span aria-hidden>✦</span>
+        <Sparkle aria-hidden size={13} weight="fill" className="text-[var(--color-accent)]" />
         {t("carousels.hooksButton")}
       </button>
 
@@ -94,7 +95,7 @@ export function HookPicker({
             ) : ideas.length === 0 ? (
               <p className="text-[12.5px] text-[var(--color-ink-faint)]">{t("carousels.hooksNoIdeas")}</p>
             ) : (
-              <ul className="grid max-h-[340px] gap-1.5 overflow-y-auto pr-1 sm:grid-cols-2">
+              <ul className="grid grid-cols-1 max-h-[340px] gap-1.5 overflow-y-auto pr-1 sm:grid-cols-2">
                 {ideas.slice(0, SHOWN).map((hook) => {
                   const tier = tiers.get(hook.id);
                   return (

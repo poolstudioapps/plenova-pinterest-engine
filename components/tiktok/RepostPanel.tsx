@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { X } from "@phosphor-icons/react";
 import { Button, Field, FileDropZone, SortableGrid } from "@/components/ui";
 import { WritingOptions } from "@/components/tiktok/WritingOptions";
 import { ImageModeChoice, type ImageMode } from "@/components/spy/ProcessDialog";
@@ -248,7 +249,7 @@ export function RepostPanel({
       : t("repost.reading");
 
   return (
-    <div className="grid max-w-[760px] gap-5">
+    <div className="grid max-w-[760px] grid-cols-[minmax(0,1fr)] gap-5">
       {/*
         No card and no heading here: the tab already names this panel, and the
         parent already pads it. Both were drawn a second time, as a bordered
@@ -330,7 +331,7 @@ export function RepostPanel({
                       aria-label={t("repost.remove")}
                       className="absolute top-1.5 right-1.5 grid size-6 place-items-center rounded-[var(--radius-pill)] bg-[color-mix(in_oklab,var(--color-surface)_88%,transparent)] text-[13px] text-[var(--color-ink)] shadow-[var(--shadow-card)] transition-colors hover:bg-[var(--color-danger-soft)] hover:text-[var(--color-danger)]"
                     >
-                      ×
+                      <X aria-hidden size={12} weight="bold" />
                     </button>
                   </div>
                 )}

@@ -99,7 +99,7 @@ export function HookSuggestions({
   return (
     <div className={cn("space-y-3", className)}>
       <p className="text-[12.5px] leading-relaxed text-[var(--color-ink-soft)]">{t("hooks.suggestHint")}</p>
-      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_220px]">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_220px]">
         <Field label={t("hooks.suggestDirection")} htmlFor="hook-direction">
           <Input
             id="hook-direction"

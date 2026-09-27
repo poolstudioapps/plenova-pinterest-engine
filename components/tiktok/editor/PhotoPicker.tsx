@@ -204,7 +204,7 @@ export function PhotoPicker({
           <div
             role="tablist"
             aria-label={heading}
-            className="flex flex-wrap gap-1 rounded-full bg-[var(--color-surface-muted)] p-1"
+            className="flex flex-wrap gap-1 rounded-full bg-[var(--color-surface-muted)] p-1 shadow-[var(--shadow-inset)]"
           >
             {templates ? (
               <button
@@ -351,7 +351,7 @@ export function PhotoPicker({
                           className="aspect-[4/5] w-full object-cover"
                         />
                         {current ? (
-                          <span className="absolute top-1.5 right-1.5 rounded-full bg-[var(--color-accent)] px-2 py-0.5 text-[10.5px] font-semibold text-white">
+                          <span className="absolute top-1.5 right-1.5 rounded-full bg-[var(--color-accent)] px-2 py-0.5 text-[10.5px] font-semibold text-[var(--color-on-accent)]">
                             {t("editor.pickerCurrent")}
                           </span>
                         ) : null}

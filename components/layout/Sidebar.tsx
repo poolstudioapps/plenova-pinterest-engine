@@ -2,7 +2,23 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import {
+  Binoculars,
+  Cards,
+  ChartLineUp,
+  Images,
+  PinterestLogo,
+  PushPin,
+  Queue,
+  Quotes,
+  SignOut,
+  Sparkle,
+  SquaresFour,
+  Sword,
+  TiktokLogo,
+  type Icon,
+} from "@phosphor-icons/react";
 import { PlenovaMark } from "@/components/layout/PlenovaMark";
 import { translator, type TranslationKey } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -15,21 +31,25 @@ import { cn } from "@/lib/utils";
  * destination makes the shape of the tool legible: each channel owns its
  * production steps and its own account page, and only the image library sits
  * outside, because it genuinely is shared.
+ *
+ * Each item carries an icon: a column of words reads as a list, a column of
+ * shapes is found at a glance - and on a phone, where the group names do not
+ * fit, the icons are what still says which channel an item belongs to.
  */
 const GROUPS: {
   key: string;
   labelKey?: TranslationKey;
-  items: { href: string; key: TranslationKey }[];
+  items: { href: string; key: TranslationKey; icon: Icon }[];
 }[] = [
   {
     key: "top",
     items: [
       // The app's business: revenue, usage, acquisition (RevenueCat, Amplitude, AppsFlyer).
-      { href: "/performances", key: "nav.performance" },
+      { href: "/performances", key: "nav.performance", icon: ChartLineUp },
       // The content side: carousels and Pins.
-      { href: "/", key: "nav.dashboard" },
+      { href: "/", key: "nav.dashboard", icon: SquaresFour },
       // Our own accounts, Mr Stark against Mr Mousk.
-      { href: "/versus", key: "nav.versus" },
+      { href: "/versus", key: "nav.versus", icon: Sword },
     ],
   },
   // TikTok first: carousels are where most of the work happens now.
@@ -37,26 +57,26 @@ const GROUPS: {
     key: "tiktok",
     labelKey: "nav.groupTikTok",
     items: [
-      { href: "/carousels", key: "nav.carousels" },
-      { href: "/hooks", key: "nav.hooks" },
-      { href: "/spy", key: "nav.spy" },
-      { href: "/tiktok", key: "nav.accountTikTok" },
+      { href: "/carousels", key: "nav.carousels", icon: Cards },
+      { href: "/hooks", key: "nav.hooks", icon: Quotes },
+      { href: "/spy", key: "nav.spy", icon: Binoculars },
+      { href: "/tiktok", key: "nav.accountTikTok", icon: TiktokLogo },
     ],
   },
   {
     key: "pinterest",
     labelKey: "nav.groupPinterest",
     items: [
-      { href: "/generate", key: "nav.generate" },
-      { href: "/library", key: "nav.library" },
-      { href: "/queue", key: "nav.queue" },
-      { href: "/pinterest", key: "nav.accountPinterest" },
+      { href: "/generate", key: "nav.generate", icon: Sparkle },
+      { href: "/library", key: "nav.library", icon: PushPin },
+      { href: "/queue", key: "nav.queue", icon: Queue },
+      { href: "/pinterest", key: "nav.accountPinterest", icon: PinterestLogo },
     ],
   },
   {
     key: "shared",
     labelKey: "nav.groupShared",
-    items: [{ href: "/media", key: "nav.media" }],
+    items: [{ href: "/media", key: "nav.media", icon: Images }],
   },
 ];
 
@@ -70,6 +90,7 @@ export function Sidebar({
   const pathname = usePathname();
   const t = translator();
   const [leaving, setLeaving] = useState(false);
+  const strip = useRef<HTMLDivElement>(null);
 
   async function signOut() {
     setLeaving(true);
@@ -84,65 +105,122 @@ export function Sidebar({
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
+  /*
+   * On a phone the items are one scrolling strip, and the current page could
+   * sit off to the right with nothing on screen saying where you are. The
+   * strip scrolls itself so the current item is in view - its own scroll
+   * only, never the page's.
+   */
+  useEffect(() => {
+    const el = strip.current;
+    const current = el?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!el || !current || el.scrollWidth <= el.clientWidth) return;
+    const target = current.offsetLeft - (el.clientWidth - current.offsetWidth) / 2;
+    el.scrollTo({ left: Math.max(0, target), behavior: "instant" });
+  }, [pathname]);
+
+  const items = GROUPS.map((group) => ({
+    ...group,
+    // Performances only for the addresses that see revenue.
+    items: group.items.filter((item) => item.href !== "/performances" || showPerformance),
+  }));
+
   return (
     <nav
       aria-label="Navigation principale"
-      className="flex gap-1 overflow-x-auto border-b border-[var(--color-line)] bg-[var(--color-surface)] px-4 py-3 md:sticky md:top-0 md:h-dvh md:w-64 md:shrink-0 md:flex-col md:gap-0 md:overflow-y-auto md:border-r md:border-b-0 md:px-3 md:py-6"
+      className={cn(
+        // Phone: a strip stuck to the top, frosted over the page it scrolls above.
+        "sticky top-0 z-30 flex items-center gap-2 border-b border-[var(--color-edge)] bg-[var(--color-frame)]/85 pt-[env(safe-area-inset-top)] backdrop-blur-md",
+        // Wider: a column on the frame, beside the sheet the pages sit on.
+        "md:h-dvh md:w-60 md:shrink-0 md:flex-col md:items-stretch md:gap-0 md:border-b-0 md:bg-transparent md:px-3 md:pt-5 md:pb-3 md:backdrop-blur-none",
+      )}
     >
-      <div className="mb-0 hidden items-center gap-2.5 px-3 md:mb-7 md:flex">
-        <PlenovaMark size={32} />
-        <div className="leading-tight">
-          <p className="text-[14px] font-semibold tracking-[-0.01em]">
+      <Link
+        href="/"
+        className="flex shrink-0 items-center gap-2.5 rounded-[12px] py-2 pl-4 md:mb-6 md:px-2.5 md:py-1"
+        aria-label="Plenova Studio"
+      >
+        <PlenovaMark size={30} className="size-7 md:size-[30px]" />
+        <span className="hidden leading-none md:block">
+          <span className="block text-[14.5px] font-semibold tracking-[-0.015em]">
             Plenova
-          </p>
-          <p className="text-[11.5px] text-[var(--color-ink-faint)]">Studio</p>
-        </div>
+          </span>
+          <span className="mt-1 block text-[11.5px] text-[var(--color-ink-faint)]">
+            Studio
+          </span>
+        </span>
+      </Link>
+
+      <div
+        ref={strip}
+        className={cn(
+          "flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto py-2 pr-4 pl-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+          // The strip fades out at its edges: there is more that way.
+          "[mask-image:linear-gradient(to_right,transparent,black_14px,black_calc(100%-28px),transparent)]",
+          "md:flex-col md:items-stretch md:gap-0 md:overflow-x-visible md:overflow-y-auto md:py-0 md:pr-0 md:pl-0 md:[mask-image:none]",
+        )}
+      >
+        {items.map((group) =>
+          group.items.length === 0 ? null : (
+            <div key={group.key} className="flex shrink-0 md:mb-5 md:block">
+              {group.labelKey ? (
+                <p className="hidden px-2.5 pb-1.5 text-[12px] font-medium text-[var(--color-ink-faint)] md:block">
+                  {t(group.labelKey)}
+                </p>
+              ) : null}
+              <ul className="flex gap-0.5 md:block md:space-y-0.5">
+                {group.items.map((item) => {
+                  const active = isActive(item.href);
+                  const Glyph = item.icon;
+                  return (
+                    <li key={item.href} className="shrink-0">
+                      <Link
+                        href={item.href}
+                        aria-current={active ? "page" : undefined}
+                        className={cn(
+                          "group flex shrink-0 items-center gap-2 rounded-[10px] px-2.5 py-1.5 text-[13.5px] whitespace-nowrap transition-[background-color,color,box-shadow,scale] duration-150 active:scale-[0.97] md:gap-2.5 md:py-[7px] md:text-[14px]",
+                          active
+                            ? "bg-[var(--color-surface)] font-semibold text-[var(--color-ink)] shadow-[var(--shadow-card)]"
+                            : "font-medium text-[var(--color-ink-soft)] hover:bg-[var(--color-surface)]/55 hover:text-[var(--color-ink)]",
+                        )}
+                      >
+                        <Glyph
+                          aria-hidden
+                          size={18}
+                          weight={active ? "duotone" : "regular"}
+                          className={cn(
+                            "shrink-0 transition-colors",
+                            active
+                              ? "text-[var(--color-accent)]"
+                              : "text-[var(--color-ink-faint)] group-hover:text-[var(--color-ink-soft)]",
+                          )}
+                        />
+                        {t(item.key)}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ),
+        )}
+
+        {/* On a phone, signing out is the last stop of the strip. */}
+        <button
+          type="button"
+          onClick={() => void signOut()}
+          disabled={leaving}
+          className="flex shrink-0 items-center gap-2 rounded-[10px] px-2.5 py-1.5 text-[13.5px] font-medium whitespace-nowrap text-[var(--color-ink-faint)] disabled:opacity-50 md:hidden"
+        >
+          <SignOut aria-hidden size={18} />
+          {leaving ? t("nav.signingOut") : t("nav.signOut")}
+        </button>
       </div>
 
-      {GROUPS.map((group) => (
-        <div key={group.key} className="contents md:mb-5 md:block">
-          {group.labelKey ? (
-            <p className="hidden px-3 pt-1 pb-2 text-[11px] font-semibold tracking-[0.06em] text-[var(--color-ink-faint)] uppercase md:block">
-              {t(group.labelKey)}
-            </p>
-          ) : null}
-
-          {group.items
-            // Performances only for the addresses that see revenue.
-            .filter((item) => item.href !== "/performances" || showPerformance)
-            .map((item) => {
-              const active = isActive(item.href);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  aria-current={active ? "page" : undefined}
-                  className={cn(
-                    "relative shrink-0 rounded-[9px] px-3 py-2 text-[14px] transition-colors md:block",
-                    active
-                      ? "bg-[var(--color-accent-soft)] font-semibold text-[var(--color-accent-ink)]"
-                      : "font-medium text-[var(--color-ink-soft)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-ink)]",
-                  )}
-                >
-                  {/* A marker on the edge, so the current page is findable
-                    without relying on a tint alone. */}
-                  {active ? (
-                    <span
-                      aria-hidden
-                      className="absolute top-1/2 -left-3 hidden h-5 w-1 -translate-y-1/2 rounded-r bg-[var(--color-accent)] md:block"
-                    />
-                  ) : null}
-                  {t(item.key)}
-                </Link>
-              );
-            })}
-        </div>
-      ))}
-
-      <div className="flex shrink-0 items-center gap-2 md:mt-auto md:block md:border-t md:border-[var(--color-line)] md:px-3 md:pt-4">
+      <div className="mt-auto hidden border-t border-[var(--color-edge)] px-1 pt-3 md:block">
         {email ? (
           <p
-            className="hidden truncate text-[12px] text-[var(--color-ink-faint)] md:block"
+            className="truncate px-1.5 pb-1 text-[12px] text-[var(--color-ink-faint)]"
             title={email}
           >
             {email}
@@ -152,8 +230,13 @@ export function Sidebar({
           type="button"
           onClick={() => void signOut()}
           disabled={leaving}
-          className="shrink-0 rounded-[9px] px-3 py-2 text-[13.5px] font-medium text-[var(--color-ink-soft)] transition-colors hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-ink)] disabled:opacity-50 md:-mx-3 md:mt-1 md:block md:w-[calc(100%+1.5rem)] md:text-left"
+          className="group flex w-full items-center gap-2.5 rounded-[10px] px-1.5 py-[7px] text-left text-[13.5px] font-medium text-[var(--color-ink-soft)] transition-colors hover:bg-[var(--color-surface)]/55 hover:text-[var(--color-ink)] disabled:opacity-50"
         >
+          <SignOut
+            aria-hidden
+            size={18}
+            className="text-[var(--color-ink-faint)] transition-colors group-hover:text-[var(--color-ink-soft)]"
+          />
           {leaving ? t("nav.signingOut") : t("nav.signOut")}
         </button>
       </div>

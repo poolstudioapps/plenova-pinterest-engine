@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Info, Warning, WarningCircle } from "@phosphor-icons/react/ssr";
 import { PottedPlant } from "@/components/plants/PottedPlant";
 import type {
   ButtonHTMLAttributes,
@@ -41,13 +42,15 @@ export function SectionHeader({
   action?: ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-      <div>
-        <h1 className="text-[30px] font-extrabold tracking-[-0.03em] text-[var(--color-ink)]">
+    <div className="mb-7 flex flex-wrap items-end justify-between gap-4 md:mb-8">
+      <div className="min-w-0">
+        {/* Inter's optical size turns this into its Display drawing: the
+            tight tracking is the face's own, not a squeeze. */}
+        <h1 className="text-[28px] leading-[1.1] font-bold tracking-[-0.025em] text-[var(--color-ink)] md:text-[34px]">
           {title}
         </h1>
         {description ? (
-          <p className="mt-2 max-w-2xl text-[14.5px] leading-relaxed text-[var(--color-ink-soft)]">
+          <p className="mt-2.5 max-w-[62ch] text-[14.5px] leading-relaxed text-[var(--color-ink-soft)]">
             {description}
           </p>
         ) : null}
@@ -67,16 +70,31 @@ type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "ink";
  * flat, quiet shape in every variant.
  */
 const DISABLED =
-  "disabled:bg-[var(--color-surface-muted)] disabled:text-[var(--color-ink-faint)] disabled:border-[var(--color-line)] disabled:shadow-none";
+  "disabled:bg-[var(--color-surface-muted)] disabled:bg-none disabled:text-[var(--color-ink-faint)] disabled:border-[var(--color-line)] disabled:shadow-none";
+
+/*
+ * Filled buttons carry a faint light from above - a sheen at the top and a
+ * one-pixel highlight on the upper edge - so they read as something you can
+ * press rather than a coloured rectangle.
+ */
+const SHEEN =
+  "bg-linear-to-b from-white/[0.09] to-transparent shadow-[inset_0_1px_0_rgb(255_255_255/0.16),var(--shadow-card)]";
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
-  primary: `bg-[var(--color-accent)] text-white border border-transparent shadow-[var(--shadow-card)] hover:brightness-110 active:brightness-95 ${DISABLED}`,
+  primary: `bg-[var(--color-accent)] text-[var(--color-on-accent)] border border-transparent ${SHEEN} hover:brightness-110 active:brightness-95 ${DISABLED}`,
   /* The site's own strongest call to action: near-black green, white text. */
-  ink: `bg-[var(--color-ink-fill)] text-[var(--color-canvas)] border border-transparent shadow-[var(--shadow-card)] hover:brightness-125 active:brightness-100 ${DISABLED}`,
-  secondary: `bg-[var(--color-surface)] text-[var(--color-ink)] border border-[var(--color-line-strong)] hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-muted)] ${DISABLED}`,
+  ink: `bg-[var(--color-ink-fill)] text-[var(--color-canvas)] border border-transparent ${SHEEN} hover:brightness-125 active:brightness-100 ${DISABLED}`,
+  secondary: `bg-[var(--color-surface)] text-[var(--color-ink)] border border-[var(--color-line-strong)] shadow-[0_1px_2px_rgb(29_47_27/0.05)] hover:border-[var(--color-ink-faint)] hover:bg-[var(--color-canvas)] ${DISABLED}`,
   ghost: `text-[var(--color-ink-soft)] border border-transparent hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-ink)] ${DISABLED} disabled:bg-transparent`,
-  danger: `bg-[var(--color-danger)] text-white border border-transparent hover:brightness-110 ${DISABLED}`,
+  danger: `bg-[var(--color-danger)] text-[var(--color-on-danger)] border border-transparent ${SHEEN} hover:brightness-110 ${DISABLED}`,
 };
+
+/*
+ * Every button gives under the finger: a small scale on press (not on hover,
+ * which a phone would leave stuck), fast, on a curve that starts at once.
+ */
+const BUTTON_BASE =
+  "inline-flex items-center justify-center gap-2 rounded-[var(--radius-pill)] font-medium whitespace-nowrap transition-[filter,background-color,border-color,box-shadow,scale] duration-150 ease-out active:not-disabled:scale-[0.97] disabled:cursor-not-allowed";
 
 /* Generous horizontal padding, because a pill needs it to read as one. */
 const BUTTON_SIZES = {
@@ -101,7 +119,7 @@ export function Button({
       {...props}
       disabled={props.disabled || loading}
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-[var(--radius-pill)] font-medium transition-[filter,background-color,border-color,box-shadow] disabled:cursor-not-allowed",
+        BUTTON_BASE,
         BUTTON_SIZES[size],
         BUTTON_VARIANTS[variant],
         className,
@@ -135,7 +153,7 @@ export function ButtonLink({
     <Link
       href={href}
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-[var(--radius-pill)] font-medium transition-[filter,background-color,border-color,box-shadow]",
+        BUTTON_BASE,
         BUTTON_SIZES[size],
         BUTTON_VARIANTS[variant],
         className,
@@ -173,7 +191,7 @@ export function Field({
   htmlFor?: string;
 }) {
   return (
-    <div className="space-y-1.5">
+    <div className="min-w-0 space-y-1.5">
       <label
         htmlFor={htmlFor}
         className="block text-[13px] font-medium text-[var(--color-ink)]"
@@ -354,21 +372,36 @@ export function Notice({
   children: ReactNode;
 }) {
   const tones = {
-    info: "border-[var(--color-line)] bg-[var(--color-surface-muted)] text-[var(--color-ink-soft)]",
-    warn: "border-transparent bg-[var(--color-warn-soft)] text-[var(--color-warn-ink)]",
+    info: "border-[var(--color-edge)] bg-[var(--color-surface-muted)] text-[var(--color-ink-soft)]",
+    warn: "border-[color-mix(in_oklab,var(--color-warn)_16%,transparent)] bg-[var(--color-warn-soft)] text-[var(--color-warn-ink)]",
     danger:
-      "border-transparent bg-[var(--color-danger-soft)] text-[var(--color-danger)]",
+      "border-[color-mix(in_oklab,var(--color-danger)_16%,transparent)] bg-[var(--color-danger-soft)] text-[var(--color-danger)]",
+  } as const;
+  /* A shape as well as a colour, so the tone is not carried by hue alone. */
+  const Glyph = tone === "warn" ? Warning : tone === "danger" ? WarningCircle : Info;
+  const glyphTone = {
+    info: "text-[var(--color-accent)]",
+    warn: "text-[var(--color-warn)]",
+    danger: "text-[var(--color-danger)]",
   } as const;
 
   return (
     <div
       className={cn(
-        "rounded-[12px] border px-4 py-3 text-[13.5px] leading-relaxed",
+        "flex gap-3 rounded-[14px] border px-4 py-3 text-[13.5px] leading-relaxed",
         tones[tone],
       )}
     >
-      {title ? <p className="mb-0.5 font-semibold">{title}</p> : null}
-      {children}
+      <Glyph
+        aria-hidden
+        size={18}
+        weight="duotone"
+        className={cn("mt-[1px] shrink-0", glyphTone[tone])}
+      />
+      <div className="min-w-0 flex-1">
+        {title ? <p className="mb-0.5 font-semibold">{title}</p> : null}
+        {children}
+      </div>
     </div>
   );
 }
@@ -383,13 +416,20 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-[16px] border border-dashed border-[var(--color-line-strong)] px-6 py-14 text-center">
-      <PottedPlant className="mb-3 size-20" />
-      <p className="text-[15px] font-medium text-[var(--color-ink)]">{title}</p>
-      <p className="mt-1.5 max-w-sm text-[13.5px] leading-relaxed text-[var(--color-ink-soft)]">
+    <div className="relative flex flex-col items-center justify-center overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-edge)] bg-linear-to-b from-[var(--color-surface)] to-[var(--color-surface)]/30 px-6 py-14 text-center">
+      {/* A soft pool of the brand green behind the plant, where the eye lands. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute top-0 left-1/2 h-40 w-72 -translate-x-1/2 -translate-y-1/3 rounded-full bg-[var(--color-accent-soft)] opacity-70 blur-3xl"
+      />
+      <PottedPlant className="relative mb-4 size-20" />
+      <p className="relative text-[16px] font-semibold tracking-[-0.01em] text-[var(--color-ink)]">
+        {title}
+      </p>
+      <p className="relative mt-1.5 max-w-sm text-[13.5px] leading-relaxed text-[var(--color-ink-soft)]">
         {description}
       </p>
-      {action ? <div className="mt-5">{action}</div> : null}
+      {action ? <div className="relative mt-6">{action}</div> : null}
     </div>
   );
 }

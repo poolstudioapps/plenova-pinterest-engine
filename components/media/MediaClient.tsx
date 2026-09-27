@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { Trash } from "@phosphor-icons/react";
 import {
   TemplateDialog,
   TemplateGrid,
@@ -117,7 +118,7 @@ export function MediaClient({ initialAssets, plants, styles }: Props) {
 
   return (
     <div className="space-y-8">
-      <Card className="grid gap-3 p-4 sm:grid-cols-2">
+      <Card className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2">
         {/* `p.primary` + `p.latin`, not the flat `p.label`: the picker draws a
             second line, so the botanical name no longer has to be folded into
             the first one to fit an <option>. */}
@@ -234,7 +235,7 @@ export function MediaClient({ initialAssets, plants, styles }: Props) {
                 </span>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-5 xl:grid-cols-6">
                 {group.assets.map((asset) => (
                   <Card key={asset.id} className="overflow-hidden">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -252,17 +253,23 @@ export function MediaClient({ initialAssets, plants, styles }: Props) {
                       <p className="truncate text-[11.5px] text-[var(--color-ink-faint)]">
                         {styleLabels.get(asset.visualStyle) ?? asset.visualStyle}
                       </p>
-                      <span className="block text-[11px] text-[var(--color-ink-faint)]">
-                        {t("media.used", { n: asset.usedCount })} ·{" "}
-                        {relativeTime(asset.createdAt)}
-                      </span>
-                      <Button
-                        variant="ghost"
-                        className="w-full px-1 py-1 text-[11.5px] text-[var(--color-danger)]"
-                        onClick={() => void remove(asset.id)}
-                      >
-                        {t("media.delete")}
-                      </Button>
+                      {/* Deleting is rare: a quiet bin that only turns red when
+                          you reach for it, not a red word on every picture. */}
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="truncate text-[11px] text-[var(--color-ink-faint)]">
+                          {t("media.used", { n: asset.usedCount })} ·{" "}
+                          {relativeTime(asset.createdAt)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => void remove(asset.id)}
+                          aria-label={t("media.delete")}
+                          title={t("media.delete")}
+                          className="-mr-1 grid size-7 shrink-0 place-items-center rounded-full text-[var(--color-ink-faint)] transition-[background-color,color,scale] hover:bg-[var(--color-danger-soft)] hover:text-[var(--color-danger)] active:scale-[0.92]"
+                        >
+                          <Trash aria-hidden size={15} />
+                        </button>
+                      </div>
                     </div>
                   </Card>
                 ))}
@@ -415,7 +422,7 @@ function Shelf({
           {t("media.shelfEmptyDrop")}
         </button>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-4 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4 lg:grid-cols-6">
           {assets.map((asset) => (
             <Card key={asset.id} className="overflow-hidden">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -432,9 +439,10 @@ function Shelf({
                   type="button"
                   onClick={() => onRemove(asset.id)}
                   aria-label={t("media.delete")}
-                  className="shrink-0 rounded-[var(--radius-pill)] px-2 py-0.5 text-[11px] text-[var(--color-danger)] transition-colors hover:bg-[var(--color-danger-soft)]"
+                  title={t("media.delete")}
+                  className="-mr-0.5 grid size-7 shrink-0 place-items-center rounded-full text-[var(--color-ink-faint)] transition-[background-color,color,scale] hover:bg-[var(--color-danger-soft)] hover:text-[var(--color-danger)] active:scale-[0.92]"
                 >
-                  {t("carousels.delete")}
+                  <Trash aria-hidden size={15} />
                 </button>
               </div>
             </Card>

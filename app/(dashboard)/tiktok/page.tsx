@@ -59,7 +59,7 @@ export default async function TikTokPage({
         </div>
       ) : null}
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,340px)]">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,340px)]">
         <TikTokPanel
           configured={status.configured}
           accounts={status.accounts}

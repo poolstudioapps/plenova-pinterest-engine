@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Button, Card, Field, Input, Notice } from "@/components/ui";
+import { ArrowRight } from "@phosphor-icons/react";
+import { Button, Field, Input, Notice } from "@/components/ui";
 import { translator } from "@/lib/i18n";
 
 /**
@@ -146,18 +147,17 @@ export function LoginForm() {
     }
   }
 
+  // The page draws the card around it; this is only what goes inside.
   if (fromLink) {
     return (
-      <Card className="p-6">
-        <p className="text-center text-[14px] text-[var(--color-ink-soft)]">
-          {t("login.checkingLink")}
-        </p>
-      </Card>
+      <p className="py-4 text-center text-[14px] text-[var(--color-ink-soft)]">
+        {t("login.checkingLink")}
+      </p>
     );
   }
 
   return (
-    <Card className="p-6">
+    <div>
       {step === "email" ? (
         <form onSubmit={requestCode} className="space-y-4">
           <Field label={t("login.email")} htmlFor="email" hint={t("login.emailHint")}>
@@ -180,6 +180,7 @@ export function LoginForm() {
             disabled={email.trim().length < 5}
           >
             {t("login.sendCode")}
+            {busy ? null : <ArrowRight aria-hidden size={16} weight="bold" />}
           </Button>
           {error ? <Notice tone="danger">{error}</Notice> : null}
         </form>
@@ -238,6 +239,6 @@ export function LoginForm() {
           </div>
         </form>
       )}
-    </Card>
+    </div>
   );
 }

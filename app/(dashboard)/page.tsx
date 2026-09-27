@@ -1,4 +1,16 @@
 import Link from "next/link";
+import {
+  ArrowRight,
+  CheckCircle,
+  Circle,
+  Gear,
+  Images,
+  PinterestLogo,
+  Plus,
+  Sparkle,
+  TiktokLogo,
+} from "@phosphor-icons/react/ssr";
+import type { Icon } from "@phosphor-icons/react";
 import { Plant3D } from "@/components/plants/Plant3D";
 import { Badge, ButtonLink, Card, Notice, SectionHeader, StatusBadge } from "@/components/ui";
 import { readiness } from "@/lib/config";
@@ -29,14 +41,34 @@ const CAROUSEL_TONE: Record<CarouselRecord["status"], string> = {
   failed: "bg-[var(--color-danger-soft)] text-[var(--color-danger)]",
 };
 
-function Stat({ label, value, tone }: { label: string; value: number | string; tone?: "warn" }) {
+/*
+ * Four counters as one strip ruled by hairlines, not four tinted boxes: the
+ * numbers are what matter, and a box around each one was louder than they
+ * were. The rules are the strip's own background showing through a 1px gap,
+ * so they stay right whether it lays out as a row or two by two.
+ */
+function Stats({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className="rounded-[14px] bg-[var(--color-surface-muted)] px-3.5 py-3">
-      <p className="text-[12px] font-medium text-[var(--color-ink-soft)]">{label}</p>
+    <div
+      className={cn(
+        "grid grid-cols-2 gap-px overflow-hidden rounded-[14px] border border-[var(--color-edge)] bg-[var(--color-edge)]",
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+function Stat({ label, value, tone }: { label: string; value: number | string; tone?: "warn" }) {
+  const alarm = tone === "warn" && Number(value) > 0;
+  return (
+    <div className="bg-[var(--color-canvas)] px-3.5 pt-3 pb-3.5">
+      <p className="truncate text-[12px] font-medium text-[var(--color-ink-faint)]">{label}</p>
       <p
         className={cn(
-          "mt-1 text-[24px] leading-none font-semibold tracking-[-0.03em] tabular-nums",
-          tone === "warn" && Number(value) > 0 && "text-[var(--color-danger)]",
+          "figures mt-1.5 text-[26px] leading-none font-semibold tracking-[-0.03em]",
+          alarm && "text-[var(--color-danger)]",
         )}
       >
         {value}
@@ -45,16 +77,44 @@ function Stat({ label, value, tone }: { label: string; value: number | string; t
   );
 }
 
-function ChannelHeader({ title, href, link }: { title: string; href: string; link: string }) {
+/* A link that says where it goes: the arrow leans in under the pointer. */
+function GoLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="group inline-flex shrink-0 items-center gap-1 rounded-full text-[13px] font-medium text-[var(--color-accent)] hover:text-[var(--color-accent-ink)]"
+    >
+      {children}
+      <ArrowRight
+        aria-hidden
+        size={14}
+        weight="bold"
+        className="transition-transform duration-200 ease-out group-hover:translate-x-0.5"
+      />
+    </Link>
+  );
+}
+
+function ChannelHeader({
+  title,
+  icon: Glyph,
+  href,
+  link,
+}: {
+  title: string;
+  icon: Icon;
+  href?: string;
+  link?: string;
+}) {
   return (
     <div className="mb-4 flex items-center justify-between gap-3">
-      <h2 className="text-[16px] font-semibold tracking-[-0.01em]">{title}</h2>
-      <Link
-        href={href}
-        className="text-[13px] font-medium text-[var(--color-accent)] hover:underline"
-      >
-        {link} →
-      </Link>
+      <h2 className="flex items-center gap-2.5 text-[16px] font-semibold tracking-[-0.01em]">
+        <span className="grid size-8 place-items-center rounded-[10px] bg-[var(--color-surface-muted)] text-[var(--color-accent-ink)]">
+          <Glyph aria-hidden size={17} weight="duotone" />
+        </span>
+        {title}
+      </h2>
+      {href && link ? <GoLink href={href}>{link}</GoLink> : null}
     </div>
   );
 }
@@ -93,16 +153,21 @@ export default async function DashboardPage() {
         title={t("dashboard.title")}
         description={t("dashboard.subtitle")}
         action={
-          <Plant3D className="-my-8 hidden h-[190px] w-[230px] shrink-0 md:block" floating={4} />
+          <Plant3D className="-my-10 hidden h-[200px] w-[240px] shrink-0 md:block" floating={4} />
         }
       />
 
-      <div className="mb-6 flex flex-wrap gap-2.5">
+      <div className="mb-7 flex flex-wrap gap-2.5">
         <ButtonLink href="/carousels" variant="primary">
+          <Plus aria-hidden size={16} weight="bold" />
           {t("dashboard.newCarousel")}
         </ButtonLink>
-        <ButtonLink href="/generate">{t("dashboard.newPins")}</ButtonLink>
+        <ButtonLink href="/generate">
+          <Sparkle aria-hidden size={16} weight="duotone" className="text-[var(--color-accent)]" />
+          {t("dashboard.newPins")}
+        </ButtonLink>
         <ButtonLink href="/media" variant="ghost">
+          <Images aria-hidden size={16} />
           {t("dashboard.openLibrary")}
         </ButtonLink>
       </div>
@@ -125,11 +190,11 @@ export default async function DashboardPage() {
         </div>
       ) : null}
 
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         {/* ------------------------------------------------------ TikTok */}
         <Card className="p-5">
-          <ChannelHeader title="TikTok" href="/carousels" link={t("dashboard.allCarousels")} />
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+          <ChannelHeader title="TikTok" icon={TiktokLogo} href="/carousels" link={t("dashboard.allCarousels")} />
+          <Stats className="sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4">
             <Stat label={t("dashboard.cDraft")} value={carouselCount("draft")} />
             <Stat label={t("dashboard.cPublished")} value={carouselCount("published")} />
             <Stat
@@ -137,7 +202,7 @@ export default async function DashboardPage() {
               value={carouselCount("generating") + carouselCount("publishing")}
             />
             <Stat label={t("dashboard.cFailed")} value={carouselCount("failed")} tone="warn" />
-          </div>
+          </Stats>
 
           <p className="mt-4 text-[12.5px] text-[var(--color-ink-soft)]">
             {accounts.length === 0 ? (
@@ -177,10 +242,10 @@ export default async function DashboardPage() {
                         <img
                           src={thumb}
                           alt=""
-                          className="h-12 w-[38px] shrink-0 rounded-[7px] object-cover"
+                          className="h-12 w-[38px] shrink-0 rounded-[8px] object-cover ring-1 ring-[var(--color-edge)]"
                         />
                       ) : (
-                        <div className="h-12 w-[38px] shrink-0 rounded-[7px] bg-[var(--color-surface-muted)]" />
+                        <div className="h-12 w-[38px] shrink-0 rounded-[8px] bg-[var(--color-surface-muted)] ring-1 ring-[var(--color-edge)]" />
                       )}
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-[13.5px] font-medium">
@@ -202,8 +267,8 @@ export default async function DashboardPage() {
 
         {/* --------------------------------------------------- Pinterest */}
         <Card className="p-5">
-          <ChannelHeader title="Pinterest" href="/library" link={t("dashboard.allPins")} />
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+          <ChannelHeader title="Pinterest" icon={PinterestLogo} href="/library" link={t("dashboard.allPins")} />
+          <Stats className="sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4">
             <Stat label={t("dashboard.generated")} value={pins.length} />
             <Stat label={t("dashboard.published")} value={pinCount("published")} />
             <Stat
@@ -211,7 +276,7 @@ export default async function DashboardPage() {
               value={pinCount("queued") + pinCount("scheduled")}
             />
             <Stat label={t("dashboard.failed")} value={pinCount("failed")} tone="warn" />
-          </div>
+          </Stats>
 
           <p className="mt-4 text-[12.5px] text-[var(--color-ink-soft)]">
             {connection.connected ? (
@@ -243,10 +308,10 @@ export default async function DashboardPage() {
                       <img
                         src={pin.imageUrl}
                         alt=""
-                        className="h-12 w-8 shrink-0 rounded-[7px] object-cover"
+                        className="h-12 w-8 shrink-0 rounded-[8px] object-cover ring-1 ring-[var(--color-edge)]"
                       />
                     ) : (
-                      <div className="h-12 w-8 shrink-0 rounded-[7px] bg-[var(--color-surface-muted)]" />
+                      <div className="h-12 w-8 shrink-0 rounded-[8px] bg-[var(--color-surface-muted)] ring-1 ring-[var(--color-edge)]" />
                     )}
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[13.5px] font-medium">{pin.title}</p>
@@ -268,24 +333,24 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      <div className="mt-5 grid gap-5 lg:grid-cols-3">
+      <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-3">
         {/* ----------------------------------------------------- library */}
         <Card className="p-5 lg:col-span-2">
-          <ChannelHeader title={t("dashboard.library")} href="/media" link={t("dashboard.openLibrary")} />
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+          <ChannelHeader title={t("dashboard.library")} icon={Images} href="/media" link={t("dashboard.openLibrary")} />
+          <Stats className="sm:grid-cols-4">
             <Stat label={t("dashboard.media")} value={media.length} />
             <Stat label={t("dashboard.templates")} value={templates.length} />
             <Stat label={t("dashboard.reuses")} value={reuses} />
             <Stat label={t("dashboard.plants")} value={PLANTS.length} />
-          </div>
-          <p className="mt-3 text-[12.5px] leading-relaxed text-[var(--color-ink-faint)]">
+          </Stats>
+          <p className="mt-3.5 max-w-[70ch] text-[12.5px] leading-relaxed text-[var(--color-ink-faint)]">
             {t("dashboard.libraryHint")}
           </p>
         </Card>
 
         {/* ------------------------------------------------------ system */}
         <Card className="p-5">
-          <h2 className="mb-4 text-[16px] font-semibold tracking-[-0.01em]">{t("dashboard.system")}</h2>
+          <ChannelHeader title={t("dashboard.system")} icon={Gear} />
           <dl className="space-y-3 text-[13px]">
             {[
               { label: t("dashboard.gemini"), ready: report.gemini },
@@ -296,17 +361,20 @@ export default async function DashboardPage() {
             ].map((row) => (
               <div key={row.label} className="flex items-center justify-between gap-3">
                 <dt className="text-[var(--color-ink-soft)]">{row.label}</dt>
-                <dd className="flex shrink-0 items-center gap-1.5">
-                  <span
-                    aria-hidden
-                    className="size-1.5 rounded-full"
-                    style={{
-                      backgroundColor: row.ready ? "var(--color-accent)" : "var(--color-ink-faint)",
-                    }}
-                  />
-                  <span className="font-medium">
-                    {row.ready ? t("dashboard.ready") : t("dashboard.notSet")}
-                  </span>
+                {/* A tick or an empty ring as well as the word: ready is
+                    readable at a glance down the column. */}
+                <dd
+                  className={cn(
+                    "flex shrink-0 items-center gap-1.5 font-medium",
+                    row.ready ? "text-[var(--color-accent-ink)]" : "text-[var(--color-ink-faint)]",
+                  )}
+                >
+                  {row.ready ? (
+                    <CheckCircle aria-hidden size={16} weight="fill" className="text-[var(--color-accent)]" />
+                  ) : (
+                    <Circle aria-hidden size={16} />
+                  )}
+                  {row.ready ? t("dashboard.ready") : t("dashboard.notSet")}
                 </dd>
               </div>
             ))}

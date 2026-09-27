@@ -43,7 +43,7 @@ export function WritingOptions({
 }) {
   const t = translator();
   return (
-    <div className="grid gap-5 md:grid-cols-2">
+    <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
       {/*
         The same controls as the new-carousel panel, not a second design of
         them: a row of chips here beside dropdowns there made the two tabs look

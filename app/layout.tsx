@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 
@@ -11,6 +11,9 @@ const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
   display: "swap",
+  // Inter's optical sizes: page titles and big figures get the tighter
+  // Display drawing, small labels the open text one - automatically, by size.
+  axes: ["opsz"],
 });
 
 export const metadata: Metadata = {
@@ -18,6 +21,15 @@ export const metadata: Metadata = {
   description:
     "Rédiger, illustrer et publier les contenus Plenova sur Pinterest et TikTok.",
   robots: { index: false, follow: false },
+};
+
+/* The phone's status bar takes the colour at the top of the page, per theme. */
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#e4eee0" },
+    { media: "(prefers-color-scheme: dark)", color: "#070e06" },
+  ],
+  viewportFit: "cover",
 };
 
 /**

@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Check } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -135,7 +136,7 @@ export function useDismiss(
 }
 
 const TRIGGER =
-  "flex w-full items-center justify-between gap-2 rounded-[var(--radius-control)] border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-3.5 py-2.5 text-left text-[14px] transition-[border-color,box-shadow] hover:border-[var(--color-accent)] focus-visible:border-[var(--color-accent)] aria-expanded:border-[var(--color-accent)] aria-expanded:shadow-[0_0_0_3px_var(--color-accent-soft)]";
+  "flex w-full items-center justify-between gap-2 rounded-[var(--radius-control)] border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-3.5 py-2.5 text-left text-[14px] shadow-[0_1px_2px_rgb(29_47_27/0.04)] transition-[border-color,box-shadow] hover:border-[var(--color-ink-faint)] focus-visible:border-[var(--color-accent)] aria-expanded:border-[var(--color-accent)] aria-expanded:shadow-[0_0_0_3px_var(--color-accent-soft)]";
 
 /*
  * A drawn chevron. The "▾" glyph it replaces rendered at 10px as something
@@ -193,11 +194,11 @@ function Row({
         className={cn(
           "grid size-4 shrink-0 place-items-center rounded-[5px] border text-[10px] leading-none",
           selected
-            ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-white"
+            ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-[var(--color-on-accent)]"
             : "border-[var(--color-line-strong)]",
         )}
       >
-        {selected ? "✓" : ""}
+        {selected ? <Check size={10} weight="bold" /> : null}
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[13.5px] font-medium">
@@ -249,8 +250,10 @@ function Panel({
         width: box.width,
         maxHeight: MAX_PANEL,
         ...(box.above ? { transform: "translateY(-100%)" } : {}),
+        // It unfolds from the field it belongs to.
+        transformOrigin: box.above ? "bottom center" : "top center",
       }}
-      className="z-[100] overflow-y-auto overscroll-contain rounded-[14px] border border-[var(--color-line)] bg-[var(--color-surface)] p-1 shadow-[var(--shadow-raised)]"
+      className="pop-in z-[100] overflow-y-auto overscroll-contain rounded-[14px] border border-[var(--color-edge)] bg-[var(--color-surface)] p-1 shadow-[var(--shadow-raised)]"
     >
       {children}
     </div>,

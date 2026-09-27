@@ -27,15 +27,22 @@ export default async function DashboardLayout({
     : null;
 
   return (
-    <div className="md:flex">
+    <div className="min-h-dvh bg-[var(--color-frame)] md:flex">
       <Sidebar email={email} showPerformance={(await performanceAccess()).allowed} />
-      <main className="min-w-0 flex-1 px-5 py-8 md:px-10 md:py-12">
-        {/*
-          Narrower than it was. A form field stretched across a wide screen is
-          harder to read, not more generous: the eye has to travel the width of
-          the window to get from a label to its value.
-        */}
-        <div className="mx-auto max-w-5xl">{children}</div>
+      {/*
+        The pages sit on a sheet laid on the frame, rather than on the same
+        ground as the navigation: the edge between the two is what makes it
+        read as an application and not a long web page with links on the left.
+      */}
+      <main id="main" className="min-w-0 flex-1 md:py-2 md:pr-2">
+        <div className="min-h-[calc(100dvh-3.5rem)] rounded-t-[22px] border-t border-[var(--color-edge)] bg-[var(--color-canvas)] px-4 pt-7 pb-16 sm:px-6 md:min-h-[calc(100dvh-1rem)] md:rounded-[22px] md:border md:px-10 md:pt-11 md:pb-20 md:shadow-[var(--shadow-card)]">
+          {/*
+            Narrower than it was. A form field stretched across a wide screen is
+            harder to read, not more generous: the eye has to travel the width of
+            the window to get from a label to its value.
+          */}
+          <div className="mx-auto max-w-5xl">{children}</div>
+        </div>
       </main>
     </div>
   );

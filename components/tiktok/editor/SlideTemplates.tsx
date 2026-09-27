@@ -223,7 +223,7 @@ export function TemplateGrid({
                   className={cn(
                     "rounded-[8px] px-2 py-1 text-[11.5px] font-medium transition-colors",
                     confirming === template.id
-                      ? "bg-[var(--color-danger)] text-white"
+                      ? "bg-[var(--color-danger)] text-[var(--color-on-danger)]"
                       : "text-[var(--color-danger)] hover:bg-[var(--color-danger-soft)]",
                   )}
                 >
@@ -387,7 +387,7 @@ export function TemplateDialog({
           </button>
         </header>
 
-        <div className="grid min-h-0 flex-1 gap-5 overflow-y-auto p-5 sm:grid-cols-[200px_minmax(0,1fr)]">
+        <div className="grid grid-cols-1 min-h-0 flex-1 gap-5 overflow-y-auto p-5 sm:grid-cols-[200px_minmax(0,1fr)]">
           <div className="space-y-2">
             <SlidePreview
               className="w-full rounded-[12px]"
@@ -401,7 +401,7 @@ export function TemplateDialog({
           </div>
 
           <div className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_180px]">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_180px]">
               <label className="block">
                 <span className="mb-1 block text-[12px] font-medium text-[var(--color-ink-soft)]">
                   {t("templates.name")}
@@ -435,7 +435,7 @@ export function TemplateDialog({
               <div
                 role="tablist"
                 aria-label={t("templates.languages")}
-                className="flex flex-wrap gap-1 rounded-full bg-[var(--color-surface-muted)] p-1"
+                className="flex flex-wrap gap-1 rounded-full bg-[var(--color-surface-muted)] p-1 shadow-[var(--shadow-inset)]"
               >
                 {CONTENT_LOCALES.map((l) => (
                   <button

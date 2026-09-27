@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { CheckCircle, CircleNotch, Leaf, PencilSimple, XCircle } from "@phosphor-icons/react";
 import {
   Badge,
   Button,
@@ -633,7 +634,7 @@ export function CarouselStudio({
           hidden={mode !== "new"}
           className="p-5 md:p-6"
         >
-          <div className="grid max-w-[760px] gap-5">
+          <div className="grid max-w-[760px] grid-cols-[minmax(0,1fr)] gap-5">
             {/*
               Two questions and a button.
 
@@ -664,7 +665,7 @@ export function CarouselStudio({
               there to tame three tall native selects with a paragraph each;
               one-line menus do not need taming.
             */}
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <Field label={t("carousels.languages")} htmlFor="langs">
                 <MultiPicker
                   id="langs"
@@ -996,7 +997,7 @@ export function CarouselStudio({
                           className={cn(
                             "rounded-full px-2.5 py-1 text-[12px] font-medium transition-colors",
                             l === lang
-                              ? "bg-[var(--color-accent)] text-white"
+                              ? "bg-[var(--color-accent)] text-[var(--color-on-accent)]"
                               : "bg-[var(--color-surface)] text-[var(--color-ink-soft)]",
                           )}
                         >
@@ -1018,14 +1019,16 @@ export function CarouselStudio({
                       itemLabel={(_, index, total) =>
                         t("carousels.slideLabel", { i: index + 1, n: total })
                       }
-                      className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5"
+                      className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-5"
                       renderItem={({ slide, i }) => {
                         const text = slide.text[lang];
                         return (
-                          <div className="space-y-1.5">
+                          // A column whose button sits at the foot, so the row of
+                          // buttons lines up whatever the length of each text.
+                          <div className="flex h-full flex-col gap-1.5">
                             {slide.imageUrl ? (
                               <SlidePreview
-                                className="w-full rounded-[9px]"
+                                className="w-full rounded-[10px] ring-1 ring-[var(--color-edge)]"
                                 src={slideImageSrc(carousel.id, i, slide)}
                                 copy={{
                                   title: text?.title ?? "",
@@ -1035,16 +1038,17 @@ export function CarouselStudio({
                                 overlay={slide.overlay ?? defaultOverlay()}
                               />
                             ) : (
-                              <div className="aspect-[4/5] w-full rounded-[9px] bg-[var(--color-line)]" />
+                              <div className="aspect-[4/5] w-full rounded-[10px] bg-[var(--color-surface-muted)] ring-1 ring-[var(--color-edge)]" />
                             )}
                             <p className="text-[12px] font-medium leading-snug">
                               {i + 1}. {text?.title || "—"}
                               {slide.hasPlenovaMention ? (
                                 <span
                                   title={t("carousels.mentionHint")}
-                                  className="ml-1 text-[var(--color-accent)]"
+                                  className="ml-1 inline-flex translate-y-[2px] text-[var(--color-accent)]"
                                 >
-                                  ◆
+                                  <Leaf aria-hidden size={13} weight="fill" />
+                                  <span className="sr-only">{t("carousels.mentionHint")}</span>
                                 </span>
                               ) : null}
                             </p>
@@ -1060,8 +1064,9 @@ export function CarouselStudio({
                                   language: lang,
                                 })
                               }
-                              className="w-full rounded-[7px] border border-[var(--color-line)] py-1 text-[11.5px] font-medium text-[var(--color-ink-soft)] transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-ink)]"
+                              className="mt-auto inline-flex w-full items-center justify-center gap-1.5 rounded-full border border-[var(--color-line-strong)] bg-[var(--color-surface)] py-1.5 text-[12px] font-medium text-[var(--color-ink-soft)] transition-[border-color,color,scale] duration-150 hover:border-[var(--color-ink-faint)] hover:text-[var(--color-ink)] active:scale-[0.97]"
                             >
+                              <PencilSimple aria-hidden size={13} />
                               {t("editor.open")}
                             </button>
                           </div>
@@ -1107,23 +1112,26 @@ export function CarouselStudio({
                               */}
                               {post.settled === "failed" ||
                               (!post.publishId && post.error) ? (
-                                <span className="text-[var(--color-danger)]">
-                                  ✕ {post.error ?? t("carousels.postFailed")}
+                                <span className="inline-flex items-center gap-1 text-[var(--color-danger)]">
+                                  <XCircle aria-hidden size={14} weight="fill" className="shrink-0" />
+                                  {post.error ?? t("carousels.postFailed")}
                                 </span>
                               ) : post.settled === "pending" ? (
-                                <span className="text-[var(--color-ink-soft)]">
-                                  ⋯ {t("carousels.postPending")}
+                                <span className="inline-flex items-center gap-1 text-[var(--color-ink-soft)]">
+                                  <CircleNotch aria-hidden size={14} weight="bold" className="shrink-0 animate-spin" />
+                                  {t("carousels.postPending")}
                                 </span>
                               ) : post.publishId ? (
-                                <span className="text-[var(--color-accent)]">
-                                  ✓{" "}
+                                <span className="inline-flex items-center gap-1 text-[var(--color-accent)]">
+                                  <CheckCircle aria-hidden size={14} weight="fill" className="shrink-0" />
                                   {post.postMode === "MEDIA_UPLOAD"
                                     ? t("carousels.postDraft")
                                     : t("carousels.postPublished")}
                                 </span>
                               ) : (
-                                <span className="text-[var(--color-danger)]">
-                                  ✕ {post.error ?? t("carousels.postFailed")}
+                                <span className="inline-flex items-center gap-1 text-[var(--color-danger)]">
+                                  <XCircle aria-hidden size={14} weight="fill" className="shrink-0" />
+                                  {post.error ?? t("carousels.postFailed")}
                                 </span>
                               )}
                             </li>

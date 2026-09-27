@@ -63,7 +63,7 @@ export function Dialog({
   if (typeof document === "undefined") return null;
   return createPortal(
     <div
-      className="fixed inset-0 z-[60] grid place-items-center bg-black/45 p-4"
+      className="fade-in fixed inset-0 z-[60] grid place-items-center bg-[rgb(8_16_7/0.42)] p-4 backdrop-blur-[3px]"
       onPointerDown={(e) => {
         if (e.target === e.currentTarget) close.current();
       }}
@@ -75,18 +75,18 @@ export function Dialog({
         aria-label={title}
         tabIndex={-1}
         className={cn(
-          "flex max-h-[90vh] w-full flex-col overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-line)] bg-[var(--color-surface)] shadow-[var(--shadow-raised)] outline-none",
+          "dialog-in flex max-h-[90dvh] w-full flex-col overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-edge)] bg-[var(--color-surface)] shadow-[var(--shadow-raised)] outline-none",
           // The default width, unless the caller gives its own.
           !/(^|\s)max-w-/.test(className ?? "") && "max-w-lg",
           className,
         )}
       >
-        <h2 className="border-b border-[var(--color-line)] px-5 py-4 text-[16px] font-semibold">
+        <h2 className="border-b border-[var(--color-line)] px-5 py-4 text-[16px] font-semibold tracking-[-0.01em]">
           {title}
         </h2>
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
         {footer ? (
-          <div className="flex flex-wrap justify-end gap-2 border-t border-[var(--color-line)] px-5 py-3">
+          <div className="flex flex-wrap justify-end gap-2 border-t border-[var(--color-line)] bg-[var(--color-canvas)]/60 px-5 py-3">
             {footer}
           </div>
         ) : null}

@@ -50,17 +50,17 @@ function LtvTile({
   sub: string;
 }) {
   return (
-    <div className="rounded-[14px] bg-[var(--color-surface-muted)] px-3.5 py-3">
-      <p className="text-[12px] font-medium text-[var(--color-ink-soft)]">
+    <div className="rounded-[16px] border border-[var(--color-edge)] bg-[var(--color-canvas)] px-4 pt-3.5 pb-3">
+      <p className="text-[12px] font-medium text-[var(--color-ink-faint)]">
         {label}
       </p>
-      <p className="mt-1 text-[22px] leading-tight font-semibold tracking-[-0.03em] tabular-nums">
+      <p className="figures mt-2 text-[24px] leading-none font-semibold tracking-[-0.03em]">
         {money(net)}{" "}
         <span className="text-[12px] font-medium tracking-normal text-[var(--color-ink-soft)]">
           net
         </span>
       </p>
-      <p className="mt-0.5 text-[12.5px] tabular-nums text-[var(--color-ink-soft)]">
+      <p className="figures mt-1.5 text-[12.5px] text-[var(--color-ink-soft)]">
         {money(gross)} brut
       </p>
       <p className="mt-1 text-[11.5px] leading-snug text-[var(--color-ink-faint)]">
@@ -72,7 +72,7 @@ function LtvTile({
 
 function Flag({ children }: { children: React.ReactNode }) {
   return (
-    <p className="rounded-[10px] bg-[var(--color-warn-soft)] px-3 py-2 text-[12.5px] text-[var(--color-warn-ink)]">
+    <p className="rounded-[12px] border border-[color-mix(in_oklab,var(--color-warn)_16%,transparent)] bg-[var(--color-warn-soft)] px-3.5 py-2.5 text-[12.5px] leading-relaxed text-[var(--color-warn-ink)]">
       {children}
     </p>
   );
@@ -262,9 +262,9 @@ export function LtvPanel({
         <Flag>Limite atteinte : un taux a été borné.</Flag>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.4fr_1fr]">
         {monthly ? <SurvivalBars ltv={ltv} /> : null}
-        <div className="rounded-[12px] border border-[var(--color-line)] px-3.5 py-3 text-[12.5px] leading-relaxed text-[var(--color-ink-soft)]">
+        <div className="rounded-[16px] border border-[var(--color-edge)] bg-[var(--color-canvas)] px-4 py-3.5 text-[12.5px] leading-relaxed text-[var(--color-ink-soft)]">
           <p className="mb-1 font-medium text-[var(--color-ink)]">
             Usage des abonnés (Amplitude)
           </p>
@@ -325,7 +325,7 @@ export function LtvPanel({
       </button>
 
       {open ? (
-        <div className="space-y-3 rounded-[12px] border border-[var(--color-line)] px-4 py-3 text-[12.5px] leading-relaxed text-[var(--color-ink-soft)]">
+        <div className="space-y-3 rounded-[16px] border border-[var(--color-edge)] bg-[var(--color-canvas)] px-4 py-3.5 text-[12.5px] leading-relaxed text-[var(--color-ink-soft)]">
           <p>
             <b>Ce que c&apos;est :</b> ce qu&apos;un client payant rapporte en
             moyenne pendant les 6 ou les 12 mois qui suivent son premier achat

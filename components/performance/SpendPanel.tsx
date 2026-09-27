@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Megaphone } from "@phosphor-icons/react";
 import { Button, Card, Input, Notice, Select } from "@/components/ui";
 import type { PerfSpendEntry } from "@/lib/performance/compute";
 
@@ -102,13 +103,16 @@ export function SpendPanel({
   }
 
   return (
-    <Card className="p-5">
+    <Card className="p-5 md:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-[16px] font-semibold tracking-[-0.01em]">
+        <div className="min-w-0">
+          <h2 className="flex items-center gap-2.5 text-[16.5px] font-semibold tracking-[-0.015em]">
+            <span className="grid size-8 place-items-center rounded-[10px] bg-[var(--color-surface-muted)] text-[var(--color-accent-ink)]">
+              <Megaphone aria-hidden size={17} weight="duotone" />
+            </span>
             Dépenses publicitaires
           </h2>
-          <p className="mt-0.5 text-[12.5px] text-[var(--color-ink-soft)]">
+          <p className="mt-2 max-w-[62ch] text-[12.5px] leading-relaxed text-[var(--color-ink-soft)]">
             Les coûts Meta arrivent seuls par AppsFlyer. Ajoute ici ce
             qu&apos;il ne voit pas (influence, autre régie…).
             {entries.length > 0
@@ -129,7 +133,7 @@ export function SpendPanel({
       {open ? (
         <form
           onSubmit={add}
-          className="mt-4 grid gap-3 border-t border-[var(--color-line)] pt-4 sm:grid-cols-2 lg:grid-cols-6"
+          className="mt-4 grid grid-cols-1 gap-3 border-t border-[var(--color-line)] pt-4 sm:grid-cols-2 lg:grid-cols-6"
         >
           <label className="text-[12.5px] font-medium text-[var(--color-ink-soft)]">
             Du

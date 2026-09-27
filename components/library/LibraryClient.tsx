@@ -139,7 +139,7 @@ export function LibraryClient({ initialPins, plants, angles }: Props) {
 
   return (
     <div className="space-y-6">
-      <Card className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-6">
+      <Card className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 lg:grid-cols-6">
         {/* `p.primary` + `p.latin`, not the flat `p.label`: the picker draws a
             second line, so the botanical name no longer has to be folded into
             the first one to fit an <option>. */}
@@ -230,7 +230,7 @@ export function LibraryClient({ initialPins, plants, angles }: Props) {
           description={t("library.noMatchBody")}
         />
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filtered.map((pin) => (
             <Card key={pin.id} className="overflow-hidden">
               <button

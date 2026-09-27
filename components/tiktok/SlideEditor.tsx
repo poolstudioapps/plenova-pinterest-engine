@@ -860,7 +860,7 @@ export function SlideEditor({
           <div
             role="tablist"
             aria-label={t("editor.displayLanguage")}
-            className="flex gap-0.5 rounded-full bg-[var(--color-surface-muted)] p-1"
+            className="flex gap-0.5 rounded-full bg-[var(--color-surface-muted)] p-1 shadow-[var(--shadow-inset)]"
           >
             {carousel.languages.map((l) => {
               const missing = missingIn(l);

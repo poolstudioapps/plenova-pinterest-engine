@@ -265,7 +265,7 @@ const FR = {
   "media.allPlants": "Toutes les plantes",
   "media.search": "Rechercher une plante, un cultivar ou un prompt",
   "media.count": "{count} images sur {plants} plantes",
-  "media.used": "utilisée {n}x",
+  "media.used": "utilisée {n} fois",
   "media.delete": "Retirer de la bibliothèque",
   "media.noMatch": "Aucune image ne correspond à ces filtres.",
 
