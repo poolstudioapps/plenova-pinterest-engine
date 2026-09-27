@@ -48,6 +48,7 @@ import {
   translator,
   type ContentLocale,
   type TranslationKey,
+  langInSentence
 } from "@/lib/i18n";
 import {
   PHOTO_DEFAULTS,
@@ -85,8 +86,8 @@ const SHORTCUTS: [string, TranslationKey][] = [
   ["Double-clic · Entrée", "editor.keyWrite"],
   ["← ↑ → ↓ · Maj", "editor.keyNudge"],
   ["Page préc. / suiv. · Alt ← →", "editor.keySlides"],
-  ["Ctrl Z · Ctrl Maj Z", "editor.keyUndo"],
-  ["Ctrl S", "editor.keySave"],
+  ["Ctrl+Z · Ctrl+Maj+Z", "editor.keyUndo"],
+  ["Ctrl+S", "editor.keySave"],
   ["Suppr", "editor.keyDelete"],
   ["R", "editor.keyCrop"],
   ["T · G", "editor.keyGuides"],
@@ -366,7 +367,7 @@ export function SlideEditor({
       draftFromTemplate(template, carousel.languages),
       missing.length > 0
         ? t("editor.templateMissing", {
-            langs: missing.map((l) => CONTENT_LOCALE_LABELS[l]).join(", "),
+            langs: missing.map((l) => langInSentence(l)).join(", "),
           })
         : t("editor.slideAdded"),
     );
@@ -581,7 +582,14 @@ export function SlideEditor({
     }
     setExporting(null);
     if (failed.length > 0) {
-      setError(t("editor.exportFailed", { slides: failed.map((i) => i + 1).join(", ") }));
+      setError(
+        t("editor.exportFailed", {
+          slides:
+            failed.length > 1
+              ? `les slides ${failed.slice(0, -1).map((i) => i + 1).join(", ")} et ${failed.at(-1)! + 1}`
+              : `la slide ${failed[0]! + 1}`,
+        }),
+      );
     } else {
       flash(t("editor.exported", { n: indexes.length }));
     }
@@ -875,7 +883,7 @@ export function SlideEditor({
                   aria-selected={l === lang}
                   title={
                     missing > 0
-                      ? t("editor.langMissing", { n: missing, lang: CONTENT_LOCALE_LABELS[l] })
+                      ? t("editor.langMissing", { n: missing, lang: langInSentence(l) })
                       : CONTENT_LOCALE_LABELS[l]
                   }
                   onClick={() => {
@@ -965,7 +973,7 @@ export function SlideEditor({
                     : t("editor.exportAll", { n: total })}
                 </span>
                 <span className="block text-[11.5px] text-[var(--color-ink-faint)]">
-                  {t("editor.exportDetail", { lang: CONTENT_LOCALE_LABELS[lang] })}
+                  {t("editor.exportDetail", { lang: langInSentence(lang) })}
                 </span>
               </MenuItem>
             ))}

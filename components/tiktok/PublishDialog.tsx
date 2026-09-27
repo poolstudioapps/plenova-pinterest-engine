@@ -344,10 +344,10 @@ export function PublishDialog({
                           }
                         >
                           {done.settled === "published"
-                            ? "OK"
+                            ? "Publié"
                             : done.settled === "pending"
-                              ? "..."
-                              : "KO"}
+                              ? "…"
+                              : "Échec"}
                         </Badge>
                       ) : null}
                     </button>
@@ -553,7 +553,7 @@ export function PublishDialog({
                   .filter((p) => p.error)
                   .map((p) => (
                     <li key={p.openId}>
-                      {p.username ? `@${p.username}` : p.openId.slice(-6)}:{" "}
+                      {p.username ? `@${p.username}` : p.openId.slice(-6)} :{" "}
                       {p.error}
                     </li>
                   ))}

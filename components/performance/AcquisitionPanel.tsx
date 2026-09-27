@@ -285,7 +285,7 @@ export function AcquisitionPanel({
           value={os}
           onChange={onOs}
           options={[
-            { id: "all", label: "Tous" },
+            { id: "all", label: "Les deux" },
             {
               id: "ios",
               label: (
@@ -329,7 +329,7 @@ export function AcquisitionPanel({
         <p className="text-[12px] text-[var(--color-ink-faint)]">
           Période propre à cette section : {dayCount(range)} j, du{" "}
           {shortDay(range.from)} au {shortDay(range.to)}
-          {previous ? `, comparés au ${shortDay(previous.from)} → ${shortDay(previous.to)}` : ""}
+          {previous ? ` · période précédente : ${shortDay(previous.from)} → ${shortDay(previous.to)}` : ""}
           {" · "}
           <button
             type="button"
@@ -360,7 +360,7 @@ export function AcquisitionPanel({
     );
   else if (os !== "all" && k.untagged > 0)
     notes.push(
-      `Sans les ${money(k.untagged)} saisis pour les deux stores, non répartis entre eux.`,
+      `Hors ${money(k.untagged)} saisis pour les deux stores (non répartis entre iOS et Android).`,
     );
 
   const tiles = (
@@ -440,7 +440,7 @@ export function AcquisitionPanel({
             />
             <Tile
               id="cpa"
-              label="CPA achat"
+              label="CPA (coût par achat)"
               value={money(k.cpa)}
               sub={k.cpaPaid !== null ? `achats issus de campagnes : ${money(k.cpaPaid)}` : "tous achats confondus"}
               now={k.cpa}

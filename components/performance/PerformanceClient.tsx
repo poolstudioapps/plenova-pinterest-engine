@@ -311,7 +311,7 @@ export function PerformanceClient({
         return one("MAU (30 j glissants)", levelCaption, level("amplitude:mau"), (v) => int.format(v), { zero: false });
       case "stickiness":
         return one(
-          "Stickiness DAU / MAU",
+          "Fidélité (DAU / MAU)",
           rateCaption,
           over(b, (r) => asPercent(ratio(s.avg("amplitude:dau", r), s.avg("amplitude:mau", r)))),
           percent,
@@ -415,7 +415,7 @@ export function PerformanceClient({
           body?.error?.message ??
             (res.status === 504
               ? "Le relevé a pris trop de temps : ce qui était fini est enregistré, réessaie dans 15 min."
-              : "Actualisation impossible."),
+              : "Relevé impossible, réessaie dans quelques minutes."),
         );
       const failed = (body?.results ?? []).filter(
         (r: { status: string }) => r.status === "error",
@@ -424,7 +424,7 @@ export function PerformanceClient({
         failed.length
           ? {
               tone: "danger",
-              text: `Relevé fait, sauf : ${failed.map((r: { source: string; error?: string }) => `${r.source} (${r.error ?? "erreur"})`).join(" ; ")}`,
+              text: `Relevé fait, sauf : ${failed.map((r: { source: string; error?: string }) => `${payload.sources.find((x) => x.source === r.source)?.label ?? r.source} (${r.error ?? "erreur"})`).join(" ; ")}`,
             }
           : { tone: "info", text: "Données à jour." },
       );
@@ -432,7 +432,7 @@ export function PerformanceClient({
     } catch (err) {
       setRefreshNote({
         tone: "danger",
-        text: err instanceof Error ? err.message : "Actualisation impossible.",
+        text: err instanceof Error ? err.message : "Relevé impossible, réessaie dans quelques minutes.",
       });
     } finally {
       setRefreshing(false);
@@ -507,8 +507,7 @@ export function PerformanceClient({
         />
         <div className="flex items-center gap-3 sm:ml-auto">
           <span className="text-[12px] leading-tight text-[var(--color-ink-faint)]">
-            Relevé {when(lastOk)}
-            <span className="hidden lg:inline"> · auto à 9 h, 18 h, 22 h</span>
+            Dernier relevé : {when(lastOk)}
           </span>
           <Button size="sm" onClick={refresh} disabled={refreshing}>
             <ArrowsClockwise
@@ -526,10 +525,9 @@ export function PerformanceClient({
         <span className="font-medium text-[var(--color-ink-soft)]">
           Du {longDay(range.from)} au {longDay(range.to)}
         </span>{" "}
-        ({k.days} j, jours UTC
-        {range.to === payload.today ? ", aujourd'hui en cours" : ""})
+        ({k.days} j{range.to === payload.today ? ", aujourd'hui en cours" : ""})
         {previous
-          ? ` · comparé au ${shortDay(previous.from)} → ${shortDay(previous.to)}`
+          ? ` · période précédente : ${shortDay(previous.from)} → ${shortDay(previous.to)}`
           : ""}
         {" "}
         · clique sur un chiffre pour voir sa courbe
@@ -570,7 +568,7 @@ export function PerformanceClient({
             </b>
           </span>
           <span>
-            Revenus 28 j{" "}
+            Revenu 28 j{" "}
             <b className="tabular-nums text-[var(--color-ink)]">
               {money(live.revenue28)}
             </b>
@@ -663,7 +661,7 @@ export function PerformanceClient({
             id="refunds"
             label="Remboursements"
             value={pct(k.refundRate)}
-            sub={`${count(k.refunded)} remboursées`}
+            sub={`${count(k.refunded)} transactions remboursées`}
             now={k.refundRate}
             before={p?.refundRate ?? null}
             better="down"
@@ -751,7 +749,7 @@ export function PerformanceClient({
           />
           <Tile
             id="stickiness"
-            label="Stickiness DAU / MAU"
+            label="Fidélité (DAU / MAU)"
             value={pct(k.stickiness)}
             now={k.stickiness}
             before={p?.stickiness ?? null}
@@ -802,8 +800,8 @@ export function PerformanceClient({
             id="onboarding"
             label="Onboarding terminé"
             value={pct(k.onboardingRate)}
-            sub={`${count(k.onboardingDone)} / ${count(k.onboardingStart)} arrivés sur Home`}
-            hint="First App Open → Onboarding Completed (arrivée sur Home) dans la journée"
+            sub={`${count(k.onboardingDone)} / ${count(k.onboardingStart)} arrivés à l'accueil`}
+            hint="Première ouverture → fin de l'onboarding (arrivée à l'accueil), le jour même"
             now={k.onboardingRate}
             before={p?.onboardingRate ?? null}
           />
@@ -812,7 +810,7 @@ export function PerformanceClient({
             label="Achat ≤ 7 j"
             value={pct(k.purchase7Rate)}
             sub={`${count(k.purchase7Done)} / ${count(k.purchase7Start)}${k.purchase7Partial ? " · en cours" : ""}`}
-            hint="First App Open → Subscription Purchased dans les 7 jours, selon Amplitude (les 7 derniers jours ne sont pas encore définitifs)"
+            hint="Première ouverture → achat d'abonnement sous 7 jours, selon Amplitude (7 derniers jours provisoires)"
             now={k.purchase7Rate}
             before={p?.purchase7Rate ?? null}
           />
@@ -821,7 +819,7 @@ export function PerformanceClient({
             label="Conversion payante ≤ 7 j"
             value={pct(k.paying7Rate)}
             sub={`${count(k.paying7)} / ${count(k.paying7Base)} · RevenueCat${k.paying7Partial ? " · en cours" : ""}`}
-            hint="Nouveaux clients qui ont payé dans les 7 jours, selon RevenueCat (remboursements du premier achat déduits ; les 7 derniers jours ne sont pas encore définitifs)"
+            hint="Nouveaux clients ayant payé sous 7 jours, selon RevenueCat (premiers achats remboursés exclus ; 7 derniers jours provisoires)"
             now={k.paying7Rate}
             before={p?.paying7Rate ?? null}
           />
@@ -884,9 +882,9 @@ export function PerformanceClient({
                 sub={
                   cohorts.totals.spendAt[key] > 0
                     ? `${money(cohorts.totals.revenue[key])} / ${money(cohorts.totals.spendAt[key])}`
-                    : "aucune cohorte arrivée à ce jour"
+                    : "aucune cohorte n'a encore atteint ce jour"
                 }
-                hint="Revenu des nouveaux clients de chaque semaine au jour N ÷ dépenses de leur semaine (semaines arrivées à ce jour seulement)"
+                hint="Revenu des nouveaux clients de chaque semaine au jour N ÷ dépenses de leur semaine (seules les semaines ayant atteint ce jour comptent)"
               />
             ))}
           </div>
@@ -963,10 +961,9 @@ export function PerformanceClient({
             </table>
           </div>
           <p className="mt-3 text-[12px] leading-relaxed text-[var(--color-ink-faint)]">
-            En italique : semaine pas encore arrivée à ce jour. Le total ne
-            compte que les semaines arrivées à chaque jour. ROAS = revenu de la
-            cohorte au jour N ÷ dépenses de sa semaine (toutes sources
-            confondues : RevenueCat ne sait pas d&apos;où viennent les clients).
+            En italique : semaine qui n&apos;a pas encore atteint ce jour (exclue
+            du total). ROAS = revenu de la cohorte au jour N ÷ dépenses de sa
+            semaine, toutes sources confondues.
           </p>
         </Section>
       ) : null}

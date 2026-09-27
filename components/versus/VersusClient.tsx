@@ -123,18 +123,17 @@ export function VersusClient({
           ))}
         </Sliding>
         <p className="text-[12px] text-[var(--color-ink-faint)]">
-          Abonnés et likes totaux : profils TikTok. Vues, enregistrements, commentaires, partages : total des posts
-          publiés sur la période, suivis par le spy{trackedSince ? ` depuis le ${trackedSince}` : ""}.
+          Abonnés et likes : chiffres des profils. Le reste : posts publiés sur la période
+          {trackedSince ? `, suivis depuis le ${trackedSince}` : ""}.
           {period === "all"
-            ? " Depuis le début : seulement les posts enregistrés (les derniers de chaque profil, plus l'historique importé)."
+            ? " Depuis le début : tous les posts relevés, historique importé compris."
             : ""}
         </p>
       </div>
 
       {importing > 0 ? (
         <Notice tone="warn" title="Import de l'historique en cours">
-          Encore {importing} post(s) de nos comptes à relever : les chiffres, surtout sur 30 jours et depuis le
-          début, se complètent au fil de l&apos;import. Recharge la page pour voir où il en est.
+          Encore {importing} {importing > 1 ? "posts" : "post"} à relever : les chiffres se complètent au fil de l&apos;import. Recharge la page pour suivre.
         </Notice>
       ) : null}
 
@@ -150,11 +149,11 @@ export function VersusClient({
       <section className="overflow-hidden rounded-[20px] bg-[#0d0e1a] text-white">
         <div className="grid grid-cols-[1fr_auto_1fr] items-center border-b border-white/10 px-5 py-3 text-[12px] font-bold tracking-[0.12em] uppercase">
           <span style={{ color: TEAM_META.stark.color }}>
-            Mr Stark<span className="hidden sm:inline"> · {stark.accounts} comptes</span>
+            Mr Stark<span className="hidden sm:inline"> · {stark.accounts} {stark.accounts > 1 ? "comptes" : "compte"}</span>
           </span>
           <span className="text-white/40">duel</span>
           <span className="text-right" style={{ color: "#7d97ff" }}>
-            Mr Mousk<span className="hidden sm:inline"> · {mousk.accounts} comptes</span>
+            Mr Mousk<span className="hidden sm:inline"> · {mousk.accounts} {mousk.accounts > 1 ? "comptes" : "compte"}</span>
           </span>
         </div>
         <ul className="divide-y divide-white/[0.06]">
@@ -209,10 +208,10 @@ export function VersusClient({
           {(
             [
               ["Abonnés", format(all.followers, "number"), all.followersGained !== null ? `${format(all.followersGained, "delta")} sur la période` : "évolution dès demain"],
-              ["Vues", format(all.views, "number"), `${all.posts} post(s)`],
+              ["Vues", format(all.views, "number"), `${all.posts} ${all.posts > 1 ? "posts" : "post"}`],
               ["Likes (profils)", format(all.likesTotal, "number"), `${format(all.likes, "number")} sur la période`],
               ["Enregistrements", format(all.saves, "number"), "sur la période"],
-              ["Commentaires", format(all.comments, "number"), `${format(all.shares, "number")} partages`],
+              ["Commentaires", format(all.comments, "number"), `et ${format(all.shares, "number")} partages`],
               ["Engagement", format(all.engagement, "percent"), `${format(all.avgViews, "number")} vues / post`],
             ] as const
           ).map(([label, value, sub]) => (
@@ -230,7 +229,7 @@ export function VersusClient({
         <div className="border-b border-[var(--color-line)] px-5 py-4">
           <h2 className="text-[16px] font-semibold tracking-[-0.015em]">Compte par compte</h2>
           <p className="mt-0.5 text-[12px] text-[var(--color-ink-faint)]">
-            Depuis toujours : tous les posts relevés du compte. La dernière colonne suit la période choisie.
+            Depuis le début : tous les posts relevés du compte. La dernière colonne suit la période choisie.
           </p>
         </div>
         <div className="overflow-x-auto">
@@ -244,7 +243,7 @@ export function VersusClient({
                 <th className="px-3 py-2 text-right font-medium">Enreg. totaux</th>
                 <th className="px-3 py-2 text-right font-medium">Posts relevés</th>
                 <th className="px-3 py-2 text-right font-medium">Vues / post</th>
-                <th className="px-3 py-2 text-right font-medium">Gagnés</th>
+                <th className="px-3 py-2 text-right font-medium">Abonnés gagnés</th>
                 <th className="px-4 py-2 text-right font-medium">
                   Vues · {period === "all" ? "tout" : `${period} j`}
                 </th>
@@ -369,7 +368,7 @@ function AccountRow({
             </span>
             <span className="block text-[11px] text-[var(--color-ink-faint)]" suppressHydrationWarning>
               {pending > 0
-                ? `historique en cours d'import · ${pending} post(s) restant(s)`
+                ? `historique en cours d'import · ${pending} ${pending > 1 ? "posts restants" : "post restant"}`
                 : account.lastCheckedAt
                   ? `relevé ${relativeTime(account.lastCheckedAt)}`
                   : "pas encore relevé"}

@@ -213,7 +213,7 @@ export function LibraryClient({ initialPins, plants, angles }: Props) {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-[13px] font-medium text-[var(--color-ink-soft)]">
-              {t("library.editing")}: {selected.title}
+              {t("library.editing")} : {selected.title}
             </p>
             <Button variant="ghost" onClick={() => setSelected(null)}>
               {t("library.close")}
@@ -240,8 +240,12 @@ export function LibraryClient({ initialPins, plants, angles }: Props) {
               <button
                 type="button"
                 onClick={() => setSelected(pin)}
-                className="group block w-full overflow-hidden text-left"
+                className="group relative block w-full overflow-hidden text-left"
               >
+                {/* On the image: the title below keeps the card's full width. */}
+                <span className="absolute top-2.5 left-2.5 z-[1] flex rounded-full shadow-[0_1px_3px_rgb(0_0_0/0.2)]">
+                  <StatusBadge status={pin.status} />
+                </span>
                 {pin.imageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -255,12 +259,9 @@ export function LibraryClient({ initialPins, plants, angles }: Props) {
               </button>
 
               <div className="space-y-2 p-3.5">
-                <div className="flex items-start justify-between gap-2">
-                  <p className="line-clamp-2 text-[13.5px] font-medium leading-snug">
-                    {pin.title}
-                  </p>
-                  <StatusBadge status={pin.status} />
-                </div>
+                <p className="line-clamp-2 text-[13.5px] font-medium leading-snug">
+                  {pin.title}
+                </p>
 
                 <div className="space-y-0.5">
                   <PlantName

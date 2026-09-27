@@ -8,6 +8,7 @@ import {
   translator,
   type ContentLocale,
   type TranslationKey,
+  langInSentence
 } from "@/lib/i18n";
 import {
   OVERLAY_STYLES,
@@ -357,8 +358,8 @@ export function TextSection({
             {elsewhere[key].length > 0 ? (
               <p className="mt-1 text-[11.5px] text-[var(--color-warn-ink)]">
                 {t("editor.untranslated", {
-                  langs: elsewhere[key].map((l) => CONTENT_LOCALE_LABELS[l]).join(", "),
-                  lang: CONTENT_LOCALE_LABELS[lang],
+                  langs: elsewhere[key].map((l) => langInSentence(l)).join(", "),
+                  lang: langInSentence(lang),
                 })}
               </p>
             ) : null}

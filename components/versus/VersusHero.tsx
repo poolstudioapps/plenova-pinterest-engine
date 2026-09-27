@@ -64,7 +64,7 @@ export function VersusHero({
   );
 
   return (
-    <div className="vs-hero relative isolate h-[300px] overflow-hidden rounded-[22px] sm:h-[400px] lg:h-[440px]">
+    <div className="vs-hero @container relative isolate h-[300px] overflow-hidden rounded-[22px] sm:h-[400px] lg:h-[440px]">
       {/* Red: the whole ground; blue is laid over it. */}
       <div className="vs-red absolute inset-0" />
       {/* Blurred on a wrapper: a clip-path on the same element would cut the blur off. */}
@@ -99,7 +99,7 @@ export function VersusHero({
       <img
         src={TEAM_META.stark.image}
         alt="Mr Stark"
-        className="absolute bottom-0 left-[-30%] h-auto w-[78%] max-w-none select-none sm:left-[-8%] sm:w-[56%]"
+        className="absolute bottom-0 left-[-30%] h-auto w-[78%] max-w-none select-none @2xl:left-[-8%] @2xl:w-[56%]"
         style={{ filter: `drop-shadow(0 0 22px ${TEAM_META.stark.glow}) drop-shadow(0 22px 26px rgba(0, 0, 0, 0.4))` }}
         draggable={false}
       />
@@ -107,7 +107,7 @@ export function VersusHero({
       <img
         src={TEAM_META.mousk.image}
         alt="Mr Mousk"
-        className="absolute right-[-30%] bottom-0 h-auto w-[78%] max-w-none select-none sm:right-[-8%] sm:w-[56%]"
+        className="absolute right-[-30%] bottom-0 h-auto w-[78%] max-w-none select-none @2xl:right-[-8%] @2xl:w-[56%]"
         style={{ filter: `drop-shadow(0 0 22px ${TEAM_META.mousk.glow}) drop-shadow(0 22px 26px rgba(0, 0, 0, 0.4))` }}
         draggable={false}
       />
@@ -115,17 +115,17 @@ export function VersusHero({
       {/* Names and the number that matters - the same build on both sides. */}
       {(
         [
-          ["stark", "MR STARK", stark, "left-5 sm:left-8 items-start text-left"],
-          ["mousk", "MR MOUSK", mousk, "right-5 sm:right-8 items-end text-right"],
+          ["stark", "MR STARK", stark, "left-5 @2xl:left-8 items-start text-left"],
+          ["mousk", "MR MOUSK", mousk, "right-5 @2xl:right-8 items-end text-right"],
         ] as const
       ).map(([team, name, value, side]) => (
-        <div key={team} className={`vs-name absolute top-5 flex flex-col sm:top-7 ${side}`}>
-          <p className="vs-title text-[26px] leading-[0.95] text-white sm:text-[50px]">{name}</p>
-          <p className="mt-2.5 text-[10.5px] font-semibold tracking-[0.16em] text-white/80 uppercase sm:text-[11.5px]">
-            <span className="sm:hidden">{metricShort}</span>
-            <span className="hidden sm:inline">{metricLabel}</span>
+        <div key={team} className={`vs-name absolute top-5 flex flex-col @2xl:top-7 ${side}`}>
+          <p className="vs-title text-[26px] leading-[0.95] text-white @2xl:text-[50px]">{name}</p>
+          <p className="mt-2.5 text-[10.5px] font-semibold tracking-[0.16em] text-white/80 uppercase @2xl:text-[11.5px]">
+            <span className="@2xl:hidden">{metricShort}</span>
+            <span className="hidden @2xl:inline">{metricLabel}</span>
           </p>
-          <p className="vs-title mt-0.5 text-[28px] leading-none text-white tabular-nums sm:text-[40px]">
+          <p className="vs-title mt-0.5 text-[28px] leading-none text-white tabular-nums @2xl:text-[40px]">
             {compactNumber(value)}
           </p>
           {leader === team ? (
@@ -144,7 +144,7 @@ export function VersusHero({
 
       {/* VS, cracked: white letters, and the cracks clipped to the same letters on top. */}
       <div className="vs-mark pointer-events-none absolute top-1/2 left-1/2 z-[3] flex -translate-x-1/2 -translate-y-1/2 flex-col items-center">
-        <div className="relative text-[88px] sm:text-[124px] lg:text-[136px]" role="img" aria-label="VS">
+        <div className="relative text-[88px] @2xl:text-[124px] @4xl:text-[136px]" role="img" aria-label="VS">
           <span className="vs-letters vs-letters-base" aria-hidden>
             VS
           </span>
@@ -153,7 +153,7 @@ export function VersusHero({
           </span>
         </div>
         <p
-          className="vs-title mt-2 flex w-fit items-center gap-2.5 rounded-full bg-black/55 px-4 py-1 text-[19px] tracking-[0.08em] text-white ring-1 ring-white/15 backdrop-blur-sm sm:text-[22px]"
+          className="vs-title mt-2 flex w-fit items-center gap-2.5 rounded-full bg-black/55 px-4 py-1 text-[19px] tracking-[0.08em] text-white ring-1 ring-white/15 backdrop-blur-sm @2xl:text-[22px]"
           title="Stats remportées par chaque équipe"
         >
           <span className="size-2 rounded-full" style={{ background: TEAM_META.stark.color }} />

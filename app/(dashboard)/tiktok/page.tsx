@@ -87,7 +87,7 @@ export default async function TikTokPage({
                   : t("tiktok.clientKeyMissing")}
               </dd>
               <dd className="mt-0.5 font-mono text-[12px]">
-                {t("tiktok.secret")}:{" "}
+                {t("tiktok.secret")} :{" "}
                 {config.tiktok.clientSecret ? "••••••" : t("tiktok.clientKeyMissing")}
               </dd>
             </div>

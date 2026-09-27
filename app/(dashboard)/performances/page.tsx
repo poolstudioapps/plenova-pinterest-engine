@@ -33,7 +33,7 @@ export default async function PerformancesPage({
       <>
         <SectionHeader title="Performances" />
         <Notice tone="info">
-          Cette page est réservée aux adresses qui voient les revenus de
+          Cette page est réservée aux comptes autorisés à voir les revenus de
           l&apos;app.
         </Notice>
       </>

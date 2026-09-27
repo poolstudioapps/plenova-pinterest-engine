@@ -210,7 +210,7 @@ export function MediaClient({ initialAssets, plants, styles }: Props) {
         ) : groups.length === 0 ? (
           <EmptyState
             title={t("media.noMatch")}
-            description={t("library.noMatchBody")}
+            description={t("media.noMatchBody")}
           />
         ) : (
           groups.map((group) => (
@@ -260,7 +260,7 @@ export function MediaClient({ initialAssets, plants, styles }: Props) {
                           you reach for it, not a red word on every picture. */}
                       <div className="flex items-center justify-between gap-1">
                         <span className="truncate text-[11px] text-[var(--color-ink-faint)]">
-                          {t("media.used", { n: asset.usedCount })} ·{" "}
+                          {(asset.usedCount ? t("media.used", { n: asset.usedCount }) : t("media.unused"))} ·{" "}
                           {relativeTime(asset.createdAt)}
                         </span>
                         <button
@@ -438,7 +438,7 @@ function Shelf({
               />
               <div className="flex items-center justify-between gap-1 p-2">
                 <span className="truncate text-[11px] text-[var(--color-ink-faint)]">
-                  {t("media.used", { n: asset.usedCount })}
+                  {(asset.usedCount ? t("media.used", { n: asset.usedCount }) : t("media.unused"))}
                 </span>
                 <button
                   type="button"

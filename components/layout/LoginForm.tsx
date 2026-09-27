@@ -58,7 +58,8 @@ export function LoginForm() {
     window.history.replaceState(null, "", window.location.pathname + window.location.search);
 
     if (failure) {
-      setError(failure.replace(/\+/g, " "));
+      // Supabase says it in English ("Email link is invalid or has expired").
+      setError(t("login.linkExpired"));
       return;
     }
     setFromLink(true);

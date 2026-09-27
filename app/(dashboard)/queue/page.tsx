@@ -64,11 +64,11 @@ export default async function QueuePage() {
                 <p className="truncate text-[14px] font-medium">{pin.title}</p>
                 <p className="mt-0.5 truncate text-[12.5px] text-[var(--color-ink-faint)]">
                   {pin.boardName
-                    ? `${t("queue.board")}: ${pin.boardName}`
+                    ? `${t("queue.board")} : ${pin.boardName}`
                     : t("queue.noBoard")}
                   {pin.scheduledAt ? ` · ${formatDate(pin.scheduledAt)}` : ""}
                   {pin.attempts > 0
-                    ? ` · ${pin.attempts} ${t("queue.attempts")}`
+                    ? ` · ${t("queue.attempts", { n: pin.attempts })}`
                     : ""}
                 </p>
                 {pin.error ? (

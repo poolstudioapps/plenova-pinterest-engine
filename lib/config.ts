@@ -289,7 +289,7 @@ export function readiness(): ReadinessReport {
     warnings.push(
       manualTokenCanPublish()
         ? "Jeton Pinterest fourni à la main : OAuth n'est pas configuré."
-        : "Le jeton d'essai Pinterest est en lecture seule (pas de pins:write) : les tableaux se lisent, mais rien ne peut encore être publié.",
+        : "Pinterest en lecture seule (jeton d'essai) : les tableaux se lisent, la publication attend l'accès complet.",
     );
   } else if (!pinterest) {
     warnings.push(

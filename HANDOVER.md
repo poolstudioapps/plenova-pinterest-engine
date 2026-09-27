@@ -291,8 +291,15 @@ lien du menu et routes vérifient tous `performanceAccess()` (`lib/performance/d
   (`lib/performance/view.ts`, lu par le serveur : pas de graphique par défaut qui
   clignote au rechargement). Acquisition a sa propre période (suit celle de la page tant
   qu'on n'en choisit pas une ; dans l'URL : `af=7|30|90` ou `af_from`/`af_to`) et son
-  filtre Tous / iOS / Android. LTV et échéances sont des projections sans historique :
+  filtre Les deux / iOS / Android. LTV et échéances sont des projections sans historique :
   pas de courbe.
+- **Aragog** (demande de l'utilisateur) : petite araignée noire style dessin animé sur les
+  pages du menu seulement (`components/fun/Aragog.tsx`, moteur `spider.ts`, chargé à la
+  demande). Elle démarre dans une toile au coin d'une carte, pendue à un fil ou au fond de
+  sa tanière selon la page, puis suit le curseur sans jamais s'arrêter (plus lente que lui,
+  tourne autour une fois arrivée). Pattes en cinématique inverse, pas alternés. Un clic
+  l'écrase (tache façon dessin animé) ; une autre revient 25 à 40 s plus tard. Coupée sur
+  écran tactile et en mouvement réduit.
 
 **Traitement par équipe (demande de l'utilisateur)** : Mr Stark et Mr Mousk traitent
 les mêmes carrousels chacun de leur côté. `allowed_emails.team` dit pour qui traite

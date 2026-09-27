@@ -307,7 +307,7 @@ export function GenerateClient({
                   ]
                     .filter(Boolean)
                     .join(" · "),
-                  detail: t("media.used", { n: a.usedCount }),
+                  detail: (a.usedCount ? t("media.used", { n: a.usedCount }) : t("media.unused")),
                 })),
               ]}
               value={reuseMediaId}

@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { Aragog } from "@/components/fun/Aragog";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { AUTH_COOKIE, readSession, sessionSecret } from "@/lib/auth";
 import { performanceAccess } from "@/lib/performance/dashboard";
@@ -44,6 +45,8 @@ export default async function DashboardLayout({
           <div className="mx-auto max-w-5xl">{children}</div>
         </div>
       </main>
+      {/* The house spider of the main pages (components/fun/Aragog.tsx). */}
+      <Aragog />
     </div>
   );
 }

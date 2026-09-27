@@ -9,6 +9,7 @@ import {
   CONTENT_LOCALE_LABELS,
   translator,
   type ContentLocale,
+  langInSentence
 } from "@/lib/i18n";
 import type { SlideOverlay } from "@/lib/overlay";
 import { SLIDE_TEXT_LIMITS, hasWords } from "@/lib/slide-text";
@@ -180,7 +181,7 @@ export function TemplateGrid({
                       title={
                         has
                           ? CONTENT_LOCALE_LABELS[l]
-                          : t("templates.missingLang", { lang: CONTENT_LOCALE_LABELS[l] })
+                          : t("templates.missingLang", { lang: langInSentence(l) })
                       }
                       className={cn(
                         "rounded-[5px] px-1 text-[10px] font-semibold uppercase",
@@ -332,7 +333,7 @@ export function TemplateDialog({
       });
       setNote(
         t("templates.translated", {
-          langs: empty.map((l) => CONTENT_LOCALE_LABELS[l]).join(", "),
+          langs: empty.map((l) => langInSentence(l)).join(", "),
         }),
       );
     } catch {
@@ -397,7 +398,7 @@ export function TemplateDialog({
               overlay={draft.overlay}
             />
             <p className="text-center text-[11.5px] text-[var(--color-ink-faint)]">
-              {t("templates.previewIn", { lang: CONTENT_LOCALE_LABELS[lang] })}
+              {t("templates.previewIn", { lang: langInSentence(lang) })}
             </p>
           </div>
 
@@ -494,7 +495,7 @@ export function TemplateDialog({
                 {empty.length === 0
                   ? t("templates.allWritten")
                   : t("templates.translate", {
-                      from: CONTENT_LOCALE_LABELS[lang],
+                      from: langInSentence(lang),
                       n: empty.length,
                     })}
               </Button>

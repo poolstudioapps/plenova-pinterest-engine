@@ -376,7 +376,7 @@ export function PhotoPicker({
                           </span>
                         )}
                         <span className="block text-[11px] text-[var(--color-ink-faint)]">
-                          {t("media.used", { n: asset.usedCount })}
+                          {(asset.usedCount ? t("media.used", { n: asset.usedCount }) : t("media.unused"))}
                         </span>
                       </span>
                     </button>

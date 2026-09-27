@@ -99,7 +99,7 @@ export function SpendPanel({
     );
 
   async function remove(entry: PerfSpendEntry) {
-    if (!window.confirm(`Supprimer ${money(entry.amount)} ${entry.channel} ?`))
+    if (!window.confirm(`Supprimer la dépense ${entry.channel} de ${money(entry.amount)} ?`))
       return;
     setBusy(entry.id);
     setError(null);
@@ -132,10 +132,9 @@ export function SpendPanel({
             Dépenses publicitaires
           </h2>
           <p className="mt-2 max-w-[62ch] text-[12.5px] leading-relaxed text-[var(--color-ink-soft)]">
-            Les coûts des régies reliées à AppsFlyer (Meta…) arrivent seuls,
-            dès qu&apos;AppsFlyer laisse lire son rapport agrégé (état dans
-            Sources, en bas). Saisis ici ce qu&apos;il ne voit pas, avec le
-            store visé si la campagne n&apos;en cible qu&apos;un.
+            Les coûts des régies reliées à AppsFlyer (Meta…) arrivent seuls.
+            Saisis ici les autres, avec le store visé si la campagne n&apos;en
+            cible qu&apos;un.
             {entries.length > 0
               ? ` ${entries.length} saisie${entries.length > 1 ? "s" : ""}, réparties jour par jour sur leur période.`
               : ""}
@@ -242,7 +241,7 @@ export function SpendPanel({
             <Notice tone={appsflyerHasCost || /meta/i.test(channel ?? "") ? "warn" : "info"}>
               {appsflyerHasCost
                 ? "AppsFlyer remonte déjà des coûts (Meta…) : ne saisis pas une dépense qu'il voit, elle compterait deux fois."
-                : "Une dépense Meta saisie ici en attendant compterait deux fois le jour où AppsFlyer remontera ses coûts : il faudra alors la supprimer (elle sera signalée)."}
+                : "Si tu saisis une dépense Meta ici, supprime-la quand AppsFlyer remontera ses coûts (elle sera signalée) : sinon elle comptera deux fois."}
             </Notice>
           </div>
         </form>
@@ -276,7 +275,7 @@ export function SpendPanel({
                     className="ml-1.5 rounded-full bg-[var(--color-warn-soft)] px-1.5 py-px text-[11px] font-medium text-[var(--color-warn-ink)]"
                     title="AppsFlyer remonte déjà des coûts sur ces jours : cette saisie les compte une deuxième fois"
                   >
-                    compté deux fois ?
+                    comptée deux fois ?
                   </span>
                 ) : null}
               </span>

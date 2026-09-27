@@ -102,7 +102,7 @@ export function UpcomingPanel({
               <p className="figures mt-1.5 text-[12.5px] text-[var(--color-ink-soft)]">
                 {n(p.cancel)} résiliation{p.cancel >= 1.5 ? "s" : ""}
                 {p.billing >= 0.5
-                  ? ` · ${n(p.billing)} en problème de paiement`
+                  ? ` · ${n(p.billing)} en échec de paiement`
                   : ""}
               </p>
               <p className="mt-1 text-[11.5px] tabular-nums text-[var(--color-ink-faint)]">

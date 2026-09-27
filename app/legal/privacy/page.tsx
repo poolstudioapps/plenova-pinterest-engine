@@ -46,8 +46,9 @@ export default function PrivacyPage() {
       </ul>
       <p>
         No browsing data, analytics or tracking cookies are collected. The only
-        cookies set are a session cookie for staff sign-in and a cookie
-        remembering the chosen interface language.
+        cookies set are a session cookie for staff sign-in and two preference
+        cookies (which team a staff member works for, and how the analytics
+        page was last arranged).
       </p>
 
       <h2>3. How tokens are protected</h2>

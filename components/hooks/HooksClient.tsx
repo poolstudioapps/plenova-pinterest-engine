@@ -445,7 +445,7 @@ export function HooksClient({
               </button>
             ))}
           </Sliding>
-          <div className="min-w-0 grow basis-[136px] sm:grow-0 sm:basis-44">
+          <div className="min-w-0 grow basis-[160px] sm:grow-0 sm:basis-44">
             <Picker
               options={[
                 { value: "all", label: t("hooks.sourceAll") },
@@ -456,7 +456,7 @@ export function HooksClient({
               onChange={(v) => setSource(v as Source)}
             />
           </div>
-          <div className="min-w-0 grow basis-[136px] sm:grow-0 sm:basis-44">
+          <div className="min-w-0 grow basis-[160px] sm:grow-0 sm:basis-44">
             <Picker
               options={[
                 { value: "", label: t("hooks.allAccounts") },
@@ -466,7 +466,7 @@ export function HooksClient({
               onChange={setAccount}
             />
           </div>
-          <div className="min-w-0 grow basis-[136px] sm:grow-0 sm:basis-44">
+          <div className="min-w-0 grow basis-[160px] sm:grow-0 sm:basis-44">
             <Picker
               options={[
                 { value: "", label: t("hooks.allFormats") },
@@ -477,7 +477,7 @@ export function HooksClient({
             />
           </div>
           {view === "list" ? (
-            <div className="min-w-0 grow basis-[136px] sm:grow-0 sm:basis-40">
+            <div className="min-w-0 grow basis-[160px] sm:grow-0 sm:basis-40">
               <Picker
                 options={[
                   { value: "views", label: t("hooks.sortViews") },

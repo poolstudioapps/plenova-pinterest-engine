@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   Binoculars,
+  Bug,
   Cards,
   ChartLineUp,
   Images,
@@ -19,6 +20,7 @@ import {
   TiktokLogo,
   type Icon,
 } from "@phosphor-icons/react";
+import { setAragogEnabled, useAragogEnabled } from "@/components/fun/aragog-pref";
 import { PlenovaMark } from "@/components/layout/PlenovaMark";
 import { Indicator, useIndicator } from "@/components/ui/Indicator";
 import { translator, type TranslationKey } from "@/lib/i18n";
@@ -232,6 +234,7 @@ export function Sidebar({
       </div>
 
       <div className="mt-auto hidden border-t border-[var(--color-edge)] px-1 pt-3 md:block">
+        <AragogSwitch />
         {email ? (
           <p
             className="truncate px-1.5 pb-1 text-[12px] text-[var(--color-ink-faint)]"
@@ -255,5 +258,48 @@ export function Sidebar({
         </button>
       </div>
     </nav>
+  );
+}
+
+/**
+ * Lets Aragog out, or keeps it in. Remembered on this computer. Only beside
+ * the desktop menu: the spider follows a mouse, it never shows on a phone.
+ */
+function AragogSwitch() {
+  const on = useAragogEnabled();
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      onClick={() => setAragogEnabled(!on)}
+      className="group mb-1 flex w-full items-center gap-2.5 rounded-[10px] px-1.5 py-[7px] text-left text-[13.5px] font-medium text-[var(--color-ink-soft)] transition-colors hover:bg-[var(--color-surface)]/55 hover:text-[var(--color-ink)]"
+    >
+      <Bug
+        aria-hidden
+        size={18}
+        weight={on ? "fill" : "regular"}
+        className={cn(
+          "transition-colors",
+          on ? "text-[var(--color-ink)]" : "text-[var(--color-ink-faint)] group-hover:text-[var(--color-ink-soft)]",
+        )}
+      />
+      <span className="flex-1">Aragog</span>
+      {/* The track fills, the knob slides across: a switch, not a checkbox. */}
+      <span
+        aria-hidden
+        className={cn(
+          "relative h-[18px] w-[30px] shrink-0 rounded-full transition-colors duration-200",
+          on ? "bg-[var(--color-accent)]" : "bg-[var(--color-line-strong)]",
+        )}
+      >
+        <span
+          className={cn(
+            "absolute top-[2px] left-[2px] size-[14px] rounded-full bg-white shadow-[0_1px_2px_rgb(0_0_0/0.25)] transition-transform duration-200 ease-[var(--ease-out)]",
+            on && "translate-x-[12px]",
+          )}
+        />
+      </span>
+    </button>
   );
 }

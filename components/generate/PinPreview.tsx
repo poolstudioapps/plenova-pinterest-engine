@@ -132,7 +132,7 @@ export function PinPreview({ pin, plants, loading, onChange }: Props) {
           tone: "info",
           text:
             action === "publish"
-              ? `${t("preview.publish")} — ${data.pin.pinterestPinId}`
+              ? t("preview.published")
               : action === "queue"
                 ? t("preview.queued")
                 : t("preview.saved"),

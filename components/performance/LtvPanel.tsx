@@ -204,7 +204,7 @@ export function LtvPanel({
           {eur1.format(ltv.band.net[12][0])} € sur 1 an).
         </p>
         <p>
-          Mix des premiers achats : {mix}
+          Répartition des premiers achats : {mix}
           {hasOneTime ? "" : " · 0 % achat unique"}.
         </p>
         {monthly ? (
@@ -264,7 +264,7 @@ export function LtvPanel({
         </Flag>
       ) : null}
       {ltv.flags.clamped ? (
-        <Flag>Limite atteinte : un taux a été borné.</Flag>
+        <Flag>Limite atteinte : un taux extrême a été plafonné.</Flag>
       ) : null}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.4fr_1fr]">
