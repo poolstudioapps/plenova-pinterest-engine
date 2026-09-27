@@ -140,9 +140,16 @@ enregistrements).
 **Le kit ne contient aucune clé de base** : il parle à l'app
 (`/api/spy/agent/*`, public dans `lib/auth.ts`) avec un code d'accès par
 ordinateur (`spy_…`, table `spy_agents`, seul le sha256 est stocké), créé dans
-Spy > Comptes > Ordinateurs et révocable. `config.json` du kit = `server` +
-`token` ; sans token, le spy le demande au premier lancement. `--code="Nom"`
-sur `spy:kit` crée un code et l'écrit dans le dossier sans l'afficher. Le spy
+Spy > Comptes > Ordinateurs et révocable. **Le code n'est jamais dans le
+dossier** (depuis le 27/09/2026, pour que l'utilisateur puisse envoyer son
+dossier tel quel à Dylan) : il vit dans le profil Windows de chaque PC,
+`%APPDATA%\Plenova Spy\config.json` ; le `config.json` du dossier ne garde que
+`server`. Un code trouvé dans le dossier (anciens kits) y est déplacé au
+lancement. Sans code, le spy le demande au premier lancement.
+`npm run spy:kit -- --install="C:\Dev\Plenova Spy"` met à jour un dossier en
+place (logs et cache gardés) ; `--code="Nom"` crée un code pour CE PC (profil
+Windows), sans l'afficher. Le zip part toujours d'une copie neuve. Le dossier
+de l'utilisateur est `C:\Dev\Plenova Spy`. Le spy
 relit la liste des comptes (`/plan`) à chaque passage : un compte ajouté dans
 l'app est visité au passage suivant, depuis n'importe quel PC. Les images
 passent par `/images` (bucket public `spy`, chemins contrôlés, type lu dans
@@ -165,9 +172,13 @@ nos comptes, dont les vues comptent sur Versus). Rien d'autre n'est relu.
 programme ni connaître l'emplacement d'un fichier (le glisser-déposer demandé
 ne donne pas de chemin). Le spy enregistre donc, à chaque lancement, le lien
 `plenova-spy://` pour l'utilisateur Windows (`HKCU\Software\Classes`, sans
-droits admin) vers le « Lancer le spy.bat » de son dossier ; le bouton ouvre
-`plenova-spy://run` et suit ensuite le passage (`GET /api/spy` toutes les 5 puis
-20 s). Rien de l'URL n'est transmis au programme.
+droits admin) vers `app\node.exe app\spy.mjs --from-app` de son dossier
+(plus le .bat : un .bat derrière un lien de navigateur était une étape de
+trop) ; `spy.mjs --register` fait seulement ce lien, sans passage. Le bouton
+ouvre `plenova-spy://run` (Chrome demande « Ouvrir Plenova Spy ? », cocher
+« Toujours autoriser ») et suit ensuite le passage (`GET /api/spy` toutes les 5
+puis 20 s). Rien de l'URL n'est transmis au programme. Testé le 27/09 : le lien
+ouvert comme le fait Chrome a lancé le passage n° 11.
 
 **Nettoyage du 26/09/2026 (demande de l'utilisateur)** : carrousels concurrents
 de plus de 7 jours restés sous 50 000 vues supprimés (1 226, avec leurs images et
@@ -185,18 +196,60 @@ Réservée aux adresses `allowed_emails.sees_revenue = true` (les quatre de l'al
 une nouvelle adresse n'y a pas accès tant qu'on ne coche pas `sees_revenue`) : page,
 lien du menu et routes vérifient tous `performanceAccess()` (`lib/performance/dashboard.ts`).
 - **Sources** : RevenueCat (revenus, MRR, abonnés, churn, conversion payante 7 j,
-  remboursements, LTV réalisée et projetée, cohortes hebdo J0/J7/J30/à date), Amplitude
-  (DAU, WAU, MAU glissants, nouveaux, acheteurs, entonnoirs onboarding, welcome → home
-  en 2.0.0+, achat ≤ 7 j), AppsFlyer (installs organiques/campagnes, coûts).
+  remboursements, LTV par payeur, cohortes hebdo J0/J7/J30/à date), Amplitude
+  (DAU, WAU, MAU glissants, nouveaux, acheteurs, onboarding, achat ≤ 7 j, rétention
+  d'usage des abonnés), AppsFlyer (installs organiques/campagnes, coûts).
   Modules `lib/performance/{revenuecat,amplitude,appsflyer}.ts`.
+- **RevenueCat = les deux apps Plenova seulement** (App Store, Play Store ; le « Test
+  Store » du projet exclu) : le nom du filtre change selon le graphique (`app_id`,
+  `first_app_id` pour les graphiques de clients, `store` pour la LTV), table dans
+  `APP_FILTER_BY_CHART` avec repli automatique si RevenueCat refuse un filtre.
+- **Conversion = app 2.0.0 et suivantes partout** (règle des utilisateurs,
+  `lib/performance/versions.ts`) : onboarding (First App Open → Onboarding Completed =
+  arrivée sur Home en 2.0.0), achat ≤ 7 j, acheteurs ÷ nouveaux, conversion payante
+  RevenueCat (découpée par `first_app_version`). Usage (DAU/WAU/MAU) et argent
+  (revenus, churn, LTV) : toutes versions. Les versions sont relues à chaque relevé.
+- **LTV = par client payant, un seul chiffre, pas par cohorte** (règles des
+  utilisateurs), réalisée depuis le lancement et projetée à 6 mois et 1 an seulement,
+  **nette** (proceeds RevenueCat : TVA et commission 15 % Small Business déduites,
+  vérifié 0,85 sur les deux stores) puis brute. Modèle `lib/performance/ltv.ts`, choisi
+  le 27/09 par un panel (3 conceptions indépendantes, 3 juges, 1 synthèse) :
+  Σ offres part des 1ers achats (transactions « New ») × (prix du 1er paiement + prix
+  d'un renouvellement × (paiements attendus − 1)), net = brut × (proceeds ÷ revenu) de
+  l'offre. Paiements attendus en mensuel = survie mois par mois mesurée sur les
+  cohortes RevenueCat (`subscription_retention` P1M, mois terminés seulement, au moins
+  10 abonnements, tirés vers le rythme de croisière d'un poids de 30), prolongée au
+  rythme de croisière (renouvellements après le 1er ; plafonné par la part « set to
+  renew » ; bornes 30–97 %). L'annuel paie une fois sur ces horizons (renouvellement
+  jamais observé, hors calcul ; la part des annuels en renouvellement auto est
+  affichée). Affichés aussi : fourchette à 80 % (Wilson, 1er renouvellement élargi par
+  la dispersion entre cohortes), part projetée, contrôle hors échantillon (le dernier
+  mois calendaire prédit sans lui) et drapeau de dérive du 1er renouvellement (ne
+  change jamais le chiffre). Chiffres du 27/09 : 22,48 € net / 30,91 € brut à 6 mois,
+  24,38 € / 33,53 € à 1 an, réalisé 21,77 € / 29,95 €. Amplitude (rétention d'usage des
+  abonnés, `/api/2/retention`) est affichée à côté, **pas dans le montant** : sans
+  événement de paiement, elle ne dit pas qui paie, et un abonné qui n'ouvre plus l'app
+  peut continuer de payer. Le tableau des cohortes hebdo n'apparaît que s'il y a des
+  dépenses sur la période (il sert au ROAS de cohorte).
+- **Échéances des 10 prochains jours** (demande de l'utilisateur) : abonnements dont la
+  période se termine, en renouvellement auto / résiliés / en problème de paiement, et le
+  revenu attendu (renouvellements × prix de renouvellement, brut et net).
+  `subscription_status` segmenté par `expiration_month`, par offre : RevenueCat donne le
+  **mois**, pas le jour, donc un mois entièrement dans la fenêtre compte en entier et un
+  mois entamé au prorata de ses jours (« ≈ »). Au jour près, il faudrait les webhooks
+  RevenueCat (proposé, pas fait). Piège : ce graphique marque son 1er segment
+  `is_total` alors qu'il n'y a pas de total - les segments se lisent par leur nom.
 - **Relevés** : `lib/performance/refresh.ts`, lancé par le cron Vercel horaire
   `/api/cron/performance` qui ne travaille qu'à 9 h, 18 h et 22 h heure de Paris, ou par
   le bouton « Actualiser » (15 min entre deux). Tout est stocké **par jour** dans
   `perf_daily` depuis `PERF_EPOCH` (2026-02-01) : la page calcule n'importe quelle période
   dans le navigateur (7/30/60 j, depuis le début, calendrier) sans appeler de fournisseur
   (`lib/performance/compute.ts`). Relecture complète une fois par semaine, sinon les
-  45 derniers jours. AppsFlyer : 24 appels/jour/app max, donc pas plus d'un relevé toutes
-  les 3 h. `perf_snapshots` est un cache (purgé au-delà de 14 jours, le dernier bon relevé
+  45 derniers jours ; `DATA_VERSION` (refresh.ts) force une relecture complète quand la
+  définition d'une source change. AppsFlyer : 24 rapports/jour/app (quota remis à zéro à
+  minuit UTC) et aucune limite de plage, donc un seul appel par app et par relevé, pas
+  plus d'un relevé toutes les 3 h, et plus rien jusqu'à minuit UTC après « Limit
+  reached ». `perf_snapshots` est un cache (purgé au-delà de 14 jours, le dernier bon relevé
   de chaque source reste toujours).
 - **Dépenses et ROAS** : coûts AppsFlyer (intégration Meta faite par l'utilisateur, les
   coûts arrivent dès qu'une campagne tourne) + saisies à la main dans `perf_spend`

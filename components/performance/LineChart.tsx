@@ -134,7 +134,7 @@ export function LineChart({
       ) : null}
       <div
         ref={box}
-        className="relative touch-pan-y select-none"
+        className="relative w-full max-w-full touch-pan-y overflow-hidden select-none"
         onPointerMove={(e) => onMove(e.clientX)}
         onPointerDown={(e) => onMove(e.clientX)}
         onPointerLeave={() => setHover(null)}

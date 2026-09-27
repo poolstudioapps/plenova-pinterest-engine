@@ -5,6 +5,7 @@ import { seesRevenue } from "@/lib/allowlist";
 import { AUTH_COOKIE, readSession, sessionSecret } from "@/lib/auth";
 import { amplitudeConfigured } from "@/lib/performance/amplitude";
 import { appsFlyerConfigured } from "@/lib/performance/appsflyer";
+import type { LtvInputs, SubscriberUsageMonth } from "@/lib/performance/ltv";
 import type {
   PerfCohort,
   PerfPayload,
@@ -38,7 +39,40 @@ export const performanceAccess = cache(
   },
 );
 
-function homeLabel(versions: unknown): string | null {
+/** "2.0.0" or "2.0.0 → 2.1.0": the app versions the conversion figures count. */
+/** A stored LtvInputs, checked for shape (snapshots written before it existed have none). */
+function isLtvInputs(v: unknown): v is LtvInputs {
+  if (!v || typeof v !== "object") return false;
+  const o = v as Record<string, unknown>;
+  return (
+    Array.isArray(o.plans) &&
+    Array.isArray(o.monthlyRetention) &&
+    typeof o.realized === "object" &&
+    o.realized !== null
+  );
+}
+
+/** Stored subscriber usage, checked for shape. */
+function usageOf(v: unknown): PerfPayload["subscriberUsage"] {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  const rows = (x: unknown): SubscriberUsageMonth[] | null =>
+    Array.isArray(x)
+      ? x
+          .filter(
+            (r): r is Record<string, unknown> => !!r && typeof r === "object",
+          )
+          .map((r) => ({
+            month: Number(r.month) || 0,
+            active: Number(r.active) || 0,
+            outOf: Number(r.outOf) || 0,
+            complete: r.complete === true,
+          }))
+      : null;
+  return { monthly: rows(o.monthly), annual: rows(o.annual) };
+}
+
+function versionsLabel(versions: unknown): string | null {
   if (!Array.isArray(versions)) return null;
   const list = versions.filter((v): v is string => typeof v === "string");
   const first = list[0];
@@ -76,8 +110,7 @@ export async function performancePayload(): Promise<PerfPayload> {
     Record<string, unknown> | undefined;
   const af = snapshots.appsflyer.good?.data as
     Record<string, unknown> | undefined;
-  const ltv = (rc?.ltvOverall ?? {}) as Record<string, unknown>;
-  const prediction = (rc?.prediction ?? {}) as Record<string, unknown>;
+  const ltvInputs = isLtvInputs(rc?.ltvInputs) ? rc.ltvInputs : null;
   const churn = Array.isArray(rc?.churn)
     ? (rc.churn as Record<string, unknown>[])
     : [];
@@ -126,18 +159,11 @@ export async function performancePayload(): Promise<PerfPayload> {
             actives: num(m.actives),
             incomplete: m.incomplete === true,
           })),
-          ltvPerCustomer: num(ltv.perCustomer),
-          ltvPerPayingCustomer: num(ltv.perPayingCustomer),
-          predicted12: num(prediction.m12),
-          predicted24: num(prediction.m24),
+          ltvInputs,
         }
       : null,
-    amplitude: amp
-      ? {
-          // "2.0.0" or "2.0.0 → 2.1.0": the versions the Home funnel counts.
-          homeSegment: homeLabel(amp.homeVersions),
-        }
-      : null,
+    conversionVersions: versionsLabel(amp?.versions),
+    subscriberUsage: usageOf(amp?.subscriberUsage),
     appsflyerHasCost:
       Object.values(series["appsflyer:cost"] ?? {}).some((v) => v > 0) ||
       af?.hasCost === true,

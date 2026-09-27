@@ -4,7 +4,9 @@
  * Double-click "Lancer le spy.bat". It visits every account listed in the app
  * (Spy > Comptes, and our own on the Versus page), reads what they posted, and
  * sends it to the app. It holds no database key: only an access code, created
- * and revoked in the app, kept in config.json next to this file.
+ * and revoked in the app. The code is this computer's, kept in the Windows
+ * user's profile (%APPDATA%\Plenova Spy\config.json), never in the folder:
+ * the folder carries no secret and can be copied or sent to anyone as it is.
  *
  * Built into the folder by scripts/build-spy-kit.mjs, with its own node.exe:
  * nothing has to be installed on the computer that runs it.
@@ -29,7 +31,13 @@ import { fileURLToPath } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const KIT = path.resolve(HERE, "..");
+/** The folder's settings: the app's address only - shared with the folder. */
 const CONFIG = path.join(KIT, "config.json");
+/** This computer's access code, outside the folder so sending the folder never sends it. */
+const USER_DIR = process.env.APPDATA
+  ? path.join(process.env.APPDATA, "Plenova Spy")
+  : path.join(os.homedir(), ".plenova-spy");
+const SECRET = path.join(USER_DIR, "config.json");
 const CACHE = path.join(HERE, "cache");
 const LOGS = path.join(KIT, "logs");
 const DEFAULT_SERVER = "https://studio.latelierugc.com";
@@ -45,11 +53,13 @@ const TIKTOK_HEADERS = {
 const GONE_CODES = new Set([10204, 10216, 10222]);
 const args = new Set(process.argv.slice(2));
 const interactive = process.stdin.isTTY && !args.has("--no-pause");
+process.title = "Plenova Spy";
 
 // ------------------------------------------------------------------ output
 
 let logFile = null;
-const paint = (code, text) => (process.stdout.isTTY ? `\x1b[${code}m${text}\x1b[0m` : text);
+const paint = (code, text) =>
+  process.stdout.isTTY ? `\x1b[${code}m${text}\x1b[0m` : text;
 const green = (t) => paint("32", t);
 const red = (t) => paint("31", t);
 const dim = (t) => paint("2", t);
@@ -66,40 +76,90 @@ function writeLog(line) {
 
 function log(line, show = line) {
   console.log(show);
-  writeLog(`[${new Date().toLocaleTimeString("fr-FR")}] ${line.replace(/\x1b\[\d+m/g, "")}\n`);
+  writeLog(
+    `[${new Date().toLocaleTimeString("fr-FR")}] ${line.replace(/\x1b\[\d+m/g, "")}\n`,
+  );
 }
 
 async function pauseBeforeClosing() {
   if (!interactive) return;
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
   await rl.question(dim("\nAppuie sur Entrée pour fermer cette fenêtre."));
   rl.close();
 }
 
 // ------------------------------------------------------------------ config
 
-function readConfig() {
-  if (!fs.existsSync(CONFIG)) return {};
+function readJson(file) {
+  if (!fs.existsSync(file)) return {};
   try {
-    return JSON.parse(fs.readFileSync(CONFIG, "utf8"));
+    return JSON.parse(fs.readFileSync(file, "utf8"));
   } catch {
-    log(`config.json est illisible (${CONFIG}) : le code d'accès va être redemandé.`);
+    log(`${file} est illisible : il sera réécrit.`);
     return {};
   }
 }
 
+function saveSecret(token) {
+  fs.mkdirSync(USER_DIR, { recursive: true });
+  fs.writeFileSync(SECRET, JSON.stringify({ token }, null, 2));
+}
+
+/**
+ * The app's address (folder) and this computer's code (profile). A code
+ * still in the folder's config.json - folders made before 2026-09-27 kept it
+ * there - moves to the profile, and the folder's copy is emptied.
+ */
+function readConfig() {
+  const folder = readJson(CONFIG);
+  let token = readJson(SECRET).token;
+  if (typeof folder.token === "string" && folder.token.startsWith("spy_")) {
+    if (!(typeof token === "string" && token.startsWith("spy_"))) {
+      token = folder.token;
+      saveSecret(token);
+    }
+    fs.writeFileSync(
+      CONFIG,
+      JSON.stringify({ server: folder.server || DEFAULT_SERVER }, null, 2),
+    );
+    log(
+      "Code d'accès rangé hors du dossier (profil Windows) : le dossier peut être partagé tel quel.",
+    );
+  }
+  return {
+    server: folder.server || DEFAULT_SERVER,
+    token: typeof token === "string" ? token : "",
+  };
+}
+
 async function ensureToken(config) {
-  if (typeof config.token === "string" && config.token.startsWith("spy_")) return config;
-  if (!interactive) throw new Error(`Aucun code d'accès valable dans ${CONFIG}. Relance le spy par un double-clic : il le demandera.`);
-  console.log(bold("\nIl faut le code d'accès du spy."));
-  console.log("Dans l'app : Spy > onglet Comptes > Ordinateurs > « Autoriser un ordinateur ».");
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  const token = (await rl.question("Colle le code ici puis appuie sur Entrée : ")).trim();
+  if (typeof config.token === "string" && config.token.startsWith("spy_"))
+    return config;
+  if (!interactive)
+    throw new Error(
+      `Aucun code d'accès valable sur cet ordinateur (${SECRET}). Relance le spy par un double-clic : il le demandera.`,
+    );
+  console.log(bold("\nIl faut le code d'accès du spy pour cet ordinateur."));
+  console.log(
+    "Dans l'app : Spy > onglet Comptes > Ordinateurs > « Autoriser un ordinateur ».",
+  );
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  const token = (
+    await rl.question("Colle le code ici puis appuie sur Entrée : ")
+  ).trim();
   rl.close();
-  if (!token.startsWith("spy_")) throw new Error("Ce n'est pas un code d'accès du spy (il commence par spy_).");
-  const next = { server: config.server || DEFAULT_SERVER, token };
-  fs.writeFileSync(CONFIG, JSON.stringify(next, null, 2));
-  return next;
+  if (!token.startsWith("spy_"))
+    throw new Error(
+      "Ce n'est pas un code d'accès du spy (il commence par spy_).",
+    );
+  saveSecret(token);
+  return { ...config, token };
 }
 
 // --------------------------------------------------------------------- app
@@ -123,7 +183,11 @@ function makeApi({ server, token }) {
         if (res.ok) return data;
         const message = data?.error?.message ?? `l'app a répondu ${res.status}`;
         // Refused or invalid: trying again changes nothing.
-        if (res.status < 500) throw Object.assign(new Error(message), { final: true, status: res.status });
+        if (res.status < 500)
+          throw Object.assign(new Error(message), {
+            final: true,
+            status: res.status,
+          });
         throw new Error(message);
       } catch (err) {
         if (err.final || attempt >= attempts) throw err;
@@ -139,7 +203,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const breathe = () => sleep(1200 + Math.random() * 1800);
 
 function jsonScript(html, id) {
-  const match = html.match(new RegExp(`<script id="${id}"[^>]*>([\\s\\S]*?)</script>`));
+  const match = html.match(
+    new RegExp(`<script id="${id}"[^>]*>([\\s\\S]*?)</script>`),
+  );
   if (!match) return null;
   try {
     return JSON.parse(match[1]);
@@ -158,16 +224,23 @@ function createdAt(id) {
 }
 
 async function readProfile(username) {
-  const res = await fetch(`https://www.tiktok.com/embed/@${encodeURIComponent(username)}`, {
-    headers: TIKTOK_HEADERS,
-    signal: AbortSignal.timeout(TIKTOK_TIMEOUT),
-  });
+  const res = await fetch(
+    `https://www.tiktok.com/embed/@${encodeURIComponent(username)}`,
+    {
+      headers: TIKTOK_HEADERS,
+      signal: AbortSignal.timeout(TIKTOK_TIMEOUT),
+    },
+  );
   if (res.status === 400 || res.status === 404) {
-    throw new Error("compte introuvable sur TikTok (suspendu, supprimé ou renommé)");
+    throw new Error(
+      "compte introuvable sur TikTok (suspendu, supprimé ou renommé)",
+    );
   }
   if (!res.ok) throw new Error(`TikTok a répondu ${res.status}`);
   const state = jsonScript(await res.text(), "__FRONTITY_CONNECT_STATE__");
-  const entry = Object.values(state?.source?.data ?? {}).find((d) => d && Array.isArray(d.videoList));
+  const entry = Object.values(state?.source?.data ?? {}).find(
+    (d) => d && Array.isArray(d.videoList),
+  );
   if (!entry) throw new Error("profil illisible (compte privé ?)");
   const user = entry.userInfo ?? {};
   return {
@@ -183,20 +256,28 @@ const positive = (n) => (Number(n) > 0 ? Math.round(Number(n)) : undefined);
 
 /** One post in full: a carousel with its slides, or a video with its cover. */
 async function readPost(username, id) {
-  const res = await fetch(`https://www.tiktok.com/@${encodeURIComponent(username)}/video/${id}`, {
-    headers: TIKTOK_HEADERS,
-    signal: AbortSignal.timeout(TIKTOK_TIMEOUT),
-  });
-  if (res.status === 404) throw Object.assign(new Error("post introuvable"), { gone: true });
+  const res = await fetch(
+    `https://www.tiktok.com/@${encodeURIComponent(username)}/video/${id}`,
+    {
+      headers: TIKTOK_HEADERS,
+      signal: AbortSignal.timeout(TIKTOK_TIMEOUT),
+    },
+  );
+  if (res.status === 404)
+    throw Object.assign(new Error("post introuvable"), { gone: true });
   if (!res.ok) throw new Error(`TikTok a répondu ${res.status}`);
-  const detail = jsonScript(await res.text(), "__UNIVERSAL_DATA_FOR_REHYDRATION__")?.__DEFAULT_SCOPE__?.[
-    "webapp.video-detail"
-  ];
+  const detail = jsonScript(
+    await res.text(),
+    "__UNIVERSAL_DATA_FOR_REHYDRATION__",
+  )?.__DEFAULT_SCOPE__?.["webapp.video-detail"];
   const item = detail?.itemInfo?.itemStruct;
   if (!item) {
-    throw Object.assign(new Error(`page illisible (statut ${detail?.statusCode ?? "?"})`), {
-      gone: GONE_CODES.has(Number(detail?.statusCode)),
-    });
+    throw Object.assign(
+      new Error(`page illisible (statut ${detail?.statusCode ?? "?"})`),
+      {
+        gone: GONE_CODES.has(Number(detail?.statusCode)),
+      },
+    );
   }
   const stats = { ...(item.stats ?? {}), ...(item.statsV2 ?? {}) };
   const num = (k) => Number(stats[k]) || 0;
@@ -207,7 +288,9 @@ async function readPost(username, id) {
     id,
     mediaType: images.length > 0 ? "carousel" : "video",
     caption: (item.desc ?? "").trim(),
-    postedAt: new Date((Number(item.createTime) || createdAt(id)) * 1000).toISOString(),
+    postedAt: new Date(
+      (Number(item.createTime) || createdAt(id)) * 1000,
+    ).toISOString(),
     views: num("playCount"),
     likes: num("diggCount"),
     comments: num("commentCount"),
@@ -224,7 +307,13 @@ async function readPost(username, id) {
             .filter((p) => p.url)
             .slice(0, 35)
         : cover
-          ? [{ url: cover, width: positive(item.video?.width), height: positive(item.video?.height) }]
+          ? [
+              {
+                url: cover,
+                width: positive(item.video?.width),
+                height: positive(item.video?.height),
+              },
+            ]
           : [],
   };
 }
@@ -232,8 +321,13 @@ async function readPost(username, id) {
 /** What the bytes are, from their first few. */
 function sniffImage(bytes) {
   if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "jpg";
-  if (bytes[0] === 0x89 && bytes.toString("ascii", 1, 4) === "PNG") return "png";
-  if (bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WEBP") return "webp";
+  if (bytes[0] === 0x89 && bytes.toString("ascii", 1, 4) === "PNG")
+    return "png";
+  if (
+    bytes.toString("ascii", 0, 4) === "RIFF" &&
+    bytes.toString("ascii", 8, 12) === "WEBP"
+  )
+    return "webp";
   return null;
 }
 
@@ -248,8 +342,15 @@ async function sendPicture(api, picture, dest) {
   if (bytes.length > MAX_IMAGE_BYTES) throw new Error("image trop lourde");
   const ext = sniffImage(bytes);
   if (!ext) throw new Error("format d'image inconnu");
-  const { url } = await api("POST", "images", { path: `${dest}.${ext}`, data: bytes.toString("base64") });
-  return { url, ...(picture.width ? { width: picture.width } : {}), ...(picture.height ? { height: picture.height } : {}) };
+  const { url } = await api("POST", "images", {
+    path: `${dest}.${ext}`,
+    data: bytes.toString("base64"),
+  });
+  return {
+    url,
+    ...(picture.width ? { width: picture.width } : {}),
+    ...(picture.height ? { height: picture.height } : {}),
+  };
 }
 
 // --------------------------------------------------------------------- run
@@ -264,7 +365,8 @@ function init() {
   fs.mkdirSync(CACHE, { recursive: true });
   videosFile = path.join(CACHE, "videos.json");
   try {
-    if (fs.existsSync(videosFile)) knownVideos = new Set(JSON.parse(fs.readFileSync(videosFile, "utf8")));
+    if (fs.existsSync(videosFile))
+      knownVideos = new Set(JSON.parse(fs.readFileSync(videosFile, "utf8")));
   } catch {
     // A damaged cache only costs a few extra page loads: start it again.
     knownVideos = new Set();
@@ -274,28 +376,60 @@ function init() {
 /**
  * The app's "Lancer le spy" button opens plenova-spy://run. This tells Windows
  * (for this user only, no admin rights) that the link means "run this
- * folder's launcher" - from wherever the folder is now, so a folder that
- * moved is found again on its next double-click. The link carries nothing
- * through: the launcher always starts the same way.
+ * folder's spy" - from wherever the folder is now, so a folder that moved is
+ * found again on its next double-click. Windows starts this folder's node.exe
+ * directly (a batch file behind a browser link is one more thing to go
+ * wrong). The link carries nothing through: the spy always starts the same way.
  */
 function registerLauncher() {
-  if (process.platform !== "win32") return;
-  const launcher = path.join(KIT, "Lancer le spy.bat");
-  if (!fs.existsSync(launcher)) return;
+  if (process.platform !== "win32") return false;
+  const node = path.join(HERE, "node.exe");
+  const script = path.join(HERE, "spy.mjs");
+  // Only from a "Plenova Spy" folder, never from the project's sources.
+  if (!fs.existsSync(node) || !fs.existsSync(script)) return false;
   const key = "HKCU\\Software\\Classes\\plenova-spy";
-  const reg = (...args) => execFileSync("reg", ["add", ...args, "/f"], { stdio: "ignore", windowsHide: true });
+  const command = `"${node}" "${script}" --from-app`;
+  let current = "";
+  try {
+    current = execFileSync(
+      "reg",
+      ["query", `${key}\\shell\\open\\command`, "/ve"],
+      {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+        windowsHide: true,
+      },
+    );
+  } catch {
+    // Not registered yet.
+  }
+  if (current.includes(command)) return true;
+  const reg = (...a) =>
+    execFileSync("reg", ["add", ...a, "/f"], {
+      stdio: "ignore",
+      windowsHide: true,
+    });
   try {
     reg(key, "/ve", "/d", "URL:Plenova Spy");
     reg(key, "/v", "URL Protocol", "/d", "");
-    reg(`${key}\\shell\\open\\command`, "/ve", "/d", `"${launcher}"`);
+    reg(`${key}\\shell\\open\\command`, "/ve", "/d", command);
   } catch {
-    writeLog("Bouton de l'app non activé (registre Windows inaccessible).\n");
+    log(
+      "Bouton « Lancer le spy » de l'app non activé : registre Windows inaccessible.",
+    );
+    return false;
   }
+  log(`Bouton « Lancer le spy » de l'app relié à ce dossier (${KIT}).`);
+  return true;
 }
 
 function saveCache() {
   try {
-    if (videosFile) fs.writeFileSync(videosFile, JSON.stringify([...knownVideos].slice(-5000)));
+    if (videosFile)
+      fs.writeFileSync(
+        videosFile,
+        JSON.stringify([...knownVideos].slice(-5000)),
+      );
   } catch {
     // Same: only a cache.
   }
@@ -306,7 +440,9 @@ async function visit(api, account, totals) {
   const cutoff = Date.now() / 1000 - windowDays * 86400;
   const stored = new Set(account.stored ?? []);
   const refresh = new Set(account.known ?? []);
-  const history = (account.backfill ?? []).filter((id) => !stored.has(id) && !refresh.has(id));
+  const history = (account.backfill ?? []).filter(
+    (id) => !stored.has(id) && !refresh.has(id),
+  );
   // Stored with their cover only: this time, all their slides.
   const completeSet = new Set(ours ? [] : (account.complete ?? []));
   let profile;
@@ -314,8 +450,13 @@ async function visit(api, account, totals) {
     profile = await readProfile(username);
   } catch (err) {
     totals.errors.push({ username, message: err.message });
-    log(`@${username} : ${err.message}`, `  ${red("✗")} @${username} ${dim(err.message)}`);
-    await api("POST", "accounts", { account: { username, status: "error", error: err.message } }).catch((e) => {
+    log(
+      `@${username} : ${err.message}`,
+      `  ${red("✗")} @${username} ${dim(err.message)}`,
+    );
+    await api("POST", "accounts", {
+      account: { username, status: "error", error: err.message },
+    }).catch((e) => {
       if (e.status === 401) throw e;
     });
     return;
@@ -323,12 +464,21 @@ async function visit(api, account, totals) {
 
   // New posts of the window, the stored ones due for fresh numbers, then the history.
   const listed = profile.ids.filter(
-    (id) => createdAt(id) >= cutoff && !stored.has(id) && !refresh.has(id) && (ours || !knownVideos.has(id)),
+    (id) =>
+      createdAt(id) >= cutoff &&
+      !stored.has(id) &&
+      !refresh.has(id) &&
+      (ours || !knownVideos.has(id)),
   );
-  const candidates = Array.from(new Set([...listed, ...refresh, ...history, ...completeSet]));
+  const candidates = Array.from(
+    new Set([...listed, ...refresh, ...history, ...completeSet]),
+  );
   const historySet = new Set(history);
   if (history.length > 0) {
-    log(`@${username} : ${history.length} post(s) d'historique à récupérer.`, `  ${dim(`@${username} : ${history.length} post(s) d'historique à récupérer, patience…`)}`);
+    log(
+      `@${username} : ${history.length} post(s) d'historique à récupérer.`,
+      `  ${dim(`@${username} : ${history.length} post(s) d'historique à récupérer, patience…`)}`,
+    );
   }
   let found = 0;
   let fresh = 0;
@@ -337,7 +487,8 @@ async function visit(api, account, totals) {
   const gone = [];
 
   for (const [n, id] of candidates.entries()) {
-    if (candidates.length > 40 && n > 0 && n % 25 === 0) console.log(dim(`    … ${n}/${candidates.length}`));
+    if (candidates.length > 40 && n > 0 && n % 25 === 0)
+      console.log(dim(`    … ${n}/${candidates.length}`));
     await breathe();
     let post;
     try {
@@ -380,11 +531,19 @@ async function visit(api, account, totals) {
       if (completeSet.has(id)) body.complete = true;
       if (!refresh.has(id) || completeSet.has(id)) {
         // Ours are measured, never rebuilt, and old history is only ranked: a cover is enough.
-        const pictures = ours || (oldHistory && !completeSet.has(id)) ? post.pictures.slice(0, 1) : post.pictures;
+        const pictures =
+          ours || (oldHistory && !completeSet.has(id))
+            ? post.pictures.slice(0, 1)
+            : post.pictures;
         const images = [];
         for (const [i, picture] of pictures.entries()) {
-          const name = post.mediaType === "video" ? "cover" : String(i + 1).padStart(2, "0");
-          images.push(await sendPicture(api, picture, `${username}/${id}/${name}`));
+          const name =
+            post.mediaType === "video"
+              ? "cover"
+              : String(i + 1).padStart(2, "0");
+          images.push(
+            await sendPicture(api, picture, `${username}/${id}/${name}`),
+          );
         }
         body.images = images;
       }
@@ -404,16 +563,25 @@ async function visit(api, account, totals) {
   const tried = candidates.length - gone.length;
   const blocked = tried > 0 && unreadable === tried;
   const problems = [
-    blocked ? `TikTok n'a laissé lire aucun des ${unreadable} posts (limite ou vérification anti-robot)` : "",
+    blocked
+      ? `TikTok n'a laissé lire aucun des ${unreadable} posts (limite ou vérification anti-robot)`
+      : "",
     !blocked && unreadable > 0 ? `${unreadable} post(s) illisible(s)` : "",
     failed > 0 ? `${failed} post(s) non envoyé(s)` : "",
   ].filter(Boolean);
-  if (problems.length > 0) totals.errors.push({ username, message: problems.join(", ") });
+  if (problems.length > 0)
+    totals.errors.push({ username, message: problems.join(", ") });
 
   let avatarUrl = null;
   if (profile.avatarUrl) {
     try {
-      avatarUrl = (await sendPicture(api, { url: profile.avatarUrl }, `avatars/${username}`)).url;
+      avatarUrl = (
+        await sendPicture(
+          api,
+          { url: profile.avatarUrl },
+          `avatars/${username}`,
+        )
+      ).url;
     } catch (err) {
       if (err.status === 401) throw err;
       avatarUrl = null;
@@ -436,7 +604,10 @@ async function visit(api, account, totals) {
   } catch (err) {
     if (err.status === 401) throw err;
     // Its posts are in; only its profile line is missing. The pass goes on.
-    totals.errors.push({ username, message: `profil non enregistré : ${err.message}` });
+    totals.errors.push({
+      username,
+      message: `profil non enregistré : ${err.message}`,
+    });
   }
 
   const summary = `${found} post(s) suivis, ${fresh} nouveau(x)`;
@@ -457,7 +628,9 @@ async function openSession() {
       return { api, accounts };
     } catch (err) {
       if (err.status !== 401 || !interactive) {
-        throw err.status === 401 ? new Error(`${err.message} (config.json : ${CONFIG})`) : err;
+        throw err.status === 401
+          ? new Error(`${err.message} (code de cet ordinateur : ${SECRET})`)
+          : err;
       }
       console.log(red(`\n${err.message}`));
       config = await ensureToken({ ...config, token: "" });
@@ -468,30 +641,57 @@ async function openSession() {
 async function main() {
   console.log(bold("\nPlenova Spy\n"));
   init();
-  registerLauncher();
+  const linked = registerLauncher();
+  // "--register": only link the app's button to this folder, no pass.
+  if (args.has("--register")) {
+    console.log(
+      linked
+        ? green(
+            "Le bouton « Lancer le spy » de l'app ouvre désormais ce dossier.",
+          )
+        : red("Bouton non activé (voir ci-dessus)."),
+    );
+    return;
+  }
   const { api, accounts } = await openSession();
   if (!accounts.length) {
     log("Aucun compte actif : ajoute-en dans l'app, Spy > Comptes.");
     return;
   }
-  log(`${accounts.length} compte(s) à visiter.`, `${accounts.length} compte(s) à visiter - ça prend quelques minutes.\n`);
+  log(
+    `${accounts.length} compte(s) à visiter.`,
+    `${accounts.length} compte(s) à visiter - ça prend quelques minutes.\n`,
+  );
   const { runId } = await api("POST", "runs", { accounts: accounts.length });
   // found/added: everything, for this window; carousels: what the Spy page reports.
-  const totals = { found: 0, added: 0, carousels: 0, newCarousels: 0, errors: [] };
+  const totals = {
+    found: 0,
+    added: 0,
+    carousels: 0,
+    newCarousels: 0,
+    errors: [],
+  };
 
   let closed = false;
   const close = async () => {
     if (closed) return;
     closed = true;
     saveCache();
-    const report = { found: totals.carousels, added: totals.newCarousels, errors: totals.errors };
+    const report = {
+      found: totals.carousels,
+      added: totals.newCarousels,
+      errors: totals.errors,
+    };
     await api("POST", `runs/${runId}`, report, { attempts: 1 }).catch((err) =>
       log(`Fin du passage non enregistrée : ${err.message}`),
     );
   };
   // The window closed or Ctrl+C: the pass is still recorded, as interrupted.
   const abort = async () => {
-    totals.errors.push({ username: "*", message: "passage interrompu (fenêtre fermée)" });
+    totals.errors.push({
+      username: "*",
+      message: "passage interrompu (fenêtre fermée)",
+    });
     await close();
     process.exit(1);
   };
@@ -504,13 +704,22 @@ async function main() {
         await visit(api, account, totals);
       } catch (err) {
         if (err.status === 401) throw err;
-        totals.errors.push({ username: account.username, message: err.message });
-        log(`@${account.username} : ${err.message}`, `  ${red("✗")} @${account.username} ${dim(err.message)}`);
+        totals.errors.push({
+          username: account.username,
+          message: err.message,
+        });
+        log(
+          `@${account.username} : ${err.message}`,
+          `  ${red("✗")} @${account.username} ${dim(err.message)}`,
+        );
       }
       if (i < accounts.length - 1) await sleep(2500 + Math.random() * 2500);
     }
   } catch (err) {
-    totals.errors.push({ username: "*", message: `passage interrompu : ${err.message}`.slice(0, 300) });
+    totals.errors.push({
+      username: "*",
+      message: `passage interrompu : ${err.message}`.slice(0, 300),
+    });
     throw err;
   } finally {
     await close();
@@ -518,7 +727,9 @@ async function main() {
   log(
     `Terminé : ${totals.found} post(s), ${totals.added} nouveau(x), ${totals.errors.length} compte(s) à vérifier.`,
     `\n${green("Terminé")} : ${totals.found} post(s) suivis, ${totals.added} nouveau(x)${
-      totals.errors.length ? `, ${red(`${totals.errors.length} compte(s) à vérifier`)}` : ""
+      totals.errors.length
+        ? `, ${red(`${totals.errors.length} compte(s) à vérifier`)}`
+        : ""
     }.\nLes hooks des nouveaux carrousels se lisent dans l'app d'ici quelques minutes.`,
   );
 }

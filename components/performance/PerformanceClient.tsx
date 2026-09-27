@@ -15,8 +15,16 @@ import {
   type Range,
 } from "@/lib/performance/compute";
 import type { RevenueOverview } from "@/lib/revenue";
+import {
+  projectLtv,
+  subscriberEngagement,
+  upcomingRenewals,
+} from "@/lib/performance/ltv";
+import { MIN_APP_VERSION } from "@/lib/performance/versions";
 import { cn } from "@/lib/utils";
 import { LineChart } from "./LineChart";
+import { LtvPanel } from "./LtvPanel";
+import { UpcomingPanel } from "./UpcomingPanel";
 import { SpendPanel } from "./SpendPanel";
 
 /* ------------------------------------------------------------ format -- */
@@ -39,7 +47,7 @@ const count = (n: number | null) => (n === null ? "-" : int.format(n));
 const pct = (n: number | null, digits = 1) =>
   n === null
     ? "-"
-    : `${new Intl.NumberFormat("fr-FR", { maximumFractionDigits: digits, minimumFractionDigits: digits }).format(n * 100)} %`;
+    : `${new Intl.NumberFormat("fr-FR", { maximumFractionDigits: digits, minimumFractionDigits: digits }).format(n * 100)} %`;
 const shortDay = (d: string) =>
   new Date(`${d}T00:00:00Z`).toLocaleDateString("fr-FR", {
     day: "numeric",
@@ -230,6 +238,27 @@ export function PerformanceClient({
   );
   const chart = useMemo(() => chartPoints(payload, range), [payload, range]);
   const cohorts = useMemo(() => cohortRows(payload, range), [payload, range]);
+  // One number for the whole history, whatever the period picked.
+  const ltv = useMemo(
+    () => (payload.rc?.ltvInputs ? projectLtv(payload.rc.ltvInputs) : null),
+    [payload],
+  );
+  const engagement = useMemo(
+    () =>
+      subscriberEngagement(
+        payload.subscriberUsage,
+        payload.rc?.ltvInputs ?? null,
+      ),
+    [payload],
+  );
+  // The next 10 days from today, whatever the period picked.
+  const upcoming = useMemo(
+    () =>
+      payload.rc?.ltvInputs
+        ? upcomingRenewals(payload.rc.ltvInputs, payload.today, 10)
+        : null,
+    [payload],
+  );
 
   // The user's rule: no spend in the period, no spend nor ROAS on screen.
   const spending = k.spend > 0;
@@ -317,6 +346,10 @@ export function PerformanceClient({
   };
   const rcMissing = missing("revenuecat", k.has.revenuecat);
   const ampMissing = missing("amplitude", k.has.amplitude);
+  // "Not read yet" is not zero: the 2.0.0+ series exist once a refresh made them.
+  const conversionMeasured =
+    payload.series["amplitude:new_users_v2"] !== undefined ||
+    payload.series["revenuecat:conv_new_customers_v2"] !== undefined;
   const afMissing = missing("appsflyer", k.has.appsflyer);
   const lastFullMonth =
     payload.rc?.churnMonths.filter((m) => !m.incomplete).pop() ?? null;
@@ -350,7 +383,7 @@ export function PerformanceClient({
           </div>
           <div
             className={cn(
-              "flex items-center gap-1.5 rounded-full border px-2 py-1",
+              "flex max-w-full min-w-0 flex-wrap items-center gap-1.5 rounded-[18px] border px-2 py-1",
               preset === null
                 ? "border-[var(--color-accent)]"
                 : "border-[var(--color-line)]",
@@ -475,14 +508,6 @@ export function PerformanceClient({
             hint="Clients vus pour la première fois par RevenueCat"
           />
           <Tile
-            label="Conversion payante ≤ 7 j"
-            value={pct(k.paying7Rate)}
-            sub={`${count(k.paying7)} / ${count(k.paying7Base)}${k.paying7Partial ? " · en cours" : ""}`}
-            hint="Nouveaux clients qui ont payé dans les 7 jours (les 7 derniers jours ne sont pas encore définitifs)"
-            now={k.paying7Rate}
-            before={p?.paying7Rate ?? null}
-          />
-          <Tile
             label="Churn mensuel moyen"
             value={pct(k.churnRate)}
             sub={`${count(k.churned)} perdus sur la période`}
@@ -549,6 +574,16 @@ export function PerformanceClient({
           />
         </div>
       </Section>
+
+      {/* ----------------------------------------------------- upcoming */}
+      {upcoming && payload.rc?.ltvInputs ? (
+        <Section
+          title="Échéances des 10 prochains jours"
+          source="RevenueCat · abonnements en cours"
+        >
+          <UpcomingPanel upcoming={upcoming} inputs={payload.rc.ltvInputs} />
+        </Section>
+      ) : null}
 
       {/* -------------------------------------------------- acquisition */}
       <Section
@@ -655,6 +690,13 @@ export function PerformanceClient({
             now={k.stickiness}
             before={p?.stickiness ?? null}
           />
+          <Tile
+            label="ARPU / mois"
+            value={money(k.arpuMonthly)}
+            hint="Revenu ramené à 30 jours ÷ MAU moyen de la période (par utilisateur actif, payeur ou non)"
+            now={k.arpuMonthly}
+            before={p?.arpuMonthly ?? null}
+          />
         </div>
         <div className="mt-5">
           <LineChart
@@ -677,39 +719,46 @@ export function PerformanceClient({
 
       {/* --------------------------------------------------- conversion */}
       <Section
-        title="Conversion"
-        source="Amplitude · nouveaux utilisateurs, par jour d'arrivée"
-        missing={ampMissing}
+        title={`Conversion · app ${payload.conversionVersions ?? MIN_APP_VERSION}${payload.conversionVersions?.includes("→") ? "" : " et suivantes"}`}
+        source="Amplitude · RevenueCat · nouveaux utilisateurs, par jour d'arrivée"
+        missing={
+          ampMissing ??
+          (!conversionMeasured
+            ? `Chiffres de l'app ${MIN_APP_VERSION} et suivantes pas encore relevés : ils arrivent au prochain relevé (ou clique sur Actualiser).`
+            : k.has.conversion
+              ? null
+              : `Aucun nouvel utilisateur de l'app ${MIN_APP_VERSION} ou suivante sur cette période : les chiffres de conversion ne comptent que ces versions.`)
+        }
       >
         <div className={GRID}>
           <Tile
             label="Onboarding terminé"
             value={pct(k.onboardingRate)}
-            sub={`${count(k.onboardingDone)} / ${count(k.onboardingStart)}`}
-            hint="First App Open → Onboarding Completed dans la journée, toutes versions"
+            sub={`${count(k.onboardingDone)} / ${count(k.onboardingStart)} arrivés sur Home`}
+            hint="First App Open → Onboarding Completed (arrivée sur Home) dans la journée"
             now={k.onboardingRate}
             before={p?.onboardingRate ?? null}
-          />
-          <Tile
-            label="Onboarding → Home"
-            value={pct(k.homeRate)}
-            sub={`${count(k.homeDone)} / ${count(k.homeStart)} · app ${payload.amplitude?.homeSegment ?? "2.0.0+"}`}
-            hint="Écran welcome → écran home dans la journée ; l'étape Home n'existe qu'à partir de l'app 2.0.0"
-            now={k.homeRate}
-            before={p?.homeRate ?? null}
           />
           <Tile
             label="Achat ≤ 7 j"
             value={pct(k.purchase7Rate)}
             sub={`${count(k.purchase7Done)} / ${count(k.purchase7Start)}${k.purchase7Partial ? " · en cours" : ""}`}
-            hint="First App Open → Subscription Purchased dans les 7 jours (les 7 derniers jours ne sont pas encore définitifs)"
+            hint="First App Open → Subscription Purchased dans les 7 jours, selon Amplitude (les 7 derniers jours ne sont pas encore définitifs)"
             now={k.purchase7Rate}
             before={p?.purchase7Rate ?? null}
           />
           <Tile
+            label="Conversion payante ≤ 7 j"
+            value={pct(k.paying7Rate)}
+            sub={`${count(k.paying7)} / ${count(k.paying7Base)} · RevenueCat${k.paying7Partial ? " · en cours" : ""}`}
+            hint="Nouveaux clients qui ont payé dans les 7 jours, selon RevenueCat (remboursements du premier achat déduits ; les 7 derniers jours ne sont pas encore définitifs)"
+            now={k.paying7Rate}
+            before={p?.paying7Rate ?? null}
+          />
+          <Tile
             label="Acheteurs"
             value={count(k.buyers)}
-            sub={`${pct(k.buyersRate)} des nouveaux utilisateurs`}
+            sub={`${pct(k.buyersRate)} des ${count(k.newUsersV2)} nouveaux utilisateurs`}
             hint="Utilisateurs ayant acheté un abonnement pendant la période, rapportés aux nouveaux utilisateurs de la période"
             now={k.buyers}
             before={p?.buyers ?? null}
@@ -719,18 +768,11 @@ export function PerformanceClient({
 
       {/* ----------------------------------------------- unit economics */}
       <Section
-        title="Valeur par utilisateur"
+        title="Valeur par client payant"
         source="RevenueCat · Amplitude"
         missing={rcMissing}
       >
-        <div className={GRID}>
-          <Tile
-            label="ARPU / mois"
-            value={money(k.arpuMonthly)}
-            hint="Revenu ramené à 30 jours ÷ MAU moyen de la période"
-            now={k.arpuMonthly}
-            before={p?.arpuMonthly ?? null}
-          />
+        <div className="mb-2.5 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
           <Tile
             label="ARPPU / mois"
             value={money(k.arppuMonthly)}
@@ -738,134 +780,129 @@ export function PerformanceClient({
             now={k.arppuMonthly}
             before={p?.arppuMonthly ?? null}
           />
-          <Tile
-            label="LTV réalisée / client"
-            value={money(payload.rc?.ltvPerCustomer ?? null)}
-            sub="depuis le lancement"
-            hint="Revenu total des clients ÷ nombre de clients (RevenueCat)"
-          />
-          <Tile
-            label="LTV réalisée / client payant"
-            value={money(payload.rc?.ltvPerPayingCustomer ?? null)}
-            sub="depuis le lancement"
-          />
-          <Tile
-            label="LTV projetée 12 mois"
-            value={money(payload.rc?.predicted12 ?? null)}
-            sub="par client · prédiction RevenueCat"
-          />
-          <Tile
-            label="LTV projetée 24 mois"
-            value={money(payload.rc?.predicted24 ?? null)}
-            sub="par client · prédiction RevenueCat"
-          />
         </div>
+        {ltv && ltv.plans.length > 0 && ltv.gross[6] > 0 ? (
+          <LtvPanel ltv={ltv} engagement={engagement} />
+        ) : (
+          <p className="text-[13px] text-[var(--color-ink-soft)]">
+            {ltv
+              ? "LTV par payeur indisponible : RevenueCat n'a pas renvoyé de ventes exploitables au dernier relevé."
+              : "La LTV par payeur arrive au prochain relevé RevenueCat."}
+          </p>
+        )}
       </Section>
 
       {/* ------------------------------------------------------ cohorts */}
-      <Section
-        title="Cohortes hebdomadaires"
-        source="RevenueCat · nouveaux clients du dimanche au samedi"
-        missing={
-          rcMissing ??
-          (cohorts.rows.length === 0
-            ? "Aucune cohorte sur cette période."
-            : null)
-        }
-      >
-        <div className="-mx-5 overflow-x-auto px-5">
-          <table className="w-full min-w-[640px] text-[13px] tabular-nums">
-            <thead>
-              <tr className="border-b border-[var(--color-line)] text-left text-[11.5px] font-medium text-[var(--color-ink-faint)]">
-                <th className="py-2 pr-3 font-medium">Semaine</th>
-                <th className="py-2 pr-3 text-right font-medium">Clients</th>
-                {spending ? (
-                  <th className="py-2 pr-3 text-right font-medium">Dépenses</th>
-                ) : null}
-                {(["J0", "J7", "J30", "À date"] as const).map((h) => (
-                  <th key={h} className="py-2 pr-3 text-right font-medium">
-                    {spending ? `ROAS ${h}` : `Revenu/client ${h}`}
-                  </th>
-                ))}
-                <th className="py-2 text-right font-medium">Revenu à date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {cohorts.rows.map((c) => (
-                <tr
-                  key={c.cohortStart}
-                  className="border-b border-[var(--color-line)] last:border-0"
-                >
-                  <td className="py-2 pr-3 whitespace-nowrap">
-                    {shortDay(c.cohortStart)}
-                  </td>
-                  <td className="py-2 pr-3 text-right">{count(c.size)}</td>
+      {/* Cohorts serve the cohort ROAS: no spend in the period, no table (and
+          the owners want the LTV as one number, not per cohort). */}
+      {spending ? (
+        <Section
+          title="Cohortes hebdomadaires"
+          source="RevenueCat · nouveaux clients du dimanche au samedi"
+          missing={
+            rcMissing ??
+            (cohorts.rows.length === 0
+              ? "Aucune cohorte sur cette période."
+              : null)
+          }
+        >
+          <div className="-mx-5 overflow-x-auto px-5">
+            <table className="w-full min-w-[640px] text-[13px] tabular-nums">
+              <thead>
+                <tr className="border-b border-[var(--color-line)] text-left text-[11.5px] font-medium text-[var(--color-ink-faint)]">
+                  <th className="py-2 pr-3 font-medium">Semaine</th>
+                  <th className="py-2 pr-3 text-right font-medium">Clients</th>
                   {spending ? (
-                    <td className="py-2 pr-3 text-right">{money(c.spend)}</td>
+                    <th className="py-2 pr-3 text-right font-medium">
+                      Dépenses
+                    </th>
                   ) : null}
-                  {(["d0", "d7", "d30", "lifetime"] as const).map((key) => {
-                    const complete = key === "lifetime" || c.complete[key];
-                    const value = spending
-                      ? pct(c.roas[key], 0)
-                      : money(c.perCustomer[key]);
-                    return (
-                      <td
-                        key={key}
-                        className={cn(
-                          "py-2 pr-3 text-right",
-                          !complete && "text-[var(--color-ink-faint)] italic",
-                        )}
-                        title={
-                          complete
-                            ? undefined
-                            : "En cours : tous les clients de la semaine n'ont pas encore atteint ce jour"
-                        }
-                      >
-                        {(spending ? c.roas[key] : c.perCustomer[key]) === null
-                          ? "-"
-                          : value}
-                      </td>
-                    );
-                  })}
+                  {(["J0", "J7", "J30", "À date"] as const).map((h) => (
+                    <th key={h} className="py-2 pr-3 text-right font-medium">
+                      {spending ? `ROAS ${h}` : `Revenu/client ${h}`}
+                    </th>
+                  ))}
+                  <th className="py-2 text-right font-medium">Revenu à date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cohorts.rows.map((c) => (
+                  <tr
+                    key={c.cohortStart}
+                    className="border-b border-[var(--color-line)] last:border-0"
+                  >
+                    <td className="py-2 pr-3 whitespace-nowrap">
+                      {shortDay(c.cohortStart)}
+                    </td>
+                    <td className="py-2 pr-3 text-right">{count(c.size)}</td>
+                    {spending ? (
+                      <td className="py-2 pr-3 text-right">{money(c.spend)}</td>
+                    ) : null}
+                    {(["d0", "d7", "d30", "lifetime"] as const).map((key) => {
+                      const complete = key === "lifetime" || c.complete[key];
+                      const value = spending
+                        ? pct(c.roas[key], 0)
+                        : money(c.perCustomer[key]);
+                      return (
+                        <td
+                          key={key}
+                          className={cn(
+                            "py-2 pr-3 text-right",
+                            !complete && "text-[var(--color-ink-faint)] italic",
+                          )}
+                          title={
+                            complete
+                              ? undefined
+                              : "En cours : tous les clients de la semaine n'ont pas encore atteint ce jour"
+                          }
+                        >
+                          {(spending ? c.roas[key] : c.perCustomer[key]) ===
+                          null
+                            ? "-"
+                            : value}
+                        </td>
+                      );
+                    })}
+                    <td className="py-2 text-right">
+                      {money(c.revenue.lifetime)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t border-[var(--color-line-strong)] font-semibold">
+                  <td className="py-2 pr-3">Total</td>
+                  <td className="py-2 pr-3 text-right">
+                    {count(cohorts.totals.size)}
+                  </td>
+                  {spending ? (
+                    <td className="py-2 pr-3 text-right">
+                      {money(cohorts.totals.spend)}
+                    </td>
+                  ) : null}
+                  {(["d0", "d7", "d30", "lifetime"] as const).map((key) => (
+                    <td key={key} className="py-2 pr-3 text-right">
+                      {spending
+                        ? pct(cohorts.totals.roas[key], 0)
+                        : money(cohorts.totals.perCustomer[key])}
+                    </td>
+                  ))}
                   <td className="py-2 text-right">
-                    {money(c.revenue.lifetime)}
+                    {money(cohorts.totals.revenue.lifetime)}
                   </td>
                 </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="border-t border-[var(--color-line-strong)] font-semibold">
-                <td className="py-2 pr-3">Total</td>
-                <td className="py-2 pr-3 text-right">
-                  {count(cohorts.totals.size)}
-                </td>
-                {spending ? (
-                  <td className="py-2 pr-3 text-right">
-                    {money(cohorts.totals.spend)}
-                  </td>
-                ) : null}
-                {(["d0", "d7", "d30", "lifetime"] as const).map((key) => (
-                  <td key={key} className="py-2 pr-3 text-right">
-                    {spending
-                      ? pct(cohorts.totals.roas[key], 0)
-                      : money(cohorts.totals.perCustomer[key])}
-                  </td>
-                ))}
-                <td className="py-2 text-right">
-                  {money(cohorts.totals.revenue.lifetime)}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-        <p className="mt-3 text-[12px] leading-relaxed text-[var(--color-ink-faint)]">
-          En italique : semaine pas encore arrivée à ce jour. Le total ne compte
-          que les semaines arrivées à chaque jour.
-          {spending
-            ? " ROAS = revenu de la cohorte au jour N ÷ dépenses de sa semaine (toutes sources confondues : RevenueCat ne sait pas d'où viennent les clients)."
-            : ""}
-        </p>
-      </Section>
+              </tfoot>
+            </table>
+          </div>
+          <p className="mt-3 text-[12px] leading-relaxed text-[var(--color-ink-faint)]">
+            En italique : semaine pas encore arrivée à ce jour. Le total ne
+            compte que les semaines arrivées à chaque jour.
+            {spending
+              ? " ROAS = revenu de la cohorte au jour N ÷ dépenses de sa semaine (toutes sources confondues : RevenueCat ne sait pas d'où viennent les clients)."
+              : ""}
+          </p>
+        </Section>
+      ) : null}
 
       <SpendPanel
         entries={payload.spend}

@@ -133,6 +133,20 @@ export const config = {
   revenuecat: {
     apiKey: env("REVENUECAT_API_KEY"),
     projectId: env("REVENUECAT_PROJECT_ID") ?? "proj1ba43566",
+    /**
+     * The apps counted: Plenova App Store and Play Store. The project also has
+     * RevenueCat's "Test Store", left out (it weighed nothing on 2026-09-27,
+     * but test purchases have no business in the figures).
+     */
+    appIds: (env("REVENUECAT_APP_IDS") ?? "app08b7fd0c66,app7177cc8d84")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+    /** The same, for the charts that filter by store rather than by app. */
+    stores: (env("REVENUECAT_STORES") ?? "app_store,play_store")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
   },
   /**
    * Usage figures for the Performances dashboard (lib/performance/amplitude.ts).
@@ -191,15 +205,17 @@ export function isBlobConfigured(): boolean {
 export function blobCredentials(): { token?: string; storeId?: string } {
   return {
     ...(config.storage.blobToken ? { token: config.storage.blobToken } : {}),
-    ...(config.storage.blobStoreId ? { storeId: config.storage.blobStoreId } : {}),
+    ...(config.storage.blobStoreId
+      ? { storeId: config.storage.blobStoreId }
+      : {}),
   };
 }
 
 export function isTikTokConfigured(): boolean {
   return Boolean(
     config.tiktok.clientKey &&
-      config.tiktok.clientSecret &&
-      resolveTikTokRedirectUri(),
+    config.tiktok.clientSecret &&
+    resolveTikTokRedirectUri(),
   );
 }
 
@@ -221,8 +237,8 @@ export function isGeminiConfigured(): boolean {
 export function isPinterestConfigured(): boolean {
   return Boolean(
     config.pinterest.appId &&
-      config.pinterest.appSecret &&
-      resolveRedirectUri(),
+    config.pinterest.appSecret &&
+    resolveRedirectUri(),
   );
 }
 
@@ -267,7 +283,8 @@ export function readiness(): ReadinessReport {
   const blobStorage = isBlobConfigured();
   const encryptionKey = Boolean(config.security.tokenEncryptionKey);
 
-  if (!gemini) warnings.push("Il manque GEMINI_API_KEY : la génération est désactivée.");
+  if (!gemini)
+    warnings.push("Il manque GEMINI_API_KEY : la génération est désactivée.");
   if (!pinterest && hasManualPinterestToken()) {
     warnings.push(
       manualTokenCanPublish()
@@ -285,7 +302,7 @@ export function readiness(): ReadinessReport {
     );
   if (!encryptionKey && pinterest)
     warnings.push(
-      "Il manque TOKEN_ENCRYPTION_KEY : les jetons OAuth ne peuvent pas être stockés."
+      "Il manque TOKEN_ENCRYPTION_KEY : les jetons OAuth ne peuvent pas être stockés.",
     );
 
   return {

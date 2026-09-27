@@ -7,6 +7,8 @@
  * Days are UTC days (YYYY-MM-DD), ranges include both ends.
  */
 
+import type { LtvInputs, SubscriberUsageMonth } from "@/lib/performance/ltv";
+
 export interface PerfCohort {
   cohortStart: string;
   size: number;
@@ -61,12 +63,16 @@ export interface PerfPayload {
       actives: number | null;
       incomplete: boolean;
     }[];
-    ltvPerCustomer: number | null;
-    ltvPerPayingCustomer: number | null;
-    predicted12: number | null;
-    predicted24: number | null;
+    /** What the projected LTV per paying customer is computed from (lib/performance/ltv.ts). */
+    ltvInputs: LtvInputs | null;
   } | null;
-  amplitude: { homeSegment: string | null } | null;
+  /** The app versions the conversion figures count, e.g. "2.0.0" or "2.0.0 → 2.1.0". */
+  conversionVersions: string | null;
+  /** Subscribers still using the app month after month (Amplitude), by plan. */
+  subscriberUsage: Record<
+    "monthly" | "annual",
+    SubscriberUsageMonth[] | null
+  > | null;
   appsflyerHasCost: boolean;
 }
 
@@ -223,18 +229,23 @@ export interface Kpis {
   onboardingRate: number | null;
   onboardingDone: number;
   onboardingStart: number;
-  homeRate: number | null;
-  homeDone: number;
-  homeStart: number;
   purchase7Rate: number | null;
   purchase7Done: number;
   purchase7Start: number;
   buyers: number;
+  /** Buyers ÷ new users, both of the counted app versions. */
   buyersRate: number | null;
+  newUsersV2: number;
   // Unit economics
   arpuMonthly: number | null;
   arppuMonthly: number | null;
-  has: { revenuecat: boolean; amplitude: boolean; appsflyer: boolean };
+  has: {
+    revenuecat: boolean;
+    amplitude: boolean;
+    appsflyer: boolean;
+    /** Any new user of the counted app versions in the range. */
+    conversion: boolean;
+  };
 }
 
 export function kpis(payload: PerfPayload, r: Range): Kpis {
@@ -248,16 +259,16 @@ export function kpis(payload: PerfPayload, r: Range): Kpis {
   const avgActives = s.avg("revenuecat:actives", r);
   const monthlyRevenue = days > 0 ? (revenue / days) * 30 : null;
 
-  const onboardingStart = s.sum("amplitude:onboarding_start", r);
-  const onboardingDone = s.sum("amplitude:onboarding_done", r);
-  const homeStart = s.sum("amplitude:onboarding_home_start", r);
-  const homeDone = s.sum("amplitude:onboarding_home_done", r);
-  const purchase7Start = s.sum("amplitude:purchase_7d_start", r);
-  const purchase7Done = s.sum("amplitude:purchase_7d_done", r);
+  // Conversion: app MIN_APP_VERSION and later only (lib/performance/versions.ts).
+  const onboardingStart = s.sum("amplitude:onboarding_v2_start", r);
+  const onboardingDone = s.sum("amplitude:onboarding_v2_done", r);
+  const purchase7Start = s.sum("amplitude:purchase_7d_v2_start", r);
+  const purchase7Done = s.sum("amplitude:purchase_7d_v2_done", r);
   const newUsers = s.sum("amplitude:new_users", r);
-  const buyers = s.sum("amplitude:buyers", r);
-  const paying7Base = s.sum("revenuecat:conv_new_customers", r);
-  const paying7 = s.sum("revenuecat:conv_paying_7d", r);
+  const buyers = s.sum("amplitude:buyers_v2", r);
+  const newUsersV2 = s.sum("amplitude:new_users_v2", r);
+  const paying7Base = s.sum("revenuecat:conv_new_customers_v2", r);
+  const paying7 = s.sum("revenuecat:conv_paying_7d_v2", r);
   const refundTx = s.sum("revenuecat:refund_transactions", r);
   const refunded = s.sum("revenuecat:refund_refunded", r);
   const churned = s.sum("revenuecat:churn_churned", r);
@@ -296,20 +307,19 @@ export function kpis(payload: PerfPayload, r: Range): Kpis {
     onboardingRate: ratio(onboardingDone, onboardingStart),
     onboardingDone,
     onboardingStart,
-    homeRate: ratio(homeDone, homeStart),
-    homeDone,
-    homeStart,
     purchase7Rate: ratio(purchase7Done, purchase7Start),
     purchase7Done,
     purchase7Start,
     buyers,
-    buyersRate: ratio(buyers, newUsers),
+    buyersRate: ratio(buyers, newUsersV2),
+    newUsersV2,
     arpuMonthly: ratio(monthlyRevenue, avgMau),
     arppuMonthly: ratio(monthlyRevenue, avgActives),
     has: {
       revenuecat: s.has("revenuecat:revenue", r),
       amplitude: s.has("amplitude:dau", r),
       appsflyer: s.has("appsflyer:installs", r),
+      conversion: newUsersV2 > 0 || paying7Base > 0,
     },
   };
 }

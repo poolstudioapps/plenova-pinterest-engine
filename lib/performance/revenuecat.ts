@@ -1,7 +1,9 @@
 import "server-only";
 import { config } from "@/lib/config";
-import { getJson, sleep, utcDay } from "@/lib/performance/http";
+import { daysAgo, getJson, sleep, utcDay, VendorError } from "@/lib/performance/http";
+import type { LtvInputs, LtvPlan } from "@/lib/performance/ltv";
 import type { DailyPoint } from "@/lib/performance/store";
+import { compareVersions, countedVersion } from "@/lib/performance/versions";
 
 /**
  * RevenueCat, the source of truth for money: revenue, MRR, subscribers,
@@ -29,7 +31,7 @@ interface Chart {
   values?: (ChartValue | (number | null)[])[];
   measures?: { display_name?: string }[] | null;
   periods?: { display_name?: string }[] | null;
-  segments?: { display_name?: string }[] | null;
+  segments?: { display_name?: string; is_total?: boolean }[] | null;
 }
 
 export interface RcMonthRow {
@@ -50,25 +52,10 @@ export interface RevenueCatData {
   };
   /** Subscription churn by month: rate in %, churned and actives at the start. */
   churn: RcMonthRow[];
-  /** Realized LTV by first-seen month (ARPU = per customer, ARPPU = per paying customer). */
-  ltv: RcMonthRow[];
-  ltvOverall: {
-    perCustomer: number | null;
-    perPayingCustomer: number | null;
-    revenue: number | null;
-    customers: number | null;
-  };
-  /** RevenueCat's predicted LTV per customer, 12 and 24 months after first seen. */
-  prediction: {
-    m12: number | null;
-    m24: number | null;
-    cohorts: {
-      month: string;
-      size: number;
-      m12: number | null;
-      m24: number | null;
-    }[];
-  };
+  /** What the projected LTV per paying customer is computed from (lib/performance/ltv.ts). */
+  ltvInputs: LtvInputs;
+  /** The app versions RevenueCat's paying conversion counted (MIN_APP_VERSION and later). */
+  conversionVersions: string[];
 }
 
 export interface RevenueCatCohort {
@@ -104,27 +91,91 @@ function project(): string {
   return id;
 }
 
+/** A chart filter, e.g. { name: "product_duration", values: ["P1M"] }. */
+interface ChartFilter {
+  name: string;
+  values: string[];
+}
+
+type AppFilterKind = "app_id" | "first_app_id" | "store";
+
+/**
+ * How each chart takes "the Plenova apps only": RevenueCat names that filter
+ * per chart (checked 2026-09-27) - app_id for money and subscriptions,
+ * first_app_id for charts of customers, store for the LTV charts. Charts not
+ * listed start with app_id; when RevenueCat refuses that very filter, the
+ * next kind is tried. A chart none of them fits fails loudly: the Test Store
+ * is never counted in silence.
+ */
+const APP_FILTER_BY_CHART: Record<string, AppFilterKind> = {
+  customers_new: "first_app_id",
+  conversion_to_paying: "first_app_id",
+  ltv_per_customer: "store",
+  ltv_per_paying_customer: "store",
+};
+const learnedFilter = new Map<string, AppFilterKind>();
+
+function appFilter(kind: AppFilterKind): ChartFilter {
+  const values =
+    kind === "store"
+      ? config.revenuecat.stores.filter((s) => /^[a-z_]+$/.test(s))
+      : config.revenuecat.appIds.filter((id) => /^app[0-9a-f]+$/i.test(id));
+  if (values.length === 0) {
+    throw new Error(kind === "store" ? "REVENUECAT_STORES est vide" : "REVENUECAT_APP_IDS est vide");
+  }
+  return { name: kind, values };
+}
+
+/**
+ * One RevenueCat chart, limited to the Plenova apps (App Store, Play Store)
+ * so the project's Test Store never counts. `segment` splits it (by
+ * product_duration, first_app_version...).
+ */
 async function chart(
   name: string,
   resolution: number,
   start: string,
   end: string,
   selectors?: Record<string, string>,
+  extra: { filters?: ChartFilter[]; segment?: string } = {},
 ): Promise<Chart> {
-  const params = new URLSearchParams({
-    resolution: String(resolution),
-    start_date: start,
-    end_date: end,
-    currency: "EUR",
-  });
-  if (selectors) params.set("selectors", JSON.stringify(selectors));
-  const data = await getJson<Chart>(
-    "RevenueCat",
-    `${API}/projects/${project()}/charts/${name}?${params}`,
-    headers(),
+  const first = learnedFilter.get(name) ?? APP_FILTER_BY_CHART[name] ?? "app_id";
+  const kinds = [...new Set<AppFilterKind>([first, "app_id", "first_app_id", "store"])];
+  let lastError: unknown = null;
+  for (const kind of kinds) {
+    const params = new URLSearchParams({
+      resolution: String(resolution),
+      start_date: start,
+      end_date: end,
+      currency: "EUR",
+    });
+    if (selectors) params.set("selectors", JSON.stringify(selectors));
+    params.set("filters", JSON.stringify([appFilter(kind), ...(extra.filters ?? [])]));
+    if (extra.segment) params.set("segment", extra.segment);
+    try {
+      const data = await getJson<Chart>(
+        "RevenueCat",
+        `${API}/projects/${project()}/charts/${name}?${params}`,
+        headers(),
+      );
+      learnedFilter.set(name, kind);
+      await sleep(SPACING_MS);
+      return data;
+    } catch (err) {
+      await sleep(SPACING_MS);
+      // Only a refusal of the app filter itself moves on to the next kind;
+      // any other error (another filter, the network) stops here.
+      const refused =
+        err instanceof VendorError &&
+        err.status === 400 &&
+        new RegExp(`invalid filter: *${kind}(?![a-z_])`, "i").test(err.message);
+      if (!refused) throw err;
+      lastError = err;
+    }
+  }
+  throw new Error(
+    `RevenueCat ${name} : aucun filtre d'app accepté (${lastError instanceof Error ? lastError.message : "?"})`,
   );
-  await sleep(SPACING_MS);
-  return data;
 }
 
 /**
@@ -160,7 +211,64 @@ function series(
   return out;
 }
 
+/**
+ * One measure of a segmented chart, summed per cohort over the segments
+ * `keep` accepts (by label; `isTotal` marks RevenueCat's own total row,
+ * found by its name: some charts flag their first real segment as the total).
+ * A cohort where no kept segment has a value is left out.
+ */
+function segmentSum(
+  chartData: Chart,
+  measure: number,
+  keep: (label: string, isTotal: boolean) => boolean,
+): Map<number, { value: number | null; incomplete: boolean }> {
+  const kept = new Set<number>();
+  (chartData.segments ?? []).forEach((seg, i) => {
+    const label = seg.display_name ?? "";
+    if (keep(label, label === "Total")) kept.add(i);
+  });
+  const out = new Map<number, { value: number | null; incomplete: boolean }>();
+  for (const v of chartData.values ?? []) {
+    if (Array.isArray(v) || v.segment === undefined || !kept.has(v.segment))
+      continue;
+    if ((v.measure ?? 0) !== measure || typeof v.value !== "number") continue;
+    const prev = out.get(v.cohort);
+    out.set(v.cohort, {
+      value: (prev?.value ?? 0) + v.value,
+      incomplete: (prev?.incomplete ?? false) || v.incomplete === true,
+    });
+  }
+  return out;
+}
+
 const dayOf = (seconds: number) => utcDay(new Date(seconds * 1000));
+
+const MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+/** RevenueCat's expiration month label ("Sep '26") as YYYY-MM, or null. */
+function expirationMonth(label: string): string | null {
+  const m = /^([A-Za-z]{3})\S*\s*'(\d{2})$/.exec(label.trim());
+  const index = m
+    ? MONTHS.indexOf(
+        `${m[1]?.[0]?.toUpperCase()}${m[1]?.slice(1).toLowerCase()}`,
+      )
+    : -1;
+  return m && index >= 0
+    ? `20${m[2]}-${String(index + 1).padStart(2, "0")}`
+    : null;
+}
 
 function monthsAgoStart(n: number): string {
   const d = new Date();
@@ -217,6 +325,7 @@ export function revenueCatConfigured(): boolean {
 export async function fetchRevenueCat(
   since: string,
   epoch: string,
+  knownVersions: string[] = [],
 ): Promise<{
   data: RevenueCatData;
   daily: DailyPoint[];
@@ -276,23 +385,42 @@ export async function fetchRevenueCat(
   // 3. Daily counts behind the rates, so any period can be computed: new
   // customers and those paying within 7 days, subscriptions at the start of
   // the day and those churned, transactions and those refunded.
+  // New customers and those paying within 7 days: every version, then app
+  // MIN_APP_VERSION and later. A split by version keeps only the 10 biggest
+  // versions of the range ("Other" for the rest), so the counted versions
+  // are found on the last 60 days - merged with those already known, so a
+  // version never drops out - and the figures asked with an explicit filter.
   const conversionChart = await chart("conversion_to_paying", 0, since, today, {
     conversion_timeframe: "7_days",
   });
-  push(
-    "conv_new_customers",
-    series(
-      conversionChart,
-      measureIndex(conversionChart, /^new customers$/i, 0),
-    ),
+  push("conv_new_customers", series(conversionChart, measureIndex(conversionChart, /^new customers$/i, 0)));
+  push("conv_paying_7d", series(conversionChart, measureIndex(conversionChart, /^paying customers/i, 1)));
+  const versionChart = await chart(
+    "conversion_to_paying",
+    4,
+    daysAgo(60),
+    today,
+    { conversion_timeframe: "7_days" },
+    { segment: "first_app_version" },
   );
-  push(
-    "conv_paying_7d",
-    series(
-      conversionChart,
-      measureIndex(conversionChart, /^paying customers/i, 1),
-    ),
-  );
+  const conversionVersions = [
+    ...new Set([
+      ...knownVersions.filter(countedVersion),
+      ...(versionChart.segments ?? []).map((sg) => (sg.display_name ?? "").trim()).filter(countedVersion),
+    ]),
+  ].sort(compareVersions);
+  if (conversionVersions.length > 0) {
+    const v2Chart = await chart(
+      "conversion_to_paying",
+      0,
+      since,
+      today,
+      { conversion_timeframe: "7_days" },
+      { filters: [{ name: "first_app_version", values: conversionVersions }] },
+    );
+    push("conv_new_customers_v2", series(v2Chart, measureIndex(v2Chart, /^new customers$/i, 0)));
+    push("conv_paying_7d_v2", series(v2Chart, measureIndex(v2Chart, /^paying customers/i, 1)));
+  }
   const churnDaily = await chart("churn", 0, since, today);
   push(
     "churn_actives",
@@ -323,76 +451,194 @@ export async function fetchRevenueCat(
     rate: measureIndex(churnChart, /^churn rate$/i, 2),
   });
 
-  // 4. Realized LTV since the start, by first-seen month.
-  const ltvChart = await chart(
-    "ltv_per_customer",
-    2,
-    monthsAgoStart(24),
-    today,
-    { customer_lifetime: "unbounded" },
-  );
-  const payingChart = await chart(
-    "ltv_per_paying_customer",
-    2,
-    monthsAgoStart(24),
-    today,
-    { customer_lifetime: "unbounded" },
-  );
-  const ltvRows = monthRows(ltvChart, {
-    customers: measureIndex(ltvChart, /^new customers$/i, 0),
-    revenue: measureIndex(ltvChart, /^realized ltv( \(unbounded\))?$/i, 1),
-    perCustomer: measureIndex(ltvChart, /\/ ?customer/i, 3),
-  });
-  const payingRows = monthRows(payingChart, {
-    paying: measureIndex(payingChart, /^new paying customers/i, 0),
-    perPaying: measureIndex(payingChart, /\/ ?paying customer/i, 2),
-  });
-  const ltv = ltvRows.map((r) => ({
-    ...r,
-    ...(payingRows.find((p) => p.month === r.month) ?? {}),
-    month: r.month,
-    incomplete: r.incomplete,
-  }));
-  const sum = (rows: RcMonthRow[], key: string) =>
-    rows.reduce(
-      (n, r) => n + (typeof r[key] === "number" ? (r[key] as number) : 0),
-      0,
+  // 4. What the projected LTV per paying customer needs (lib/performance/ltv.ts):
+  // payments and money by plan duration, the plan of first purchases, the
+  // monthly subscriptions' renewals, and the paying customers so far.
+  const bySplit = (chartData: Chart, measure: number) => {
+    const out = new Map<string, number>();
+    const labels = (chartData.segments ?? []).map(
+      (sg) =>
+        // By name: subscription_status flags its first real segment is_total.
+        sg.display_name ?? "",
     );
-  const lifetimeRevenue = sum(ltvRows, "revenue");
-  const lifetimeCustomers = sum(ltvRows, "customers");
-  const lifetimePaying = sum(payingRows, "paying");
-
-  // 5. Predicted LTV per customer at 12 and 24 months, by first-seen month (rows: [cohort, size, M0..M24]).
-  const predictionChart = await chart(
-    "prediction_explorer",
-    2,
-    sixMonths,
+    for (const v of chartData.values ?? []) {
+      if (
+        Array.isArray(v) ||
+        v.segment === undefined ||
+        (v.measure ?? 0) !== measure
+      )
+        continue;
+      if (typeof v.value !== "number") continue;
+      const label = labels[v.segment] ?? "";
+      out.set(label, (out.get(label) ?? 0) + v.value);
+    }
+    return out;
+  };
+  const byDuration = { segment: "product_duration" };
+  const grossChart = await chart(
+    "revenue",
+    4,
+    epoch,
     today,
+    { revenue_type: "revenue" },
+    byDuration,
+  );
+  const netChart = await chart(
+    "revenue",
+    4,
+    epoch,
+    today,
+    { revenue_type: "proceeds" },
+    byDuration,
+  );
+  // First payments alone (transaction type "New"): their own price, and the
+  // plan mix of new payers (not resubscriptions or product changes, who
+  // already paid once).
+  const newOnly = {
+    ...byDuration,
+    filters: [{ name: "transaction_type", values: ["New"] }],
+  };
+  const firstGrossChart = await chart(
+    "revenue",
+    4,
+    epoch,
+    today,
+    { revenue_type: "revenue" },
+    newOnly,
+  );
+  const firstGross = bySplit(
+    firstGrossChart,
+    measureIndex(firstGrossChart, /^revenue$/i, 0),
+  );
+  const firstTransactions = bySplit(
+    firstGrossChart,
+    measureIndex(firstGrossChart, /^transactions$/i, 1),
+  );
+  const gross = bySplit(grossChart, measureIndex(grossChart, /^revenue$/i, 0));
+  const transactions = bySplit(
+    grossChart,
+    measureIndex(grossChart, /^transactions$/i, 1),
+  );
+  const net = bySplit(netChart, measureIndex(netChart, /^proceeds$/i, 0));
+  const plans: LtvPlan[] = [...transactions.keys()]
+    .filter((label) => label !== "Total" && label !== "")
+    .map((duration) => ({
+      duration,
+      gross: gross.get(duration) ?? 0,
+      net: net.get(duration) ?? 0,
+      transactions: transactions.get(duration) ?? 0,
+      firstGross: firstGross.get(duration) ?? 0,
+      firstTransactions: firstTransactions.get(duration) ?? 0,
+    }))
+    .filter((pl) => pl.transactions > 0);
+
+  // Subscriptions coming to the end of their period, by plan and month of
+  // expiration (RevenueCat gives the month, not the day): set to renew, set
+  // to cancel, in billing trouble. Also the annual set-to-renew share.
+  const expirations: LtvInputs["expirations"] = [];
+  for (const plan of ["P1M", "P1Y"]) {
+    const statusChart = await chart(
+      "subscription_status",
+      2,
+      monthsAgoStart(0),
+      today,
+      undefined,
+      {
+        segment: "expiration_month",
+        filters: [{ name: "product_duration", values: [plan] }],
+      },
+    );
+    const read = (re: RegExp, fallback: number) =>
+      bySplit(statusChart, measureIndex(statusChart, re, fallback));
+    const active = read(/^total active subscriptions$/i, 0);
+    const renew = read(/^active subscriptions set to renew$/i, 1);
+    const cancel = read(/^active subscriptions set to cancel$/i, 2);
+    const billing = read(/^active subscriptions billing issue$/i, 3);
+    for (const [label, count] of active) {
+      const month = expirationMonth(label);
+      if (!month || count <= 0) continue;
+      expirations.push({
+        plan,
+        month,
+        active: count,
+        renew: renew.get(label) ?? 0,
+        cancel: cancel.get(label) ?? 0,
+        billing: billing.get(label) ?? 0,
+      });
+    }
+  }
+  const annual = expirations.filter((e) => e.plan === "P1Y");
+  const annualActive = annual.reduce((n, e) => n + e.active, 0);
+
+  // Monthly subscriptions: periods alternate "Month N" (count, odd) and
+  // "Month N rate" (%, even); period 0 is the number that started.
+  const retentionChart = await chart(
+    "subscription_retention",
+    2,
+    epoch,
+    today,
+    undefined,
     {
-      cohorting_date: "first_seen_date",
-      measure: "predicted_ltv_per_customer",
-      period_resolution: "month",
+      filters: [{ name: "product_duration", values: ["P1M"] }],
     },
   );
-  const predictionCohorts = (predictionChart.values ?? [])
-    .filter(
-      (row): row is (number | null)[] =>
-        Array.isArray(row) && typeof row[0] === "number",
+  const retention = new Map<
+    number,
+    { size: number; months: Map<number, { count: number; complete: boolean }> }
+  >();
+  for (const v of retentionChart.values ?? []) {
+    if (
+      Array.isArray(v) ||
+      typeof v.cohort !== "number" ||
+      typeof v.period !== "number"
     )
-    .map((row) => ({
-      month: dayOf(row[0] as number),
-      size: Number(row[1]) || 0,
-      m12: typeof row[2 + 12] === "number" ? (row[2 + 12] as number) : null,
-      m24: typeof row[2 + 24] === "number" ? (row[2 + 24] as number) : null,
+      continue;
+    if (typeof v.value !== "number") continue;
+    const entry = retention.get(v.cohort) ?? { size: 0, months: new Map() };
+    if (v.period === 0) entry.size = v.value;
+    else if (v.period % 2 === 1)
+      entry.months.set((v.period + 1) / 2, {
+        count: v.value,
+        complete: v.incomplete !== true,
+      });
+    retention.set(v.cohort, entry);
+  }
+  const monthlyRetention = [...retention.entries()]
+    .sort(([x], [y]) => x - y)
+    .map(([cohortTs, entry]) => ({
+      cohort: dayOf(cohortTs),
+      size: entry.size,
+      months: [...entry.months.entries()]
+        .sort(([x], [y]) => x - y)
+        .map(([m, cell]) => ({ m, ...cell })),
     }));
-  const weighted = (key: "m12" | "m24") => {
-    const usable = predictionCohorts.filter(
-      (c) => c[key] !== null && c.size > 0,
-    );
-    const size = usable.reduce((n, c) => n + c.size, 0);
-    return size > 0
-      ? usable.reduce((n, c) => n + (c[key] as number) * c.size, 0) / size
-      : null;
+
+  const payingChart = await chart("ltv_per_paying_customer", 2, epoch, today, {
+    customer_lifetime: "unbounded",
+  });
+  const payers = [
+    ...series(
+      payingChart,
+      measureIndex(payingChart, /^new paying customers/i, 0),
+    ).values(),
+  ].reduce((n, cell) => n + (cell.value ?? 0), 0);
+  const ltvInputs: LtvInputs = {
+    since: epoch,
+    plans,
+    monthlyRetention,
+    annualRenewal:
+      annualActive > 0
+        ? {
+            setToRenew: annual.reduce((n, e) => n + e.renew, 0),
+            active: annualActive,
+          }
+        : null,
+    expirations,
+    realized: {
+      gross: gross.get("Total") ?? 0,
+      net: net.get("Total") ?? 0,
+      payers,
+    },
   };
 
   // 6. Weekly cohorts of new customers (RevenueCat's default cohorting, by
@@ -476,20 +722,8 @@ export async function fetchRevenueCat(
         activeUsers28: pick("active_users"),
       },
       churn,
-      ltv,
-      ltvOverall: {
-        perCustomer:
-          lifetimeCustomers > 0 ? lifetimeRevenue / lifetimeCustomers : null,
-        perPayingCustomer:
-          lifetimePaying > 0 ? lifetimeRevenue / lifetimePaying : null,
-        revenue: lifetimeRevenue || null,
-        customers: lifetimeCustomers || null,
-      },
-      prediction: {
-        m12: weighted("m12"),
-        m24: weighted("m24"),
-        cohorts: predictionCohorts,
-      },
+      ltvInputs,
+      conversionVersions,
     },
     daily,
     cohorts,

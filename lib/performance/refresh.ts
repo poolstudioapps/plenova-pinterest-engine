@@ -56,9 +56,24 @@ const WEEKLY_DAYS: Record<
   amplitude: "all",
   appsflyer: 90,
 };
-/** AppsFlyer allows about 24 report calls a day per app: never more often than this, success or not. */
+/**
+ * AppsFlyer allows 24 report calls a day per app, from 00:00 UTC: never more
+ * often than this, success or not - and after "Limit reached", not before
+ * the quota starts again at midnight UTC.
+ */
 const APPSFLYER_MIN_GAP_MS = 3 * 3_600_000;
 const KEEP_SNAPSHOTS_DAYS = 14;
+/**
+ * Bumped when what a source stores changes meaning (a filter, a funnel's
+ * definition): its next refresh re-reads everything since PERF_EPOCH, so no
+ * old day keeps the former definition. 2: RevenueCat limited to the Plenova
+ * apps, Amplitude's Home funnel limited to app 2.0.0 and later (2026-09-27).
+ */
+const DATA_VERSION: Record<"revenuecat" | "amplitude" | "appsflyer", number> = {
+  revenuecat: 2,
+  amplitude: 2,
+  appsflyer: 1,
+};
 /** The routes may run 300 s: a source still busy after this is recorded as failed. */
 const DEADLINE_MS = 240_000;
 const LOCK_MS = 6 * 60_000;
@@ -78,6 +93,16 @@ interface Fetched {
 }
 
 export class RefreshBusyError extends Error {}
+
+/** The app versions a previous snapshot counted, so a version never drops out of the conversion figures. */
+function knownVersions(data: Record<string, unknown> | undefined): string[] {
+  const v = data?.conversionVersions;
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+}
+
+/** AppsFlyer's answer once the day's report quota is used up. */
+const quotaReached = (error: string | null | undefined) =>
+  /limit reached/i.test(error ?? "");
 
 /**
  * One refresh at a time: two would double the calls against each vendor's
@@ -131,7 +156,10 @@ export async function refreshPerformance(): Promise<SourceOutcome[]> {
       if (
         source === "appsflyer" &&
         lastAttempt &&
-        started - Date.parse(lastAttempt.takenAt) < APPSFLYER_MIN_GAP_MS
+        (started - Date.parse(lastAttempt.takenAt) < APPSFLYER_MIN_GAP_MS ||
+          (quotaReached(lastAttempt.error) &&
+            lastAttempt.takenAt.slice(0, 10) ===
+              new Date(started).toISOString().slice(0, 10)))
       ) {
         return { source, status: "skipped" };
       }
@@ -139,11 +167,12 @@ export async function refreshPerformance(): Promise<SourceOutcome[]> {
         typeof previous?.data.weeklyAt === "string"
           ? previous.data.weeklyAt
           : null;
-      const window: "first" | "weekly" | "recent" = !previous
-        ? "first"
-        : !weeklyAt || started - Date.parse(weeklyAt) > WEEKLY_EVERY_MS
-          ? "weekly"
-          : "recent";
+      const window: "first" | "weekly" | "recent" =
+        !previous || previous.data.dataVersion !== DATA_VERSION[source]
+          ? "first"
+          : !weeklyAt || started - Date.parse(weeklyAt) > WEEKLY_EVERY_MS
+            ? "weekly"
+            : "recent";
       const weekly = WEEKLY_DAYS[source];
       const since =
         window === "first" || (window === "weekly" && weekly === "all")
@@ -182,6 +211,7 @@ export async function refreshPerformance(): Promise<SourceOutcome[]> {
         await saveSnapshot(source, true, {
           ...(result.data as Record<string, unknown>),
           since,
+          dataVersion: DATA_VERSION[source],
           weeklyAt: window === "recent" ? weeklyAt : new Date().toISOString(),
         });
         return { source, status: "ok", window, points: result.daily.length };
@@ -190,8 +220,12 @@ export async function refreshPerformance(): Promise<SourceOutcome[]> {
           err instanceof Error ? err.message : String(err),
         ).slice(0, 300);
         console.error(`[performance] ${source}:`, message);
-        await saveSnapshot(source, false, {}, message).catch(() => undefined);
-        return { source, status: "error", error: message };
+        const shown =
+          source === "appsflyer" && quotaReached(message)
+            ? `Quota AppsFlyer du jour atteint, nouvel essai après minuit UTC (${message})`
+            : message;
+        await saveSnapshot(source, false, {}, shown).catch(() => undefined);
+        return { source, status: "error", error: shown };
       } finally {
         clearTimeout(timer);
       }
@@ -199,9 +233,9 @@ export async function refreshPerformance(): Promise<SourceOutcome[]> {
 
     const outcomes = await Promise.all([
       run("revenuecat", revenueCatConfigured(), (since) =>
-        fetchRevenueCat(since, PERF_EPOCH),
+        fetchRevenueCat(since, PERF_EPOCH, knownVersions(latest.revenuecat.good?.data)),
       ),
-      run("amplitude", amplitudeConfigured(), (since) => fetchAmplitude(since)),
+      run("amplitude", amplitudeConfigured(), (since) => fetchAmplitude(since, PERF_EPOCH)),
       run("appsflyer", appsFlyerConfigured(), (since) => fetchAppsFlyer(since)),
     ]);
     await pruneSnapshots(KEEP_SNAPSHOTS_DAYS).catch((err) =>

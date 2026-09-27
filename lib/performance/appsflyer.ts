@@ -12,12 +12,14 @@ import type { DailyPoint } from "@/lib/performance/store";
  * Meta's cost integration is set up in AppsFlyer (the owner, 2026-09-27): its
  * spend arrives in "Total Cost" whenever a campaign runs; other channels are
  * typed in on the page (lib/performance/spend.ts). The API
- * allows about 24 calls a day per app for these reports: ranges are cut into
- * 31-day chunks and the refresh does not call it more than every 3 hours.
+ * allows 24 calls a day per app (and 120 per account) for reports of 3 days
+ * or more, counted from 00:00 UTC, with no limit on the range itself: one
+ * call per app covers the whole range (a year at most per call, the history
+ * being kept 25 months), and the refresh calls it every 3 hours at most.
  */
 
 const API = "https://hq1.appsflyer.com/api/agg-data/export/app";
-const CHUNK_DAYS = 31;
+const CHUNK_DAYS = 365;
 const SPACING_MS = 1500;
 
 export function appsFlyerConfigured(): boolean {
@@ -86,6 +88,11 @@ export async function fetchAppsFlyer(
   since: string,
 ): Promise<{ data: AppsFlyerData; daily: DailyPoint[] }> {
   const today = utcDay(new Date());
+  // AppsFlyer keeps 25 months of aggregate history: never ask (nor zero-fill)
+  // beyond 24.
+  const now = new Date();
+  const oldest = utcDay(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 24, now.getUTCDate())));
+  if (since < oldest) since = oldest;
   const totals = new Map<string, number>();
   const add = (day: string, metric: string, value: number) => {
     const key = `${day}|${metric}`;
