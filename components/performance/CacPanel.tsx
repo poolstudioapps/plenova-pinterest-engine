@@ -477,6 +477,8 @@ function RealCard({
   const certain =
     real.verdict === "over" && real.bestCase !== null && real.bestCase > t.max;
   const threshold = eur(t.available ? t.max : 20);
+  // Some counted days come before AppsFlyer's events.
+  const partial = real.eventsFrom !== null && real.daysWithEvents > 0 && real.daysWithEvents < real.days;
   const figure = judged
     ? real.estimate !== null
       ? `≈ ${eur(real.estimate)}`
@@ -515,7 +517,7 @@ function RealCard({
           : "Chaque client payant coûte plus qu'il ne rapporte en un an. Baisse le budget et corrige avant de relancer.";
       case "confirm":
         return real.noPayers
-          ? `AppsFlyer attribue ${plural(real.attributed, "achat", "achats")} aux pubs, mais RevenueCat ne voit aucun nouveau payant ces jours-là : pas d'estimation possible.`
+          ? `AppsFlyer attribue ${plural(real.attributed, "achat", "achats")} aux pubs${partial ? ` depuis le ${shortDay(real.eventsFrom!)}` : ""}, mais RevenueCat ne voit aucun nouveau payant ces jours-là : pas d'estimation possible.`
           : real.daysWithEvents === 0
             ? "Sans événements AppsFlyer sur ces jours, seul le minimum est connu : pas de verdict tant qu'il reste sous le max."
             : `Pas encore assez d'achats attribués aux pubs (${int.format(real.attributed)}/10) pour trancher.`;
@@ -528,26 +530,29 @@ function RealCard({
       case "little":
         return `Moins de ${threshold} dépensés sur des jours complets : trop peu pour juger.`;
       case "unread":
-        return "RevenueCat n'a pas encore de relevé pour ces jours de dépense : le CAC s'affichera après le prochain relevé réussi.";
+        return "RevenueCat n'a pas encore de relevé pour certains jours de dépense : le CAC s'affichera après le prochain relevé réussi.";
       case "none":
         return "Cibles indisponibles : pas de verdict.";
     }
   })();
 
   // Before a verdict the spend on show says it all.
+  // With an estimate, the figures of its own days, so they divide into it.
   const counted =
     real.days === 0 || !judged
       ? null
       : real.adPayers !== null
-        ? `${eur(real.spent)} dépensés · ≈ ${plural(Math.round(real.adPayers), "client payant venu", "clients payants venus")} des pubs, sur ${plural(real.payers, "nouveau payant", "nouveaux payants")}`
+        ? `${eur(real.estSpent)} dépensés · ≈ ${plural(Math.round(real.adPayers), "client payant venu", "clients payants venus")} des pubs, sur ${plural(real.estPayers, "nouveau payant", "nouveaux payants")}`
         : `${eur(real.spent)} dépensés · ${plural(real.payers, "nouveau payant", "nouveaux payants")} · ${plural(real.attributed, "achat attribué", "achats attribués")} aux pubs`;
   const events = !judged
     ? null
-    : real.skipped > 0 && real.eventsFrom
-      ? `${eur(real.skipped)} dépensés avant le ${shortDay(real.eventsFrom)}, sans événements AppsFlyer : pas comptés dans l'estimation.`
-      : real.days > 0 && real.daysWithEvents === 0
-        ? "Pas d'événements AppsFlyer sur ces jours : seul le minimum est calculable."
-        : null;
+    : real.days > 0 && real.daysWithEvents === 0
+      ? "Pas d'événements AppsFlyer sur ces jours : seul le minimum est calculable."
+      : real.skipped > 0 && real.eventsFrom
+        ? `${eur(real.skipped)} dépensés avant le ${shortDay(real.eventsFrom)} (pas d'événements AppsFlyer) : hors du ≈, mais vérifiés contre le max.`
+        : partial && real.estimate === null
+          ? `Pas d'événements AppsFlyer avant le ${shortDay(real.eventsFrom!)} : achats attribués comptés à partir de ce jour.`
+          : null;
 
   const scaleLabel = `${[
     real.estimate !== null
@@ -604,7 +609,8 @@ function RealCard({
         {counted ? <p className="figures">{counted}</p> : null}
         {real.estimate !== null && real.bestCase !== null ? (
           <p>
-            Au mieux, en comptant tous les nouveaux payants comme venus des pubs :{" "}
+            Au mieux, avec tous les nouveaux payants venus des pubs (et une
+            marge pour le hasard) :{" "}
             <span className="figures">{eur(real.bestCase)}</span>
           </p>
         ) : null}
@@ -623,8 +629,9 @@ function RealCard({
         ) : null}
         {real.capped ? (
           <p>
-            AppsFlyer compte plus d&apos;achats que RevenueCat sur ces jours :
-            estimation ramenée au total RevenueCat.
+            {real.cappedByAf
+              ? "AppsFlyer compte plus d'achats que RevenueCat ne voit de nouveaux payants sur ces jours : estimation ramenée au total RevenueCat."
+              : "Recalée sur RevenueCat, l'estimation dépassait tous les nouveaux payants de ces jours : ramenée à leur total."}
           </p>
         ) : null}
       </div>
@@ -638,7 +645,9 @@ function RealCard({
           <b>≈</b> : les achats qu&apos;AppsFlyer attribue aux pubs, recalés sur
           les payants que voit RevenueCat (AppsFlyer en rate une partie).{" "}
           <b>Au mieux</b> : la dépense ÷ tous les nouveaux payants des jours de
-          pub, comme s&apos;ils venaient tous des pubs.
+          pub, comme s&apos;ils venaient tous des pubs, avec une marge pour le
+          hasard (9 fois sur 10, il n&apos;y en a pas plus). Au-dessus du max,
+          la campagne perd de l&apos;argent quoi que dise AppsFlyer.
         </p>
         <p>
           Le vrai CAC est entre les deux. Les 7 derniers jours sont exclus :

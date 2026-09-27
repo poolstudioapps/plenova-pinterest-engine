@@ -168,33 +168,39 @@ export const judged = (v: CacVerdict) =>
 export interface CacReal {
   /** All the spend of the period, whatever happens to it below. */
   total: number;
-  /** Spend on the days counted, and on the last 7 days (not judged yet). */
+  /** Spend on the complete days counted, and on the last 7 days (not judged yet). */
   spent: number;
   pending: number;
   /** Spend on complete days RevenueCat has no reading for: not counted. */
   unread: number;
-  /** Spend on complete days before AppsFlyer's events, left out of an estimate. */
-  skipped: number;
-  /** The days counted. */
+  /** The complete days counted, and all the new payers of those days (RevenueCat). */
   from: string | null;
   to: string | null;
   days: number;
-  /** All new payers of those days (RevenueCat), and the purchases AppsFlyer gives the ads. */
   payers: number;
+  /** Purchases AppsFlyer gives the ads, on the counted days it has events for. */
   attributed: number;
-  /** Complete ad days AppsFlyer has events for. */
   daysWithEvents: number;
+  /**
+   * The estimate reads the days with AppsFlyer events only: their spend and
+   * payers, and the spend of the counted days before them (left out of it).
+   */
+  estSpent: number;
+  estPayers: number;
+  skipped: number;
   /** Payers the ads brought, estimated; the CAC it gives; the best case. Null before a verdict. */
   adPayers: number | null;
   estimate: number | null;
   bestCase: number | null;
   verdict: CacVerdict;
-  /** For "early": the day the first verdict can come, if the campaign keeps spending. */
+  /** For "early": the day the 30-day period first has enough complete spend to judge. */
   verdictOn: string | null;
   /** AppsFlyer events only from this day. */
   eventsFrom: string | null;
-  /** AppsFlyer gave the ads more payers than RevenueCat saw: brought back to RevenueCat's. */
+  /** The estimate went past all the new payers of its days: brought back to their number. */
   capped: boolean;
+  /** ...because AppsFlyer itself counts more purchases than RevenueCat payers. */
+  cappedByAf: boolean;
   /** AppsFlyer gives the ads purchases, but RevenueCat saw no new payer those days. */
   noPayers: boolean;
   /** Complete ad days in the last 30, outside the period: a longer period would judge them. */
@@ -221,6 +227,8 @@ export function cacReal(payload: PerfPayload, r: Range, targets: CacTargets): Ca
   const sum = (days: string[], of: (d: string) => number) =>
     days.reduce((n, d) => n + of(d), 0);
   const spendOn = (d: string) => spend.get(d) ?? 0;
+  const payersOn = (d: string) => rc[d] ?? 0;
+  const threshold = targets.available ? targets.max : 20;
 
   // Complete ad days (a week old: their payers are known) that RevenueCat has read.
   const mature: string[] = [];
@@ -235,9 +243,16 @@ export function cacReal(payload: PerfPayload, r: Range, targets: CacTargets): Ca
     else if (rc[d] !== undefined) mature.push(d);
     else unread += sp;
   }
+  const spent = cents(sum(mature, spendOn));
+  const payers = sum(mature, payersOn);
+  // The best case needs no attribution: it reads every counted day.
+  const floorR = mature.length > 0 && spent > 0 ? shownFloor(spent / upper90(payers)) : null;
+
+  // The estimate needs AppsFlyer's events: it reads their days only.
   const withEvents = eventsFrom === null ? [] : mature.filter((d) => d >= eventsFrom);
   const attributed = sum(withEvents, (d) => (paid[0]![d] ?? 0) + (paid[1]![d] ?? 0));
-  const payersE = sum(withEvents, (d) => rc[d] ?? 0);
+  const estSpent = cents(sum(withEvents, spendOn));
+  const estPayers = sum(withEvents, payersOn);
 
   // How many RevenueCat payers per purchase AppsFlyer sees, over 90 days.
   let scale = 1;
@@ -247,22 +262,19 @@ export function cacReal(payload: PerfPayload, r: Range, targets: CacTargets): Ca
     const start = start90 > eventsFrom ? start90 : eventsFrom;
     if (start <= end) {
       const seen = afPurchases(s, "all", { from: start, to: end });
-      const all = sum(daysOf({ from: start, to: end }), (d) => rc[d] ?? 0);
+      const all = sum(daysOf({ from: start, to: end }), payersOn);
       if (seen >= 20 && all > seen) scale = all / seen;
     }
   }
   const rawAdPayers = attributed * scale;
+  // Only on enough spend of its own: a few euros after the events say nothing.
   const adPayers =
-    attributed >= 5 && payersE > 0 ? Math.min(rawAdPayers, payersE) : null;
-
-  // With an estimate, everything is read on the days it covers: the best case
-  // then stays under it, and the figures on show divide into each other.
-  const days = adPayers !== null ? withEvents : mature;
-  const skipped = adPayers !== null ? sum(mature, spendOn) - sum(days, spendOn) : 0;
-  const spent = cents(sum(days, spendOn));
-  const payers = sum(days, (d) => rc[d] ?? 0);
-  const estimate = adPayers !== null ? spent / adPayers : null;
-  const bestCase = days.length > 0 && spent > 0 ? spent / upper90(payers) : null;
+    attributed >= 5 && estPayers > 0 && estSpent >= threshold
+      ? Math.min(rawAdPayers, estPayers)
+      : null;
+  const estR = adPayers !== null ? shownCac(estSpent / adPayers) : null;
+  // The best case shown beside the estimate reads the same days, so it stays under it.
+  const estFloorR = adPayers !== null ? shownFloor(estSpent / upper90(estPayers)) : null;
 
   const recent = addDays(payload.today, -30);
   let matureElsewhere = false;
@@ -275,54 +287,77 @@ export function cacReal(payload: PerfPayload, r: Range, targets: CacTargets): Ca
     }
   }
 
-  const threshold = targets.available ? targets.max : 20;
   let verdict: CacVerdict;
   let verdictOn: string | null = null;
-  const estR = estimate === null ? null : shownCac(estimate);
-  const floorR = bestCase === null ? null : shownFloor(bestCase);
-  if (days.length === 0 || spent < threshold) {
-    verdict = pending > 0 ? "early" : unread > 0 ? "unread" : "little";
-    // The day the spend reaches the threshold, plus the week its payers need.
-    let run = 0;
-    for (const d of daysOf(r)) {
-      run = cents(run + spendOn(d));
-      if (run >= threshold) {
-        verdictOn = addDays(d, 8);
-        break;
+  let estimate: number | null = null;
+  let bestCase: number | null = null;
+  if (mature.length === 0 || spent < threshold) {
+    // Nothing to judge yet: RevenueCat still has to read complete days that
+    // would be enough, or the spend is too recent, or too small.
+    verdict =
+      cents(spent + unread) >= threshold ? "unread" : pending > 0 ? "early" : "little";
+    if (verdict === "early") {
+      // The 30-day period on day d + 8 counts the complete days d - 22 to d:
+      // the first recent day whose window holds enough spend.
+      const all = spendByDay(payload, { from: addDays(cutoff, -21), to: payload.today }, "all");
+      for (const d of daysOf({ from: addDays(cutoff, 1), to: payload.today })) {
+        let run = 0;
+        for (const w of daysOf({ from: addDays(d, -22), to: d })) run += all.get(w) ?? 0;
+        if (cents(run) >= threshold) {
+          verdictOn = addDays(d, 8);
+          break;
+        }
       }
     }
-    if (verdictOn !== null && verdictOn <= payload.today) verdictOn = null;
   } else if (!targets.available) {
     verdict = "none";
+    estimate = estR;
+    bestCase = estR !== null ? estFloorR : floorR;
   } else if (floorR !== null && floorR > targets.max) {
+    // Too dear even with every new payer credited to the ads: whatever
+    // AppsFlyer says, and on every counted day.
     verdict = "over";
-  } else if (estR !== null && attributed >= 10) {
-    verdict = estR <= targets.ideal ? "good" : estR <= targets.max ? "thin" : "over";
+    bestCase = floorR;
+  } else if (estR !== null) {
+    estimate = estR;
+    bestCase = estFloorR;
+    verdict =
+      attributed < 10
+        ? "confirm"
+        : estR <= targets.ideal
+          ? "good"
+          : estR <= targets.max
+            ? "thin"
+            : "over";
   } else {
     verdict = "confirm";
+    bestCase = floorR;
   }
-  const show = judged(verdict);
+  const withEstimate = estimate !== null;
 
   return {
     total: cents(total),
     spent,
     pending: cents(pending),
     unread: cents(unread),
-    skipped: cents(skipped),
-    from: days[0] ?? null,
-    to: days.at(-1) ?? null,
-    days: days.length,
+    from: mature[0] ?? null,
+    to: mature.at(-1) ?? null,
+    days: mature.length,
     payers,
     attributed,
     daysWithEvents: withEvents.length,
-    adPayers: show ? adPayers : null,
-    estimate: show ? estR : null,
-    bestCase: show ? floorR : null,
+    estSpent,
+    estPayers,
+    skipped: withEstimate ? cents(spent - estSpent) : 0,
+    adPayers: withEstimate ? adPayers : null,
+    estimate,
+    bestCase,
     verdict,
-    verdictOn: verdict === "early" ? verdictOn : null,
+    verdictOn,
     eventsFrom,
-    capped: show && adPayers !== null && rawAdPayers > payersE,
-    noPayers: attributed >= 5 && payersE === 0,
+    capped: withEstimate && rawAdPayers > estPayers,
+    cappedByAf: withEstimate && attributed > estPayers,
+    noPayers: attributed >= 5 && estPayers === 0,
     matureElsewhere,
   };
 }
