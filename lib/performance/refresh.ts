@@ -42,16 +42,10 @@ import { supabaseService } from "@/lib/store/supabase";
 /** The app's first days: first AppsFlyer install 2026-02-26, first purchase 2026-02-26. */
 export const PERF_EPOCH = "2026-02-01";
 const RECENT_DAYS = 45;
-/**
- * AppsFlyer's ordinary reading is shorter: one row per install to download,
- * and its late corrections are few - the weekly re-read covers its 90 days.
- */
-const RECENT_DAYS_APPSFLYER = 14;
 const WEEKLY_EVERY_MS = 7 * 86_400_000;
 /**
- * The weekly re-read: RevenueCat and Amplitude make the same number of calls
- * whatever the range, so they re-read everything; AppsFlyer's raw data only
- * goes back 90 days (lib/performance/appsflyer.ts keeps within it).
+ * The weekly re-read: every source makes the same number of calls whatever
+ * the range (AppsFlyer: one per app and year), so all re-read everything.
  */
 const WEEKLY_DAYS: Record<
   "revenuecat" | "amplitude" | "appsflyer",
@@ -59,7 +53,7 @@ const WEEKLY_DAYS: Record<
 > = {
   revenuecat: "all",
   amplitude: "all",
-  appsflyer: 90,
+  appsflyer: "all",
 };
 /**
  * AppsFlyer counts its reports per report, app and day from 00:00 UTC: never
@@ -73,12 +67,13 @@ const KEEP_SNAPSHOTS_DAYS = 14;
  * definition): its next refresh re-reads everything since PERF_EPOCH, so no
  * old day keeps the former definition. 2: RevenueCat limited to the Plenova
  * apps, Amplitude's Home funnel limited to app 2.0.0 and later (2026-09-27);
- * AppsFlyer read from its raw data, per store, with its events (2026-09-27).
+ * AppsFlyer per store with its events (2026-09-27); 3: AppsFlyer from its
+ * aggregate report again, the raw data not being in the plan (2026-09-27).
  */
 export const DATA_VERSION: Record<"revenuecat" | "amplitude" | "appsflyer", number> = {
   revenuecat: 2,
   amplitude: 2,
-  appsflyer: 2,
+  appsflyer: 3,
 };
 /** The routes may run 300 s: a source still busy after this is recorded as failed. */
 const DEADLINE_MS = 240_000;
@@ -187,11 +182,7 @@ export async function refreshPerformance(): Promise<SourceOutcome[]> {
         window === "first" || (window === "weekly" && weekly === "all")
           ? PERF_EPOCH
           : daysAgo(
-              window === "weekly" && weekly !== "all"
-                ? weekly
-                : source === "appsflyer"
-                  ? RECENT_DAYS_APPSFLYER
-                  : RECENT_DAYS,
+              window === "weekly" && weekly !== "all" ? weekly : RECENT_DAYS,
             );
 
       let timer: ReturnType<typeof setTimeout> | undefined;
@@ -259,22 +250,9 @@ export async function refreshPerformance(): Promise<SourceOutcome[]> {
         fetchRevenueCat(since, PERF_EPOCH, knownVersions(latest.revenuecat.good?.data)),
       ),
       run("amplitude", amplitudeConfigured(), (since) => fetchAmplitude(since, PERF_EPOCH)),
-      run("appsflyer", appsFlyerConfigured(), (since, signal) => {
-        // The aggregate report (the networks' spend) is not asked again the
-        // UTC day it refused; the days its cost was stored for keep it.
-        const today = new Date(started).toISOString().slice(0, 10);
-        const snaps = [latest.appsflyer.last, latest.appsflyer.good];
-        const coveredTo = snaps
-          .map((x) => x?.data.aggregateCostTo)
-          .filter((d): d is string => typeof d === "string")
-          .sort()
-          .pop();
-        return fetchAppsFlyer(since, {
-          tryAggregateCost: !snaps.some((x) => x?.data.costRefusedOn === today),
-          aggregateCostTo: coveredTo ?? null,
-          signal,
-        });
-      }),
+      run("appsflyer", appsFlyerConfigured(), (since, signal) =>
+        fetchAppsFlyer(since, signal),
+      ),
     ]);
     await pruneSnapshots(KEEP_SNAPSHOTS_DAYS).catch((err) =>
       console.error(

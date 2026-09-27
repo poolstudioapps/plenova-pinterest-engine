@@ -37,9 +37,9 @@ const date = (d: string) =>
 
 /**
  * Ad spend typed in by hand, for what AppsFlyer does not bring: the networks
- * linked to it (Meta...) arrive by themselves once its aggregate report can
- * be read (lib/performance/appsflyer.ts). The store a campaign targeted feeds
- * the AppsFlyer section's costs per store. Folded away until needed.
+ * linked to it (Meta...) arrive by themselves with its aggregate report
+ * (lib/performance/appsflyer.ts). The store a campaign targeted feeds the
+ * AppsFlyer section's costs per store. Folded away until needed.
  */
 export function SpendPanel({
   entries,

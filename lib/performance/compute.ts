@@ -554,9 +554,9 @@ export function afPurchases(s: Series, os: Os, r: Range): number {
 }
 
 /**
- * The first day AppsFlyer's in-app events were read for: its raw data goes
- * back 90 days, so the days before have installs (kept from earlier) but no
- * purchases - counting them as zero would sink every rate.
+ * The first day AppsFlyer's in-app events were read for: days stored before
+ * (installs loaded on their own) have no purchases, and counting them as zero
+ * would sink every rate.
  */
 export function afEventsFrom(payload: PerfPayload): string | null {
   const days = Object.keys(payload.series["appsflyer:first_plant_ios"] ?? {});

@@ -178,7 +178,7 @@ export function AcquisitionPanel({
       case "purchases":
         return {
           ...base,
-          title: "Achats vus par AppsFlyer",
+          title: "Achats des installés du jour",
           caption: perDayCaption,
           series: [
             {
@@ -350,7 +350,7 @@ export function AcquisitionPanel({
     );
   else if (k.eventsPartial && k.eventsFrom)
     notes.push(
-      `Achats et premières plantes relevés depuis le ${shortDay(k.eventsFrom)} : AppsFlyer ne garde ce détail que 90 jours, les taux ne comptent que ces jours-là.`,
+      `Achats et premières plantes relevés à partir du ${shortDay(k.eventsFrom)} : les taux ne comptent que ces jours-là.`,
     );
   if (!spending)
     notes.push(
@@ -389,7 +389,7 @@ export function AcquisitionPanel({
           sub={k.activations === null ? notRead : `${count(k.activations)} premières plantes`}
           now={k.activationRate}
           before={p?.activationRate ?? null}
-          hint="Premières plantes ajoutées ÷ installs, selon AppsFlyer"
+          hint="Part des installs de la période qui ont ajouté une première plante, selon AppsFlyer"
         />
         <Tile
           id={hasEvents ? "purchases" : undefined}
@@ -402,7 +402,7 @@ export function AcquisitionPanel({
           }
           now={k.purchases}
           before={comparable ? (p?.purchases ?? null) : null}
-          hint="Achats envoyés par l'app à AppsFlyer, au jour de l'achat"
+          hint="Installés de la période qui ont acheté, selon AppsFlyer (le chiffre grandit tant qu'ils achètent)"
         />
         <Tile
           id={hasEvents ? "conversion" : undefined}
@@ -415,7 +415,7 @@ export function AcquisitionPanel({
           }
           now={k.purchaseRate}
           before={p?.purchaseRate ?? null}
-          hint="Achats ÷ installs de la période (pas une cohorte : un achat peut venir d'un install plus ancien)"
+          hint="Part des installs de la période qui ont acheté"
         />
         {spending ? (
           <>

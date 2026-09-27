@@ -200,25 +200,22 @@ lien du menu et routes vérifient tous `performanceAccess()` (`lib/performance/d
   (DAU, WAU, MAU glissants, nouveaux, acheteurs, onboarding, achat ≤ 7 j, rétention
   d'usage des abonnés), AppsFlyer (installs organiques/campagnes par store, achats,
   premières plantes, coûts au clic). Modules `lib/performance/{revenuecat,amplitude,appsflyer}.ts`.
-- **AppsFlyer = raw data, pas l'agrégé** (27/09) : le plan du compte répond « Limit
-  reached for partners-daily-report » dès le premier appel aux rapports agrégés ; le
-  token posé dans Vercel sert au Pull API raw data. `installs_report` +
-  `organic_installs_report` (1 ligne par install) et `in_app_events_report` +
-  `organic_in_app_events_report` filtrés sur les 5 événements de l'app
-  (`af_purchase_annual`, `af_purchase_monthly`, `af_purchase_one_time_offer`,
-  `af_first_plant_added`, `af_first_quick_scan`), comptés par jour UTC et **par store**
-  (`installs_ios`, `purchases_monthly_android`…, plus les totaux `installs`,
-  `installs_organic`, `installs_paid`, `cost`). Le raw ne remonte que **90 jours** : chaque
-  relevé relit les 88 derniers jours au plus, le reste reste tel que stocké. Historique
-  des installs du 26/02 au 26/09 chargé une fois le 27/09 depuis le connecteur AppsFlyer
-  (même chiffres que le tableau de bord AppsFlyer ; pas d'événements avant la fenêtre
-  raw : la page le dit et ne compte les taux que sur les jours qui en ont). Le raw ne
-  porte que le coût qu'une régie passe au clic ; **les coûts Meta (intégration coûts
-  reliée par les utilisateurs) ne sont que dans le rapport agrégé** : chaque relevé
-  tente aussi `partners_by_date_report` (Total Cost), qui remplace alors les coûts au
-  clic ; refusé (« Limit reached »), il n'est retenté que le jour UTC suivant et les
-  coûts déjà relevés restent (avertissement dans Sources). Le reste des dépenses se
-  saisit sur la page (avec le store visé, colonne `perf_spend.platform`).
+- **AppsFlyer = rapport agrégé « partners by date »** (27/09) : le raw data n'est pas
+  dans l'abonnement (« Your current subscription package doesn't include raw data
+  reports »). Un appel par app et par année de plage donne, par jour d'install et par
+  source : installs (organiques / campagnes), coût (`Total Cost`, dont les coûts Meta de
+  l'intégration reliée par les utilisateurs) et, pour les événements de l'app, les
+  utilisateurs qui les ont faits (`af_purchase_annual`, `af_purchase_monthly`,
+  `af_purchase_one_time_offer`, `af_first_plant_added`, colonnes « (Unique users) »).
+  Les achats sont donc **par jour d'install** (cohorte) : le chiffre d'un jour grandit
+  tant que ses installés achètent, d'où la relecture des 45 derniers jours à chaque
+  relevé et de tout l'historique chaque semaine. Stocké par store (`installs_ios`,
+  `purchases_monthly_android`…) plus les totaux `installs`, `installs_organic`,
+  `installs_paid`, `cost`. Le 27/09 le premier appel agrégé avait répondu « Limit
+  reached for partners-daily-report » (quota du jour : 24 appels par app, 120 par compte ;
+  le connecteur MCP AppsFlyer utilisé ce jour-là pour l'historique a pu le consommer) :
+  après ce message, plus d'appel avant minuit UTC. Le reste des dépenses se saisit sur la
+  page (avec le store visé, colonne `perf_spend.platform`).
 - **RevenueCat = les deux apps Plenova seulement** (App Store, Play Store ; le « Test
   Store » du projet exclu) : le nom du filtre change selon le graphique (`app_id`,
   `first_app_id` pour les graphiques de clients, `store` pour la LTV), table dans
@@ -266,7 +263,7 @@ lien du menu et routes vérifient tous `performanceAccess()` (`lib/performance/d
   (`lib/performance/compute.ts`). Relecture complète une fois par semaine, sinon les
   45 derniers jours ; `DATA_VERSION` (refresh.ts) force une relecture complète quand la
   définition d'une source change. AppsFlyer : quota par rapport, par app et par jour
-  (remis à zéro à minuit UTC), 4 rapports par app et par relevé, pas plus d'un relevé
+  (remis à zéro à minuit UTC), un appel par app et par relevé, pas plus d'un relevé
   toutes les 3 h, et plus rien jusqu'à minuit UTC après « Limit reached » (seulement si
   l'échec vient de la même version de lecture). `perf_snapshots` est un cache (purgé au-delà de 14 jours, le dernier bon relevé
   de chaque source reste toujours).
