@@ -6,9 +6,11 @@ import { plantIdentity } from "@/lib/data/localize";
 import { PLANTS } from "@/lib/data/plants";
 import { translator, type TranslationKey } from "@/lib/i18n";
 import { getConnectionStatus } from "@/lib/pinterest";
+import { revenueOverview, type RevenueResult } from "@/lib/revenue";
 import { getStore } from "@/lib/store";
 import type { CarouselRecord } from "@/lib/types";
 import { cn, relativeTime } from "@/lib/utils";
+import { viewerSeesRevenue } from "@/lib/viewer";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +44,48 @@ function Stat({ label, value, tone }: { label: string; value: number | string; t
         {value}
       </p>
     </div>
+  );
+}
+
+/** The app's revenue, for the owner only - see lib/revenue.ts for how it is kept safe. */
+function RevenueCard({ result }: { result: RevenueResult }) {
+  if (result.state !== "ok") {
+    return (
+      <Notice tone="info" title="Revenus de l'app">
+        {result.state === "not-configured"
+          ? "Pas encore branché : ajoute la clé RevenueCat (REVENUECAT_API_KEY, lecture seule) dans Vercel."
+          : "RevenueCat ne répond pas pour l'instant ; les chiffres reviennent au prochain chargement."}
+      </Notice>
+    );
+  }
+  const r = result.overview;
+  const money = (n: number | null) =>
+    n === null
+      ? "-"
+      : new Intl.NumberFormat("fr-FR", { style: "currency", currency: r.currency, maximumFractionDigits: 0 }).format(n);
+  const count = (n: number | null) => (n === null ? "-" : new Intl.NumberFormat("fr-FR").format(n));
+  return (
+    <Card className="p-5">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="text-[16px] font-semibold tracking-[-0.01em]">Revenus de l&apos;app Plenova</h2>
+        <a
+          href={r.dashboardUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="text-[13px] font-medium text-[var(--color-accent)] hover:underline"
+        >
+          RevenueCat →
+        </a>
+      </div>
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
+        <Stat label="MRR" value={money(r.mrr)} />
+        <Stat label="Revenus 28 j" value={money(r.revenue28)} />
+        <Stat label="Abonnés actifs" value={count(r.activeSubscriptions)} />
+        <Stat label="Essais en cours" value={count(r.activeTrials)} />
+        <Stat label="Nouveaux clients 28 j" value={count(r.newCustomers28)} />
+        <Stat label="Utilisateurs actifs 28 j" value={count(r.activeUsers28)} />
+      </div>
+    </Card>
   );
 }
 
@@ -81,6 +125,8 @@ export default async function DashboardPage() {
     getConnectionStatus(),
   ]);
   const report = readiness();
+  // The revenue is asked for only when the viewer may see it.
+  const revenue = (await viewerSeesRevenue()) ? await revenueOverview() : null;
 
   const pinCount = (s: string) => pins.filter((p) => p.status === s).length;
   const carouselCount = (s: CarouselRecord["status"]) =>
@@ -122,6 +168,12 @@ export default async function DashboardPage() {
           <Notice tone="danger" title={t("dashboard.notPersistentTitle")}>
             {t("dashboard.notPersistent")}
           </Notice>
+        </div>
+      ) : null}
+
+      {revenue ? (
+        <div className="mb-5">
+          <RevenueCard result={revenue} />
         </div>
       ) : null}
 

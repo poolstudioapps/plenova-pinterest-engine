@@ -179,6 +179,15 @@ s'affichent dans le Spy, historique compris ; ceux importés en couverture seule
 plan, `complete: true` sur `/posts`), puis deviennent traitables. Spy et Hooks
 s'affichent par pages de 20 (`components/ui/Pager.tsx`).
 
+**Revenus de l'app sur le tableau de bord (RevenueCat)** : `lib/revenue.ts`, lu côté
+serveur par la page d'accueil seulement (pas de route API), cache 10 min. Clé
+`REVENUECAT_API_KEY` = clé secrète API v2 **en lecture seule sur Charts & metrics
+uniquement**, posée par l'utilisateur dans Vercel (Production, Sensitive) - jamais dans
+le dépôt ni dans une conversation. Projet `proj1ba43566` (Plenova). Visible seulement
+des adresses `allowed_emails.sees_revenue = true` (les deux du propriétaire et celle de Dylan). Seuls
+les chiffres agrégés (MRR, revenus 28 j, abonnés, essais, nouveaux clients,
+utilisateurs actifs) quittent le serveur.
+
 **Traitement par équipe (demande de l'utilisateur)** : Mr Stark et Mr Mousk traitent
 les mêmes carrousels chacun de leur côté. `allowed_emails.team` dit pour qui traite
 chaque adresse (ienders.pro / ienders38 = stark, dylan.semionoff-bru@ubisoft.com =

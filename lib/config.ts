@@ -124,6 +124,16 @@ export const config = {
     publishableKey:
       env("SUPABASE_PUBLISHABLE_KEY") ?? env("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
   },
+  /**
+   * The Plenova app's revenue, for the dashboard (lib/revenue.ts). The key is
+   * a RevenueCat API v2 secret key, read-only on charts & metrics only - set
+   * in Vercel as Sensitive, never shared, never sent to the browser. The
+   * project id is not a secret.
+   */
+  revenuecat: {
+    apiKey: env("REVENUECAT_API_KEY"),
+    projectId: env("REVENUECAT_PROJECT_ID") ?? "proj1ba43566",
+  },
   security: {
     tokenEncryptionKey: env("TOKEN_ENCRYPTION_KEY"),
     cronSecret: env("CRON_SECRET"),

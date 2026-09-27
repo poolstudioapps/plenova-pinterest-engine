@@ -1,6 +1,6 @@
 import "server-only";
 import { cookies } from "next/headers";
-import { teamOf } from "@/lib/allowlist";
+import { seesRevenue, teamOf } from "@/lib/allowlist";
 import { AUTH_COOKIE, readSession, sessionSecret } from "@/lib/auth";
 import type { Team } from "@/lib/types";
 
@@ -30,4 +30,12 @@ export async function viewer(): Promise<Viewer> {
   if (mapped) return { email, team: mapped, fixed: true };
   const chosen = jar.get(TEAM_COOKIE)?.value;
   return { email, team: chosen === "stark" || chosen === "mousk" ? chosen : null, fixed: false };
+}
+
+/** Whether the signed-in person may see the app's revenue. No session, no revenue. */
+export async function viewerSeesRevenue(): Promise<boolean> {
+  const jar = await cookies();
+  const secret = await sessionSecret();
+  const email = secret ? await readSession(secret, jar.get(AUTH_COOKIE)?.value) : null;
+  return email ? seesRevenue(email) : false;
 }

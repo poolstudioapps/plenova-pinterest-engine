@@ -171,3 +171,19 @@ export async function teamOf(email: string): Promise<Team | null> {
   }
   return data?.team === "stark" || data?.team === "mousk" ? data.team : null;
 }
+
+/** Whether an address may see the app's revenue on the dashboard (allowed_emails.sees_revenue). */
+export async function seesRevenue(email: string): Promise<boolean> {
+  const supabase = admin();
+  if (!supabase) return false;
+  const { data, error } = await supabase
+    .from("allowed_emails")
+    .select("sees_revenue")
+    .eq("email", email.trim().toLowerCase())
+    .maybeSingle();
+  if (error) {
+    console.error("[auth] who sees the revenue could not be read:", error.message);
+    return false;
+  }
+  return data?.sees_revenue === true;
+}
