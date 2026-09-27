@@ -198,8 +198,27 @@ lien du menu et routes vérifient tous `performanceAccess()` (`lib/performance/d
 - **Sources** : RevenueCat (revenus, MRR, abonnés, churn, conversion payante 7 j,
   remboursements, LTV par payeur, cohortes hebdo J0/J7/J30/à date), Amplitude
   (DAU, WAU, MAU glissants, nouveaux, acheteurs, onboarding, achat ≤ 7 j, rétention
-  d'usage des abonnés), AppsFlyer (installs organiques/campagnes, coûts).
-  Modules `lib/performance/{revenuecat,amplitude,appsflyer}.ts`.
+  d'usage des abonnés), AppsFlyer (installs organiques/campagnes par store, achats,
+  premières plantes, coûts au clic). Modules `lib/performance/{revenuecat,amplitude,appsflyer}.ts`.
+- **AppsFlyer = raw data, pas l'agrégé** (27/09) : le plan du compte répond « Limit
+  reached for partners-daily-report » dès le premier appel aux rapports agrégés ; le
+  token posé dans Vercel sert au Pull API raw data. `installs_report` +
+  `organic_installs_report` (1 ligne par install) et `in_app_events_report` +
+  `organic_in_app_events_report` filtrés sur les 5 événements de l'app
+  (`af_purchase_annual`, `af_purchase_monthly`, `af_purchase_one_time_offer`,
+  `af_first_plant_added`, `af_first_quick_scan`), comptés par jour UTC et **par store**
+  (`installs_ios`, `purchases_monthly_android`…, plus les totaux `installs`,
+  `installs_organic`, `installs_paid`, `cost`). Le raw ne remonte que **90 jours** : chaque
+  relevé relit les 88 derniers jours au plus, le reste reste tel que stocké. Historique
+  des installs du 26/02 au 26/09 chargé une fois le 27/09 depuis le connecteur AppsFlyer
+  (même chiffres que le tableau de bord AppsFlyer ; pas d'événements avant la fenêtre
+  raw : la page le dit et ne compte les taux que sur les jours qui en ont). Le raw ne
+  porte que le coût qu'une régie passe au clic ; **les coûts Meta (intégration coûts
+  reliée par les utilisateurs) ne sont que dans le rapport agrégé** : chaque relevé
+  tente aussi `partners_by_date_report` (Total Cost), qui remplace alors les coûts au
+  clic ; refusé (« Limit reached »), il n'est retenté que le jour UTC suivant et les
+  coûts déjà relevés restent (avertissement dans Sources). Le reste des dépenses se
+  saisit sur la page (avec le store visé, colonne `perf_spend.platform`).
 - **RevenueCat = les deux apps Plenova seulement** (App Store, Play Store ; le « Test
   Store » du projet exclu) : le nom du filtre change selon le graphique (`app_id`,
   `first_app_id` pour les graphiques de clients, `store` pour la LTV), table dans
@@ -246,16 +265,16 @@ lien du menu et routes vérifient tous `performanceAccess()` (`lib/performance/d
   dans le navigateur (7/30/60 j, depuis le début, calendrier) sans appeler de fournisseur
   (`lib/performance/compute.ts`). Relecture complète une fois par semaine, sinon les
   45 derniers jours ; `DATA_VERSION` (refresh.ts) force une relecture complète quand la
-  définition d'une source change. AppsFlyer : 24 rapports/jour/app (quota remis à zéro à
-  minuit UTC) et aucune limite de plage, donc un seul appel par app et par relevé, pas
-  plus d'un relevé toutes les 3 h, et plus rien jusqu'à minuit UTC après « Limit
-  reached ». `perf_snapshots` est un cache (purgé au-delà de 14 jours, le dernier bon relevé
+  définition d'une source change. AppsFlyer : quota par rapport, par app et par jour
+  (remis à zéro à minuit UTC), 4 rapports par app et par relevé, pas plus d'un relevé
+  toutes les 3 h, et plus rien jusqu'à minuit UTC après « Limit reached » (seulement si
+  l'échec vient de la même version de lecture). `perf_snapshots` est un cache (purgé au-delà de 14 jours, le dernier bon relevé
   de chaque source reste toujours).
-- **Dépenses et ROAS** : coûts AppsFlyer (intégration Meta faite par l'utilisateur, les
-  coûts arrivent dès qu'une campagne tourne) + saisies à la main dans `perf_spend`
-  (réparties par jour, pour les canaux qu'AppsFlyer ne voit pas). **Règle de
-  l'utilisateur : pas de dépense sur la période = dépenses, ROAS, coût par install et
-  colonnes ROAS masqués.** ROAS = revenu RevenueCat ÷ dépenses, tous utilisateurs
+- **Dépenses et ROAS** : coûts remontés par AppsFlyer (rapport agrégé quand il répond,
+  sinon coûts au clic) + saisies à la main dans `perf_spend` (réparties par jour ; un store visé ou les deux). **Règle de
+  l'utilisateur : pas de dépense sur la période = dépenses, ROAS, CPI, CPA et colonnes
+  ROAS masqués.** Filtré sur un store, le coût ne compte que les saisies de ce store (une
+  saisie « les deux » n'est pas répartie, la page le signale). ROAS = revenu RevenueCat ÷ dépenses, tous utilisateurs
   confondus (RevenueCat ne connaît pas l'origine des clients) ; ROAS de cohorte =
   revenu des nouveaux clients d'une semaine au jour N ÷ dépenses de cette semaine.
 - **Clés** (Vercel, Production, **Sensitive**, posées par l'utilisateur, jamais dans le
@@ -265,6 +284,15 @@ lien du menu et routes vérifient tous `performanceAccess()` (`lib/performance/d
   Elles sont masquées dans les erreurs (`lib/errors.ts`, `redact`).
 - **En direct** : `lib/revenue.ts` (vue d'ensemble RevenueCat, cache 10 min) alimente la
   ligne « En direct » en haut de la page ; le reste suit les relevés.
+- **Tuiles → graphique** (demande de l'utilisateur) : dans Revenus, Acquisition,
+  Utilisation et Conversion, un clic sur une tuile affiche sa courbe sous les tuiles
+  (anneau qui glisse d'une tuile à l'autre, `components/performance/parts.tsx`). Le
+  choix de chaque bloc et le store d'Acquisition sont gardés dans le cookie `perf_view`
+  (`lib/performance/view.ts`, lu par le serveur : pas de graphique par défaut qui
+  clignote au rechargement). Acquisition a sa propre période (suit celle de la page tant
+  qu'on n'en choisit pas une ; dans l'URL : `af=7|30|90` ou `af_from`/`af_to`) et son
+  filtre Tous / iOS / Android. LTV et échéances sont des projections sans historique :
+  pas de courbe.
 
 **Traitement par équipe (demande de l'utilisateur)** : Mr Stark et Mr Mousk traitent
 les mêmes carrousels chacun de leur côté. `allowed_emails.team` dit pour qui traite

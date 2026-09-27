@@ -381,6 +381,21 @@
     animation: value 260ms var(--ease-out) backwards;
   }
 
+  /*
+   * Another figure picked for a chart: the new line crossfades in through a
+   * slight blur rather than sweeping in again - picking is quick and done
+   * often, a redraw each time would slow it down.
+   */
+  @keyframes chart-swap {
+    from {
+      opacity: 0;
+      filter: blur(2px);
+    }
+  }
+  .chart-swap {
+    animation: chart-swap 220ms var(--ease-out) backwards;
+  }
+
   /* A chart drawing itself from the left the first time it is shown. */
   @keyframes draw {
     from {
@@ -479,6 +494,7 @@
     .stagger > *,
     .panel-in,
     .value-in,
+    .chart-swap,
     .draw-in,
     .grow-in,
     .grow-x-in {

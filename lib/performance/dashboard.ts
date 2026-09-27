@@ -121,6 +121,7 @@ export async function performancePayload(): Promise<PerfPayload> {
     configured: boolean,
   ): PerfSourceStatus => {
     const s = snapshots[source];
+    const warnings = s.last?.ok ? s.last.data.warnings : null;
     return {
       source,
       label,
@@ -128,6 +129,9 @@ export async function performancePayload(): Promise<PerfPayload> {
       lastOk: s.good?.takenAt ?? null,
       lastAttempt: s.last?.takenAt ?? null,
       error: s.last && !s.last.ok ? s.last.error : null,
+      warning: Array.isArray(warnings)
+        ? warnings.filter((w): w is string => typeof w === "string").join(" ") || null
+        : null,
     };
   };
 
@@ -142,6 +146,7 @@ export async function performancePayload(): Promise<PerfPayload> {
       to: e.to,
       channel: e.channel,
       amount: e.amount,
+      platform: e.platform,
       note: e.note,
       createdBy: e.createdBy,
     })),

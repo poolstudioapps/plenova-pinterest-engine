@@ -45,8 +45,8 @@ const RECENT_DAYS = 45;
 const WEEKLY_EVERY_MS = 7 * 86_400_000;
 /**
  * The weekly re-read: RevenueCat and Amplitude make the same number of calls
- * whatever the range, so they re-read everything; AppsFlyer pays one call per
- * 31 days and app, so it re-reads 90 days.
+ * whatever the range, so they re-read everything; AppsFlyer's raw data only
+ * goes back 90 days (lib/performance/appsflyer.ts keeps within it).
  */
 const WEEKLY_DAYS: Record<
   "revenuecat" | "amplitude" | "appsflyer",
@@ -57,9 +57,9 @@ const WEEKLY_DAYS: Record<
   appsflyer: 90,
 };
 /**
- * AppsFlyer allows 24 report calls a day per app, from 00:00 UTC: never more
- * often than this, success or not - and after "Limit reached", not before
- * the quota starts again at midnight UTC.
+ * AppsFlyer counts its reports per report, app and day from 00:00 UTC: never
+ * more often than this, success or not - and after "Limit reached", not
+ * before the quota starts again at midnight UTC.
  */
 const APPSFLYER_MIN_GAP_MS = 3 * 3_600_000;
 const KEEP_SNAPSHOTS_DAYS = 14;
@@ -67,12 +67,13 @@ const KEEP_SNAPSHOTS_DAYS = 14;
  * Bumped when what a source stores changes meaning (a filter, a funnel's
  * definition): its next refresh re-reads everything since PERF_EPOCH, so no
  * old day keeps the former definition. 2: RevenueCat limited to the Plenova
- * apps, Amplitude's Home funnel limited to app 2.0.0 and later (2026-09-27).
+ * apps, Amplitude's Home funnel limited to app 2.0.0 and later (2026-09-27);
+ * AppsFlyer read from its raw data, per store, with its events (2026-09-27).
  */
 const DATA_VERSION: Record<"revenuecat" | "amplitude" | "appsflyer", number> = {
   revenuecat: 2,
   amplitude: 2,
-  appsflyer: 1,
+  appsflyer: 2,
 };
 /** The routes may run 300 s: a source still busy after this is recorded as failed. */
 const DEADLINE_MS = 240_000;
@@ -148,14 +149,17 @@ export async function refreshPerformance(): Promise<SourceOutcome[]> {
     async function run(
       source: "revenuecat" | "amplitude" | "appsflyer",
       configured: boolean,
-      fetcher: (since: string) => Promise<Fetched>,
+      fetcher: (since: string, signal: AbortSignal) => Promise<Fetched>,
     ): Promise<SourceOutcome> {
       if (!configured) return { source, status: "not-configured" };
       const previous = latest[source].good;
       const lastAttempt = latest[source].last;
+      // Only an attempt of the same reading counts: the aggregate reports'
+      // quota said nothing about the raw ones.
       if (
         source === "appsflyer" &&
         lastAttempt &&
+        lastAttempt.data.dataVersion === DATA_VERSION.appsflyer &&
         (started - Date.parse(lastAttempt.takenAt) < APPSFLYER_MIN_GAP_MS ||
           (quotaReached(lastAttempt.error) &&
             lastAttempt.takenAt.slice(0, 10) ===
@@ -182,17 +186,22 @@ export async function refreshPerformance(): Promise<SourceOutcome[]> {
             );
 
       let timer: ReturnType<typeof setTimeout> | undefined;
+      // Past the deadline the calls still running are stopped too, not left
+      // spending the vendor's quota for a reading nobody will save.
+      const stop = new AbortController();
       try {
         const result = await Promise.race([
-          fetcher(since < PERF_EPOCH ? PERF_EPOCH : since),
+          fetcher(since < PERF_EPOCH ? PERF_EPOCH : since, stop.signal),
           new Promise<never>((_, reject) => {
             timer = setTimeout(
-              () =>
+              () => {
+                stop.abort();
                 reject(
                   new Error(
                     `${source} trop long (plus de ${DEADLINE_MS / 1000} s), relevé interrompu`,
                   ),
-                ),
+                );
+              },
               DEADLINE_MS - (Date.now() - started),
             );
           }),
@@ -224,7 +233,12 @@ export async function refreshPerformance(): Promise<SourceOutcome[]> {
           source === "appsflyer" && quotaReached(message)
             ? `Quota AppsFlyer du jour atteint, nouvel essai après minuit UTC (${message})`
             : message;
-        await saveSnapshot(source, false, {}, shown).catch(() => undefined);
+        await saveSnapshot(
+          source,
+          false,
+          { dataVersion: DATA_VERSION[source] },
+          shown,
+        ).catch(() => undefined);
         return { source, status: "error", error: shown };
       } finally {
         clearTimeout(timer);
@@ -236,7 +250,22 @@ export async function refreshPerformance(): Promise<SourceOutcome[]> {
         fetchRevenueCat(since, PERF_EPOCH, knownVersions(latest.revenuecat.good?.data)),
       ),
       run("amplitude", amplitudeConfigured(), (since) => fetchAmplitude(since, PERF_EPOCH)),
-      run("appsflyer", appsFlyerConfigured(), (since) => fetchAppsFlyer(since)),
+      run("appsflyer", appsFlyerConfigured(), (since, signal) => {
+        // The aggregate report (the networks' spend) is not asked again the
+        // UTC day it refused; the days its cost was stored for keep it.
+        const today = new Date(started).toISOString().slice(0, 10);
+        const snaps = [latest.appsflyer.last, latest.appsflyer.good];
+        const coveredTo = snaps
+          .map((x) => x?.data.aggregateCostTo)
+          .filter((d): d is string => typeof d === "string")
+          .sort()
+          .pop();
+        return fetchAppsFlyer(since, {
+          tryAggregateCost: !snaps.some((x) => x?.data.costRefusedOn === today),
+          aggregateCostTo: coveredTo ?? null,
+          signal,
+        });
+      }),
     ]);
     await pruneSnapshots(KEEP_SNAPSHOTS_DAYS).catch((err) =>
       console.error(

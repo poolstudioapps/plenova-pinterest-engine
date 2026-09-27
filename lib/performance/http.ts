@@ -20,6 +20,13 @@ export class VendorError extends Error {
   }
 }
 
+interface RequestOptions {
+  timeoutMs?: number;
+  attempts?: number;
+  /** Stops the call, and any retry, when aborted. */
+  signal?: AbortSignal;
+}
+
 async function request(
   vendor: string,
   url: string,
@@ -27,7 +34,8 @@ async function request(
   {
     timeoutMs = 25_000,
     attempts = 3,
-  }: { timeoutMs?: number; attempts?: number } = {},
+    signal,
+  }: RequestOptions = {},
 ): Promise<Response> {
   for (let attempt = 1; ; attempt++) {
     let res: Response;
@@ -35,9 +43,14 @@ async function request(
       res = await fetch(url, {
         ...init,
         cache: "no-store",
-        signal: AbortSignal.timeout(timeoutMs),
+        signal: signal
+          ? AbortSignal.any([AbortSignal.timeout(timeoutMs), signal])
+          : AbortSignal.timeout(timeoutMs),
       });
     } catch {
+      // Stopped from outside (the refresh ran out of time): no retry.
+      if (signal?.aborted)
+        throw new VendorError(vendor, null, `${vendor} : appel interrompu`);
       if (attempt >= attempts)
         throw new VendorError(vendor, null, `${vendor} ne répond pas`);
       await sleep(2000 * attempt);
@@ -73,7 +86,7 @@ export async function getJson<T = unknown>(
   vendor: string,
   url: string,
   headers: Record<string, string>,
-  options?: { timeoutMs?: number; attempts?: number },
+  options?: RequestOptions,
 ): Promise<T> {
   const res = await request(
     vendor,
@@ -88,7 +101,7 @@ export async function getText(
   vendor: string,
   url: string,
   headers: Record<string, string>,
-  options?: { timeoutMs?: number; attempts?: number },
+  options?: RequestOptions,
 ): Promise<string> {
   const res = await request(
     vendor,

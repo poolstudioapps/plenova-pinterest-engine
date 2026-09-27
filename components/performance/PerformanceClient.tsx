@@ -1,14 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { HANDED_OVER, Sliding } from "@/components/ui/Indicator";
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
 import {
-  ArrowDownRight,
   ArrowsClockwise,
-  ArrowUpRight,
   Broadcast,
-  CalendarBlank,
   CalendarDots,
   Coins,
   CurrencyEur,
@@ -16,18 +12,21 @@ import {
   Funnel,
   Pulse,
   Table,
-  UsersThree,
-  type Icon,
 } from "@phosphor-icons/react";
-import { Button, Card, Notice, TILE, TILE_LABEL, TILE_VALUE } from "@/components/ui";
+import { Button, Card, Notice } from "@/components/ui";
 import {
-  chartPoints,
+  buckets,
   cohortRows,
   kpis,
+  over,
   presetRange,
   previousRange,
+  ratio,
+  Series,
+  spendByDay,
   trend,
   type Kpis,
+  type Os,
   type PerfPayload,
   type Preset,
   type Range,
@@ -39,216 +38,38 @@ import {
   upcomingRenewals,
 } from "@/lib/performance/ltv";
 import { MIN_APP_VERSION } from "@/lib/performance/versions";
+import { saveView, type PerfView } from "@/lib/performance/view";
 import { cn } from "@/lib/utils";
-import { LineChart } from "./LineChart";
-import { Sparkline } from "./Sparkline";
+import { AcquisitionPanel, type AfPeriod } from "./AcquisitionPanel";
+import {
+  count,
+  eur0,
+  eur2,
+  int,
+  longDay,
+  money,
+  pct,
+  percent,
+  perDay,
+  shortDay,
+  when,
+} from "./format";
 import { LtvPanel } from "./LtvPanel";
-import { UpcomingPanel } from "./UpcomingPanel";
+import {
+  ChartPanel,
+  Crossfade,
+  DatePill,
+  fixRange,
+  GRID,
+  Section,
+  Segmented,
+  Tile,
+  TileGroup,
+  writeQuery,
+  type ChartDef,
+} from "./parts";
 import { SpendPanel } from "./SpendPanel";
-
-/* ------------------------------------------------------------ format -- */
-
-const eur0 = new Intl.NumberFormat("fr-FR", {
-  style: "currency",
-  currency: "EUR",
-  maximumFractionDigits: 0,
-});
-const eur2 = new Intl.NumberFormat("fr-FR", {
-  style: "currency",
-  currency: "EUR",
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-const int = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 });
-const money = (n: number | null) =>
-  n === null ? "-" : Math.abs(n) >= 100 ? eur0.format(n) : eur2.format(n);
-const count = (n: number | null) => (n === null ? "-" : int.format(n));
-const pct = (n: number | null, digits = 1) =>
-  n === null
-    ? "-"
-    : `${new Intl.NumberFormat("fr-FR", { maximumFractionDigits: digits, minimumFractionDigits: digits }).format(n * 100)} %`;
-const shortDay = (d: string) =>
-  new Date(`${d}T00:00:00Z`).toLocaleDateString("fr-FR", {
-    day: "numeric",
-    month: "short",
-    timeZone: "UTC",
-  });
-const longDay = (d: string) =>
-  new Date(`${d}T00:00:00Z`).toLocaleDateString("fr-FR", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    timeZone: "UTC",
-  });
-const when = (iso: string | null) =>
-  iso
-    ? new Date(iso).toLocaleString("fr-FR", {
-        day: "numeric",
-        month: "short",
-        hour: "2-digit",
-        minute: "2-digit",
-        timeZone: "Europe/Paris",
-      })
-    : "jamais";
-
-/* ------------------------------------------------------------- tiles -- */
-
-type Better = "up" | "down" | null;
-
-function Delta({
-  now,
-  before,
-  better,
-}: {
-  now: number | null;
-  before: number | null;
-  better: Better;
-}) {
-  if (now === null || before === null || before === 0) return null;
-  const change = (now - before) / Math.abs(before);
-  if (!Number.isFinite(change) || Math.abs(change) < 0.005) {
-    return (
-      <span className="rounded-full bg-[var(--color-surface-muted)] px-1.5 py-px text-[11px] font-medium text-[var(--color-ink-faint)]">
-        stable
-      </span>
-    );
-  }
-  const good = better === null ? null : change > 0 === (better === "up");
-  // The direction is drawn (the arrow) as well as coloured, so it survives
-  // for someone who cannot tell the green from the red.
-  const Arrow = change > 0 ? ArrowUpRight : ArrowDownRight;
-  return (
-    <span
-      className={cn(
-        "figures inline-flex items-center gap-0.5 rounded-full px-1.5 py-px text-[11px] font-semibold",
-        good === null
-          ? "bg-[var(--color-surface-muted)] text-[var(--color-ink-soft)]"
-          : good
-            ? "bg-[var(--color-accent-soft)] text-[var(--color-accent-ink)]"
-            : "bg-[var(--color-danger-soft)] text-[var(--color-danger)]",
-      )}
-      title="Par rapport à la période de même durée juste avant"
-    >
-      <Arrow aria-hidden size={11} weight="bold" />
-      {new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(
-        Math.abs(change) * 100,
-      )}
-      {"\u202f"}%
-    </span>
-  );
-}
-
-/*
- * Whether figures crossfade when they change: yes for a period picked from
- * the presets, no while dates are being typed - a blur on every keystroke is
- * noise, not information.
- */
-const Crossfade = createContext(true);
-
-function Tile({
-  label,
-  value,
-  sub,
-  hint,
-  now,
-  before,
-  better = "up",
-  spark,
-}: {
-  label: string;
-  value: string;
-  sub?: ReactNode;
-  hint?: string;
-  now?: number | null;
-  before?: number | null;
-  better?: Better;
-  /** The figure day by day over the period, drawn along the foot of the tile. */
-  spark?: (number | null)[];
-}) {
-  const crossfade = useContext(Crossfade);
-  return (
-    <div className={TILE} title={hint}>
-      {/* Two lines kept for every label, so the figures of a row line up. */}
-      <p className={cn(TILE_LABEL, "min-h-[2lh]")}>{label}</p>
-      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-        {/* Keyed on the value: another period re-inserts it, and it crossfades in. */}
-        <p key={value} className={cn(TILE_VALUE, crossfade && "value-in")}>
-          {value}
-        </p>
-        {now !== undefined && before !== undefined ? (
-          <Delta now={now} before={before} better={better} />
-        ) : null}
-      </div>
-      {sub ? (
-        <p className="figures mt-2 text-[11.5px] leading-snug text-[var(--color-ink-faint)]">
-          {sub}
-        </p>
-      ) : null}
-      {spark ? (
-        // Full-bleed along the foot of the tile, fading into it.
-        <div className="-mx-4 mt-auto -mb-4 pt-3">
-          <Sparkline values={spark} label={`${label}, jour après jour`} />
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function Section({
-  title,
-  icon: Glyph,
-  source,
-  children,
-  missing,
-}: {
-  title: string;
-  icon: Icon;
-  source: string;
-  children: ReactNode;
-  missing?: string | null;
-}) {
-  return (
-    <Card className="p-5 md:p-6">
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <h2 className="flex items-center gap-2.5 text-[16.5px] font-semibold tracking-[-0.015em]">
-          <span className="grid size-8 place-items-center rounded-[10px] bg-[var(--color-surface-muted)] text-[var(--color-accent-ink)]">
-            <Glyph aria-hidden size={17} weight="duotone" />
-          </span>
-          {title}
-        </h2>
-        <span className="text-[12px] text-[var(--color-ink-faint)]">
-          {source}
-        </span>
-      </div>
-      {missing ? (
-        <p className="rounded-[14px] bg-[var(--color-canvas)] px-4 py-3 text-[13px] text-[var(--color-ink-soft)]">
-          {missing}
-        </p>
-      ) : (
-        children
-      )}
-    </Card>
-  );
-}
-
-const GRID = "grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4";
-
-/*
- * The native date field, stripped to its text inside the range pill. Its own
- * calendar icon is hidden (the pill has one), so a click on the field opens
- * the calendar - otherwise a mouse could only type the date.
- */
-const openCalendar = (e: React.MouseEvent<HTMLInputElement>) => {
-  try {
-    e.currentTarget.showPicker?.();
-  } catch {
-    // Refused (not a user gesture, or not supported): typing still works.
-  }
-};
-
-/* The native date field, stripped to its text inside the range pill. */
-const DATE =
-  "figures w-[7.6rem] rounded-[8px] bg-transparent px-1 py-1 text-[13px] text-[var(--color-ink)] outline-none focus-visible:bg-[var(--color-surface-muted)] [&::-webkit-calendar-picker-indicator]:hidden";
+import { UpcomingPanel } from "./UpcomingPanel";
 
 /* -------------------------------------------------------------- page -- */
 
@@ -261,14 +82,22 @@ const PRESETS: { id: Preset; label: string }[] = [
 
 export type InitialRange = { preset: Preset } | { custom: Range };
 
+/** The axis of a chart in percent: whole numbers, the tooltip keeps a decimal. */
+const pctTick = (v: number) => `${int.format(v)} %`;
+const asPercent = (v: number | null) => (v === null ? null : v * 100);
+
 export function PerformanceClient({
   payload,
   live,
   initial,
+  initialView,
+  initialAf,
 }: {
   payload: PerfPayload;
   live: RevenueOverview | null;
   initial: InitialRange;
+  initialView: PerfView;
+  initialAf: AfPeriod;
 }) {
   const router = useRouter();
   const [preset, setPreset] = useState<Preset | null>(
@@ -279,6 +108,7 @@ export function PerformanceClient({
       ? initial.custom
       : presetRange("30", payload.today, payload.firstDay),
   );
+  const [view, setView] = useState<PerfView>(initialView);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshNote, setRefreshNote] = useState<{
     tone: "info" | "danger";
@@ -300,16 +130,14 @@ export function PerformanceClient({
     () => (previous ? kpis(payload, previous) : null),
     [payload, previous],
   );
-  const chart = useMemo(() => chartPoints(payload, range), [payload, range]);
   // The small trend lines of the tiles. Not for revenue or daily users: the
-  // big charts right under those tiles already draw them.
+  // big charts right under those tiles draw them.
   const spark = useMemo(() => {
     const of = (key: string) => trend(payload, key, range);
     return {
       mrr: of("revenuecat:mrr"),
       actives: of("revenuecat:actives"),
       newCustomers: of("revenuecat:new_customers"),
-      installs: of("appsflyer:installs"),
       newUsers: of("amplitude:new_users"),
       wau: of("amplitude:wau"),
       mau: of("amplitude:mau"),
@@ -341,30 +169,239 @@ export function PerformanceClient({
 
   // The user's rule: no spend in the period, no spend nor ROAS on screen.
   const spending = k.spend > 0;
+  const churnMonths = (payload.rc?.churnMonths ?? []).filter(
+    (m) => !m.incomplete && m.rate !== null,
+  );
+  const lastFullMonth = churnMonths.at(-1) ?? null;
+
+  /* --------------------------------------------- charts under the tiles */
+
+  const s = useMemo(() => new Series(payload.series), [payload]);
+  const b = useMemo(() => buckets(range), [range]);
+
+  // The tiles of each group that draw a chart, the first being the default.
+  const groups = {
+    rev: [
+      "revenue",
+      "mrr",
+      "actives",
+      "newCustomers",
+      "churn",
+      ...(churnMonths.length > 1 ? ["churnMonth"] : []),
+      "refunds",
+      ...(spending ? ["spend", "roas"] : []),
+    ],
+    use: ["dau", "wau", "mau", "stickiness", "arpu", "newUsers"],
+    conv: ["onboarding", "purchase7", "paying7", "buyers"],
+  } as const satisfies Record<string, readonly string[]>;
+  const shown = (group: keyof typeof groups) => {
+    const ids: readonly string[] = groups[group];
+    const saved = view.charts[group];
+    return saved && ids.includes(saved) ? saved : ids[0]!;
+  };
+
+  function pickChart(group: string, id: string) {
+    const next = { ...view, charts: { ...view.charts, [group]: id } };
+    setView(next);
+    saveView(next);
+  }
+  function pickOs(os: Os) {
+    const next = { ...view, os };
+    setView(next);
+    saveView(next);
+  }
+
+  const chartFor = (id: string): ChartDef => {
+    const weekly = b.weekly;
+    const perDayCaption = weekly
+      ? "moyenne par jour, semaine par semaine"
+      : "jour par jour";
+    const levelCaption = weekly ? "moyenne de chaque semaine" : "jour par jour";
+    const rateCaption = weekly ? "semaine par semaine" : "jour par jour";
+    const labels = b.labels;
+    const one = (
+      title: string,
+      caption: string,
+      values: (number | null)[],
+      format: (v: number) => string,
+      extra: Partial<ChartDef> = {},
+      color = "var(--color-accent)",
+    ): ChartDef => ({
+      title,
+      caption,
+      labels,
+      series: [{ name: title, color, values }],
+      format,
+      ...extra,
+    });
+    const sumPerDay = (key: string) => over(b, (r, n) => s.sum(key, r) / n);
+    const level = (key: string) => over(b, (r) => s.avg(key, r));
+    const spendOf = (r: Range) =>
+      [...spendByDay(payload, r).values()].reduce((a, v) => a + v, 0);
+    const rate = (num: string, den: string) =>
+      over(b, (r) => asPercent(ratio(s.sum(num, r), s.sum(den, r))));
+    const rateExtra = { tick: pctTick, minStep: 0.5 };
+
+    switch (id) {
+      case "mrr":
+        return one("MRR", levelCaption, level("revenuecat:mrr"), (v) => eur0.format(v), { zero: false });
+      case "actives":
+        return one("Abonnés actifs", levelCaption, level("revenuecat:actives"), (v) => int.format(v), { zero: false });
+      case "newCustomers":
+        return one("Nouveaux clients", perDayCaption, sumPerDay("revenuecat:new_customers"), perDay, { tick: (v) => int.format(v) });
+      case "churn":
+        return one(
+          "Abonnements payants perdus",
+          perDayCaption,
+          sumPerDay("revenuecat:churn_churned"),
+          perDay,
+          { tick: (v) => int.format(v) },
+        );
+      case "churnMonth":
+        return {
+          title: "Churn mensuel, mois par mois",
+          caption: "mois complets, tout l'historique",
+          labels: churnMonths.map((m) =>
+            new Date(`${m.month}T00:00:00Z`).toLocaleDateString("fr-FR", {
+              month: "short",
+              year: "2-digit",
+              timeZone: "UTC",
+            }),
+          ),
+          series: [
+            {
+              name: "Churn",
+              color: "var(--color-accent)",
+              values: churnMonths.map((m) => m.rate),
+            },
+          ],
+          format: percent,
+          ...rateExtra,
+        };
+      case "refunds":
+        return one(
+          "Remboursements",
+          perDayCaption,
+          sumPerDay("revenuecat:refund_refunded"),
+          perDay,
+          { tick: (v) => int.format(v) },
+        );
+      case "spend":
+        return one(
+          "Dépenses",
+          perDayCaption,
+          over(b, (r, n) => spendOf(r) / n),
+          (v) => eur0.format(v),
+          {},
+          "var(--color-series-spend)",
+        );
+      case "roas":
+        return one(
+          "ROAS : revenu ÷ dépenses",
+          rateCaption,
+          over(b, (r) => asPercent(ratio(s.sum("revenuecat:revenue", r), spendOf(r)))),
+          percent,
+          rateExtra,
+        );
+      case "dau":
+        return one("Utilisateurs actifs par jour", levelCaption, level("amplitude:dau"), (v) => int.format(v), { zero: false });
+      case "wau":
+        return one("WAU (7 j glissants)", levelCaption, level("amplitude:wau"), (v) => int.format(v), { zero: false });
+      case "mau":
+        return one("MAU (30 j glissants)", levelCaption, level("amplitude:mau"), (v) => int.format(v), { zero: false });
+      case "stickiness":
+        return one(
+          "Stickiness DAU / MAU",
+          rateCaption,
+          over(b, (r) => asPercent(ratio(s.avg("amplitude:dau", r), s.avg("amplitude:mau", r)))),
+          percent,
+          rateExtra,
+        );
+      case "arpu":
+        return one(
+          "ARPU / mois",
+          rateCaption,
+          over(b, (r, n) =>
+            ratio((s.sum("revenuecat:revenue", r) / n) * 30, s.avg("amplitude:mau", r)),
+          ),
+          (v) => eur2.format(v),
+          { minStep: 0.05 },
+        );
+      case "newUsers":
+        return one("Nouveaux utilisateurs", perDayCaption, sumPerDay("amplitude:new_users"), perDay, { tick: (v) => int.format(v) });
+      case "onboarding":
+        return one(
+          "Onboarding terminé",
+          rateCaption,
+          rate("amplitude:onboarding_v2_done", "amplitude:onboarding_v2_start"),
+          percent,
+          rateExtra,
+        );
+      case "purchase7":
+        return one(
+          "Achat ≤ 7 j (Amplitude)",
+          rateCaption,
+          rate("amplitude:purchase_7d_v2_done", "amplitude:purchase_7d_v2_start"),
+          percent,
+          rateExtra,
+        );
+      case "paying7":
+        return one(
+          "Conversion payante ≤ 7 j (RevenueCat)",
+          rateCaption,
+          rate("revenuecat:conv_paying_7d_v2", "revenuecat:conv_new_customers_v2"),
+          percent,
+          rateExtra,
+        );
+      case "buyers":
+        return one("Acheteurs", perDayCaption, sumPerDay("amplitude:buyers_v2"), perDay, { tick: (v) => int.format(v) });
+      default:
+        return {
+          title: spending ? "Revenu et dépenses" : "Revenu",
+          caption: perDayCaption,
+          labels,
+          series: [
+            {
+              name: "Revenu",
+              color: "var(--color-series-revenue)",
+              values: sumPerDay("revenuecat:revenue"),
+            },
+            ...(spending
+              ? [
+                  {
+                    name: "Dépenses",
+                    color: "var(--color-series-spend)",
+                    values: over(b, (r, n) => spendOf(r) / n),
+                  },
+                ]
+              : []),
+          ],
+          format: (v) => eur0.format(v),
+        };
+    }
+  };
+
+  const rev = shown("rev");
+  const use = shown("use");
+  const conv = shown("conv");
+  // Only the three charts on screen are computed (a few hundred sums).
+  const revChart = chartFor(rev);
+  const useChart = chartFor(use);
+  const convChart = chartFor(conv);
+
+  /* ------------------------------------------------------------ period */
 
   function pickPreset(id: Preset) {
     setPreset(id);
-    window.history.replaceState(null, "", `?p=${id}`);
+    writeQuery({ p: id, from: null, to: null });
   }
 
   function pickDates(next: Range) {
-    // Half-typed or impossible dates are ignored; the rest is kept within the data.
-    const valid = (d: string) =>
-      /^\d{4}-\d{2}-\d{2}$/.test(d) &&
-      new Date(`${d}T00:00:00Z`).toISOString().startsWith(d);
-    if (!valid(next.from) || !valid(next.to)) return;
-    const clamp = (d: string) =>
-      d < payload.firstDay
-        ? payload.firstDay
-        : d > payload.today
-          ? payload.today
-          : d;
-    const a = clamp(next.from);
-    const b = clamp(next.to);
-    const fixed = a <= b ? { from: a, to: b } : { from: b, to: a };
+    const fixed = fixRange(next, payload.firstDay, payload.today);
+    if (!fixed) return;
     setPreset(null);
     setCustom(fixed);
-    window.history.replaceState(null, "", `?from=${fixed.from}&to=${fixed.to}`);
+    writeQuery({ p: null, from: fixed.from, to: fixed.to });
   }
 
   async function refresh() {
@@ -404,32 +441,41 @@ export function PerformanceClient({
 
   const lastOk =
     payload.sources
-      .map((s) => s.lastOk)
+      .map((x) => x.lastOk)
       .filter((d): d is string => d !== null)
       .sort()
       .pop() ?? null;
   const nothing = Object.keys(payload.series).length === 0;
   const status = (source: "revenuecat" | "amplitude" | "appsflyer") =>
-    payload.sources.find((s) => s.source === source);
+    payload.sources.find((x) => x.source === source);
   const missing = (
     source: "revenuecat" | "amplitude" | "appsflyer",
     has: boolean,
   ) => {
-    const s = status(source);
-    if (!s?.configured)
-      return `${s?.label ?? source} n'est pas encore branché (clé manquante dans Vercel).`;
-    if (!s.lastOk)
-      return `Pas encore de relevé ${s.label} : clique sur Actualiser.`;
+    const st = status(source);
+    if (!st?.configured)
+      return `${st?.label ?? source} n'est pas encore branché (clé manquante dans Vercel).`;
+    if (!st.lastOk)
+      return `Pas encore de relevé ${st.label} : clique sur Actualiser.`;
     if (!has) return "Pas de données sur cette période.";
     return null;
   };
   const rcMissing = missing("revenuecat", k.has.revenuecat);
   const ampMissing = missing("amplitude", k.has.amplitude);
+  // Installs already stored count, even before AppsFlyer's first good reading.
+  const afStatus = status("appsflyer");
+  const afStored = Object.keys(payload.series).some((key) =>
+    key.startsWith("appsflyer:installs_"),
+  );
+  const afMissing = afStored
+    ? null
+    : !afStatus?.configured
+      ? "AppsFlyer n'est pas encore branché (clé manquante dans Vercel)."
+      : "Pas encore de relevé AppsFlyer : clique sur Actualiser.";
   // "Not read yet" is not zero: the 2.0.0+ series exist once a refresh made them.
   const conversionMeasured =
     payload.series["amplitude:new_users_v2"] !== undefined ||
     payload.series["revenuecat:conv_new_customers_v2"] !== undefined;
-  const afMissing = missing("appsflyer", k.has.appsflyer);
   const ARPPU = (
     <Tile
       label="ARPPU / mois"
@@ -439,70 +485,26 @@ export function PerformanceClient({
       before={p?.arppuMonthly ?? null}
     />
   );
-  const lastFullMonth =
-    payload.rc?.churnMonths.filter((m) => !m.incomplete).pop() ?? null;
 
   return (
     <Crossfade.Provider value={preset !== null}>
     <div className="space-y-5">
       {/* ---------------------------------------------------- period bar */}
       <div className="flex flex-wrap items-center gap-2.5">
-        <Sliding
-          role="group"
-          aria-label="Période"
-          watch={preset}
-          indicatorClassName="rounded-full bg-[var(--color-pill)] shadow-[var(--shadow-card)]"
-          className="flex flex-wrap gap-0.5 rounded-full bg-[var(--color-surface-muted)] p-1 shadow-[var(--shadow-inset)]"
-        >
-          {PRESETS.map((x) => (
-            <button
-              key={x.id}
-              type="button"
-              onClick={() => pickPreset(x.id)}
-              aria-pressed={preset === x.id}
-              className={cn(
-                "relative rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-[background-color,color,box-shadow,scale] duration-200 active:scale-[0.96]",
-                preset === x.id
-                  ? `bg-[var(--color-surface)] text-[var(--color-ink)] shadow-[var(--shadow-card)] ${HANDED_OVER}`
-                  : "text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]",
-              )}
-            >
-              {x.label}
-            </button>
-          ))}
-        </Sliding>
+        <Segmented<Preset>
+          label="Période"
+          value={preset}
+          options={PRESETS}
+          onChange={pickPreset}
+        />
         {/* A chosen period lights the pill up; a preset leaves it quiet. */}
-        <div
-          className={cn(
-            "flex max-w-full min-w-0 flex-wrap items-center gap-1 rounded-[20px] border bg-[var(--color-surface)] py-1 pr-2 pl-3 transition-[border-color,box-shadow]",
-            preset === null
-              ? "border-[var(--color-accent)] shadow-[0_0_0_3px_var(--color-accent-soft)]"
-              : "border-[var(--color-line-strong)]",
-          )}
-        >
-          <CalendarBlank aria-hidden size={16} className="shrink-0 text-[var(--color-ink-faint)]" />
-          <input
-            type="date"
-            aria-label="Du"
-            value={range.from}
-            min={payload.firstDay}
-            max={payload.today}
-            onChange={(e) => pickDates({ from: e.target.value, to: range.to })}
-            onClick={openCalendar}
-            className={DATE}
-          />
-          <span aria-hidden className="text-[12px] text-[var(--color-ink-faint)]">→</span>
-          <input
-            type="date"
-            aria-label="Au"
-            value={range.to}
-            min={payload.firstDay}
-            max={payload.today}
-            onChange={(e) => pickDates({ from: range.from, to: e.target.value })}
-            onClick={openCalendar}
-            className={DATE}
-          />
-        </div>
+        <DatePill
+          range={range}
+          min={payload.firstDay}
+          max={payload.today}
+          active={preset === null}
+          onChange={pickDates}
+        />
         <div className="flex items-center gap-3 sm:ml-auto">
           <span className="text-[12px] leading-tight text-[var(--color-ink-faint)]">
             Relevé {when(lastOk)}
@@ -529,6 +531,8 @@ export function PerformanceClient({
         {previous
           ? ` · comparé au ${shortDay(previous.from)} → ${shortDay(previous.to)}`
           : ""}
+        {" "}
+        · clique sur un chiffre pour voir sa courbe
       </p>
 
       {refreshNote ? (
@@ -578,11 +582,22 @@ export function PerformanceClient({
       <Section
         title="Revenus"
         icon={CurrencyEur}
-        source="RevenueCat · brut TTC, remboursements déduits"
+        source={
+          spending
+            ? "RevenueCat · brut TTC, remboursements déduits · dépenses saisies"
+            : "RevenueCat · brut TTC, remboursements déduits"
+        }
         missing={rcMissing}
       >
-        <div className={GRID}>
+        <TileGroup
+          label="Chiffre affiché dans le graphique des revenus"
+          selected={rev}
+          onSelect={(id) => pickChart("rev", id)}
+          chart="chart-revenue"
+          className={GRID}
+        >
           <Tile
+            id="revenue"
             label="Revenu"
             value={money(k.revenue)}
             sub={`${count(k.transactions)} transactions`}
@@ -590,6 +605,7 @@ export function PerformanceClient({
             before={p?.revenue ?? null}
           />
           <Tile
+            id="mrr"
             label="MRR (fin de période)"
             value={money(k.mrr)}
             spark={spark.mrr}
@@ -597,6 +613,7 @@ export function PerformanceClient({
             before={p?.mrr ?? null}
           />
           <Tile
+            id="actives"
             label="Abonnés actifs"
             value={count(k.activeSubscriptions)}
             spark={spark.actives}
@@ -604,6 +621,7 @@ export function PerformanceClient({
             before={p?.activeSubscriptions ?? null}
           />
           <Tile
+            id="newCustomers"
             label="Nouveaux clients"
             value={count(k.newCustomers)}
             spark={spark.newCustomers}
@@ -612,6 +630,7 @@ export function PerformanceClient({
             hint="Clients vus pour la première fois par RevenueCat"
           />
           <Tile
+            id="churn"
             label="Churn mensuel moyen"
             value={pct(k.churnRate)}
             sub={`${count(k.churned)} perdus sur la période`}
@@ -621,6 +640,7 @@ export function PerformanceClient({
             better="down"
           />
           <Tile
+            id={churnMonths.length > 1 ? "churnMonth" : undefined}
             label="Churn du dernier mois complet"
             value={pct(
               lastFullMonth?.rate !== null && lastFullMonth?.rate !== undefined
@@ -640,6 +660,7 @@ export function PerformanceClient({
             }
           />
           <Tile
+            id="refunds"
             label="Remboursements"
             value={pct(k.refundRate)}
             sub={`${count(k.refunded)} remboursées`}
@@ -647,36 +668,28 @@ export function PerformanceClient({
             before={p?.refundRate ?? null}
             better="down"
           />
-        </div>
-        <div className="mt-6">
-          <LineChart
-            ariaLabel={
-              spending ? "Revenu et dépenses par jour" : "Revenu par jour"
-            }
-            labels={chart.points.map((x) => x.label)}
-            series={[
-              {
-                name: chart.weekly
-                  ? "Revenu / jour (moy. de la semaine)"
-                  : "Revenu / jour",
-                color: "var(--color-series-revenue)",
-                values: chart.points.map((x) => x.revenue),
-              },
-              ...(spending
-                ? [
-                    {
-                      name: chart.weekly
-                        ? "Dépenses / jour (moy. de la semaine)"
-                        : "Dépenses / jour",
-                      color: "var(--color-series-spend)",
-                      values: chart.points.map((x) => x.spend),
-                    },
-                  ]
-                : []),
-            ]}
-            format={(v) => eur0.format(v)}
-          />
-        </div>
+          {spending ? (
+            <>
+              <Tile
+                id="spend"
+                label="Dépenses"
+                value={money(k.spend)}
+                now={k.spend}
+                before={p?.spend ?? null}
+                better={null}
+              />
+              <Tile
+                id="roas"
+                label="ROAS (revenu ÷ dépenses)"
+                value={pct(k.roas, 0)}
+                now={k.roas}
+                before={p?.roas ?? null}
+                hint="Revenu de la période ÷ dépenses de la période, tous utilisateurs confondus"
+              />
+            </>
+          ) : null}
+        </TileGroup>
+        <ChartPanel id={rev} domId="chart-revenue" chart={revChart} />
       </Section>
 
       {/* ----------------------------------------------------- upcoming */}
@@ -691,94 +704,35 @@ export function PerformanceClient({
       ) : null}
 
       {/* -------------------------------------------------- acquisition */}
-      <Section
-        title="Acquisition"
-        icon={UsersThree}
-        source={
-          spending
-            ? "AppsFlyer · Amplitude · dépenses saisies"
-            : "AppsFlyer · Amplitude"
-        }
-        missing={afMissing && ampMissing ? afMissing : null}
-      >
-        <div className={GRID}>
-          {afMissing ? (
-            <Tile label="Installs" value="-" sub={afMissing} />
-          ) : (
-            <Tile
-              label="Installs"
-              value={count(k.installs)}
-              spark={spark.installs}
-              sub={`${count(k.installsOrganic)} organiques · ${count(k.installsPaid)} campagnes`}
-              now={k.installs}
-              before={p?.installs ?? null}
-              hint="AppsFlyer, iOS + Android"
-            />
-          )}
-          <Tile
-            label="Nouveaux utilisateurs"
-            value={count(k.newUsers)}
-            spark={spark.newUsers}
-            now={k.newUsers}
-            before={p?.newUsers ?? null}
-            hint="Amplitude : premier événement dans l'app"
-          />
-          {spending ? (
-            <>
-              <Tile
-                label="Dépenses"
-                value={money(k.spend)}
-                now={k.spend}
-                before={p?.spend ?? null}
-                better={null}
-              />
-              <Tile
-                label="ROAS (revenu ÷ dépenses)"
-                value={pct(k.roas, 0)}
-                now={k.roas}
-                before={p?.roas ?? null}
-                hint="Revenu de la période ÷ dépenses de la période, tous utilisateurs confondus"
-              />
-              <Tile
-                label="Coût par install"
-                value={money(k.cpi)}
-                now={k.cpi}
-                before={p?.cpi ?? null}
-                better="down"
-                hint="Dépenses ÷ installs (organiques compris)"
-              />
-            </>
-          ) : null}
-        </div>
-        {spending && cohorts.rows.length > 0 ? (
-          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {(["d0", "d7", "d30", "lifetime"] as const).map((key) => (
-              <Tile
-                key={key}
-                label={`ROAS cohortes ${key === "lifetime" ? "à date" : `J${key.slice(1)}`}`}
-                value={pct(cohorts.totals.roas[key], 0)}
-                sub={
-                  cohorts.totals.spendAt[key] > 0
-                    ? `${money(cohorts.totals.revenue[key])} / ${money(cohorts.totals.spendAt[key])}`
-                    : "aucune cohorte arrivée à ce jour"
-                }
-                hint="Revenu des nouveaux clients de chaque semaine au jour N ÷ dépenses de leur semaine (semaines arrivées à ce jour seulement)"
-              />
-            ))}
-          </div>
-        ) : null}
-      </Section>
+      <AcquisitionPanel
+        payload={payload}
+        pageRange={range}
+        initialPeriod={initialAf}
+        os={view.os}
+        onOs={pickOs}
+        chart={view.charts.acq}
+        onChart={(id) => pickChart("acq", id)}
+        missing={afMissing}
+      />
 
       {/* -------------------------------------------------------- usage */}
       <Section title="Utilisation" icon={Pulse} source="Amplitude" missing={ampMissing}>
-        <div className={GRID}>
+        <TileGroup
+          label="Chiffre affiché dans le graphique d'utilisation"
+          selected={use}
+          onSelect={(id) => pickChart("use", id)}
+          chart="chart-usage"
+          className={GRID}
+        >
           <Tile
+            id="dau"
             label="DAU moyen"
             value={count(k.dauAvg === null ? null : Math.round(k.dauAvg))}
             now={k.dauAvg}
             before={p?.dauAvg ?? null}
           />
           <Tile
+            id="wau"
             label="WAU (7 j glissants)"
             value={count(k.wau)}
             spark={spark.wau}
@@ -787,6 +741,7 @@ export function PerformanceClient({
             sub={`au ${shortDay(range.to)}`}
           />
           <Tile
+            id="mau"
             label="MAU (30 j glissants)"
             value={count(k.mau)}
             spark={spark.mau}
@@ -795,36 +750,31 @@ export function PerformanceClient({
             sub={`au ${shortDay(range.to)}`}
           />
           <Tile
+            id="stickiness"
             label="Stickiness DAU / MAU"
             value={pct(k.stickiness)}
             now={k.stickiness}
             before={p?.stickiness ?? null}
           />
           <Tile
+            id="arpu"
             label="ARPU / mois"
             value={money(k.arpuMonthly)}
             hint="Revenu ramené à 30 jours ÷ MAU moyen de la période (par utilisateur actif, payeur ou non)"
             now={k.arpuMonthly}
             before={p?.arpuMonthly ?? null}
           />
-        </div>
-        <div className="mt-6">
-          <LineChart
-            ariaLabel="Utilisateurs actifs par jour"
-            labels={chart.points.map((x) => x.label)}
-            series={[
-              {
-                name: chart.weekly
-                  ? "Utilisateurs actifs (moy. de la semaine)"
-                  : "Utilisateurs actifs",
-                color: "var(--color-accent)",
-                values: chart.points.map((x) => x.dau),
-              },
-            ]}
-            format={(v) => int.format(v)}
-            height={180}
+          <Tile
+            id="newUsers"
+            label="Nouveaux utilisateurs"
+            value={count(k.newUsers)}
+            spark={spark.newUsers}
+            now={k.newUsers}
+            before={p?.newUsers ?? null}
+            hint="Amplitude : premier événement dans l'app"
           />
-        </div>
+        </TileGroup>
+        <ChartPanel id={use} domId="chart-usage" chart={useChart} />
       </Section>
 
       {/* --------------------------------------------------- conversion */}
@@ -841,8 +791,15 @@ export function PerformanceClient({
               : `Aucun nouvel utilisateur de l'app ${MIN_APP_VERSION} ou suivante sur cette période : les chiffres de conversion ne comptent que ces versions.`)
         }
       >
-        <div className={GRID}>
+        <TileGroup
+          label="Chiffre affiché dans le graphique de conversion"
+          selected={conv}
+          onSelect={(id) => pickChart("conv", id)}
+          chart="chart-conversion"
+          className={GRID}
+        >
           <Tile
+            id="onboarding"
             label="Onboarding terminé"
             value={pct(k.onboardingRate)}
             sub={`${count(k.onboardingDone)} / ${count(k.onboardingStart)} arrivés sur Home`}
@@ -851,6 +808,7 @@ export function PerformanceClient({
             before={p?.onboardingRate ?? null}
           />
           <Tile
+            id="purchase7"
             label="Achat ≤ 7 j"
             value={pct(k.purchase7Rate)}
             sub={`${count(k.purchase7Done)} / ${count(k.purchase7Start)}${k.purchase7Partial ? " · en cours" : ""}`}
@@ -859,6 +817,7 @@ export function PerformanceClient({
             before={p?.purchase7Rate ?? null}
           />
           <Tile
+            id="paying7"
             label="Conversion payante ≤ 7 j"
             value={pct(k.paying7Rate)}
             sub={`${count(k.paying7)} / ${count(k.paying7Base)} · RevenueCat${k.paying7Partial ? " · en cours" : ""}`}
@@ -867,6 +826,7 @@ export function PerformanceClient({
             before={p?.paying7Rate ?? null}
           />
           <Tile
+            id="buyers"
             label="Acheteurs"
             value={count(k.buyers)}
             spark={spark.buyers}
@@ -875,7 +835,8 @@ export function PerformanceClient({
             now={k.buyers}
             before={p?.buyers ?? null}
           />
-        </div>
+        </TileGroup>
+        <ChartPanel id={conv} domId="chart-conversion" chart={convChart} />
       </Section>
 
       {/* ----------------------------------------------- unit economics */}
@@ -914,20 +875,31 @@ export function PerformanceClient({
               : null)
           }
         >
+          <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {(["d0", "d7", "d30", "lifetime"] as const).map((key) => (
+              <Tile
+                key={key}
+                label={`ROAS cohortes ${key === "lifetime" ? "à date" : `J${key.slice(1)}`}`}
+                value={pct(cohorts.totals.roas[key], 0)}
+                sub={
+                  cohorts.totals.spendAt[key] > 0
+                    ? `${money(cohorts.totals.revenue[key])} / ${money(cohorts.totals.spendAt[key])}`
+                    : "aucune cohorte arrivée à ce jour"
+                }
+                hint="Revenu des nouveaux clients de chaque semaine au jour N ÷ dépenses de leur semaine (semaines arrivées à ce jour seulement)"
+              />
+            ))}
+          </div>
           <div className="-mx-5 overflow-x-auto px-5">
             <table className="w-full min-w-[640px] text-[13px] tabular-nums">
               <thead>
                 <tr className="border-b border-[var(--color-line)] text-left text-[11.5px] font-medium text-[var(--color-ink-faint)]">
                   <th className="py-2 pr-3 font-medium">Semaine</th>
                   <th className="py-2 pr-3 text-right font-medium">Clients</th>
-                  {spending ? (
-                    <th className="py-2 pr-3 text-right font-medium">
-                      Dépenses
-                    </th>
-                  ) : null}
+                  <th className="py-2 pr-3 text-right font-medium">Dépenses</th>
                   {(["J0", "J7", "J30", "À date"] as const).map((h) => (
                     <th key={h} className="py-2 pr-3 text-right font-medium">
-                      {spending ? `ROAS ${h}` : `Revenu/client ${h}`}
+                      ROAS {h}
                     </th>
                   ))}
                   <th className="py-2 text-right font-medium">Revenu à date</th>
@@ -943,14 +915,9 @@ export function PerformanceClient({
                       {shortDay(c.cohortStart)}
                     </td>
                     <td className="py-2 pr-3 text-right">{count(c.size)}</td>
-                    {spending ? (
-                      <td className="py-2 pr-3 text-right">{money(c.spend)}</td>
-                    ) : null}
+                    <td className="py-2 pr-3 text-right">{money(c.spend)}</td>
                     {(["d0", "d7", "d30", "lifetime"] as const).map((key) => {
                       const complete = key === "lifetime" || c.complete[key];
-                      const value = spending
-                        ? pct(c.roas[key], 0)
-                        : money(c.perCustomer[key]);
                       return (
                         <td
                           key={key}
@@ -964,10 +931,7 @@ export function PerformanceClient({
                               : "En cours : tous les clients de la semaine n'ont pas encore atteint ce jour"
                           }
                         >
-                          {(spending ? c.roas[key] : c.perCustomer[key]) ===
-                          null
-                            ? "-"
-                            : value}
+                          {c.roas[key] === null ? "-" : pct(c.roas[key], 0)}
                         </td>
                       );
                     })}
@@ -983,16 +947,12 @@ export function PerformanceClient({
                   <td className="py-2 pr-3 text-right">
                     {count(cohorts.totals.size)}
                   </td>
-                  {spending ? (
-                    <td className="py-2 pr-3 text-right">
-                      {money(cohorts.totals.spend)}
-                    </td>
-                  ) : null}
+                  <td className="py-2 pr-3 text-right">
+                    {money(cohorts.totals.spend)}
+                  </td>
                   {(["d0", "d7", "d30", "lifetime"] as const).map((key) => (
                     <td key={key} className="py-2 pr-3 text-right">
-                      {spending
-                        ? pct(cohorts.totals.roas[key], 0)
-                        : money(cohorts.totals.perCustomer[key])}
+                      {pct(cohorts.totals.roas[key], 0)}
                     </td>
                   ))}
                   <td className="py-2 text-right">
@@ -1004,10 +964,9 @@ export function PerformanceClient({
           </div>
           <p className="mt-3 text-[12px] leading-relaxed text-[var(--color-ink-faint)]">
             En italique : semaine pas encore arrivée à ce jour. Le total ne
-            compte que les semaines arrivées à chaque jour.
-            {spending
-              ? " ROAS = revenu de la cohorte au jour N ÷ dépenses de sa semaine (toutes sources confondues : RevenueCat ne sait pas d'où viennent les clients)."
-              : ""}
+            compte que les semaines arrivées à chaque jour. ROAS = revenu de la
+            cohorte au jour N ÷ dépenses de sa semaine (toutes sources
+            confondues : RevenueCat ne sait pas d&apos;où viennent les clients).
           </p>
         </Section>
       ) : null}
@@ -1016,6 +975,7 @@ export function PerformanceClient({
         entries={payload.spend}
         today={payload.today}
         appsflyerHasCost={payload.appsflyerHasCost}
+        appsflyerCost={payload.series["appsflyer:cost"] ?? {}}
       />
 
       {/* ------------------------------------------------------ sources */}
@@ -1027,9 +987,9 @@ export function PerformanceClient({
           Sources
         </h2>
         <ul className="divide-y divide-[var(--color-line)] text-[13px]">
-          {payload.sources.map((s) => (
+          {payload.sources.map((src) => (
             <li
-              key={s.source}
+              key={src.source}
               className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5 first:pt-0 last:pb-0"
             >
               {/* Real state, so a dot - with a ring on it when something is wrong. */}
@@ -1037,25 +997,32 @@ export function PerformanceClient({
                 aria-hidden
                 className={cn(
                   "size-2 rounded-full",
-                  s.configured && s.error && "ring-3 ring-[var(--color-danger-soft)]",
+                  src.configured && src.error && "ring-3 ring-[var(--color-danger-soft)]",
+                  src.configured && !src.error && src.warning && "ring-3 ring-[var(--color-warn-soft)]",
                 )}
                 style={{
-                  backgroundColor: !s.configured
+                  backgroundColor: !src.configured
                     ? "var(--color-ink-faint)"
-                    : s.error
+                    : src.error
                       ? "var(--color-danger)"
-                      : "var(--color-accent)",
+                      : src.warning
+                        ? "var(--color-warn)"
+                        : "var(--color-accent)",
                 }}
               />
-              <span className="w-[92px] font-medium">{s.label}</span>
+              <span className="w-[92px] font-medium">{src.label}</span>
               <span className="text-[var(--color-ink-soft)]">
-                {!s.configured
+                {!src.configured
                   ? "Non branché : clé manquante dans Vercel"
-                  : `Dernier relevé réussi : ${when(s.lastOk)}`}
+                  : `Dernier relevé réussi : ${when(src.lastOk)}`}
               </span>
-              {s.error ? (
+              {src.error ? (
                 <span className="basis-full pl-[20px] text-[12px] text-[var(--color-danger)]">
-                  Dernier essai ({when(s.lastAttempt)}) : {s.error}
+                  Dernier essai ({when(src.lastAttempt)}) : {src.error}
+                </span>
+              ) : src.warning ? (
+                <span className="basis-full pl-[20px] text-[12px] text-[var(--color-warn-ink)]">
+                  {src.warning}
                 </span>
               ) : null}
             </li>

@@ -15,6 +15,12 @@ const CHANNELS = [
   "Autre",
 ];
 
+const PLATFORMS = [
+  { id: "", label: "Les deux" },
+  { id: "ios", label: "iOS" },
+  { id: "android", label: "Android" },
+] as const;
+
 const money = (n: number) =>
   new Intl.NumberFormat("fr-FR", {
     style: "currency",
@@ -30,23 +36,29 @@ const date = (d: string) =>
   });
 
 /**
- * Ad spend typed in by hand, for the channels AppsFlyer has no cost from
- * (Meta's comes through AppsFlyer). Folded away until needed.
+ * Ad spend typed in by hand, for what AppsFlyer does not bring: the networks
+ * linked to it (Meta...) arrive by themselves once its aggregate report can
+ * be read (lib/performance/appsflyer.ts). The store a campaign targeted feeds
+ * the AppsFlyer section's costs per store. Folded away until needed.
  */
 export function SpendPanel({
   entries,
   today,
   appsflyerHasCost,
+  appsflyerCost,
 }: {
   entries: PerfSpendEntry[];
   today: string;
   appsflyerHasCost: boolean;
+  /** AppsFlyer's cost per day, to spot a typed entry it now also brings. */
+  appsflyerCost: Record<string, number>;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [from, setFrom] = useState(today);
   const [to, setTo] = useState(today);
   const [channel, setChannel] = useState(CHANNELS[0]);
+  const [platform, setPlatform] = useState<"" | "ios" | "android">("");
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -60,7 +72,7 @@ export function SpendPanel({
       const res = await fetch("/api/performance/spend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ from, to, channel, amount, note }),
+        body: JSON.stringify({ from, to, channel, amount, platform, note }),
       });
       if (!res.ok)
         throw new Error(
@@ -78,6 +90,13 @@ export function SpendPanel({
       setBusy(null);
     }
   }
+
+  // A Meta entry on days AppsFlyer now brings a cost for: likely counted twice.
+  const overlaps = (e: PerfSpendEntry) =>
+    /meta/i.test(e.channel) &&
+    Object.entries(appsflyerCost).some(
+      ([day, v]) => v > 0 && day >= e.from && day <= e.to,
+    );
 
   async function remove(entry: PerfSpendEntry) {
     if (!window.confirm(`Supprimer ${money(entry.amount)} ${entry.channel} ?`))
@@ -113,8 +132,10 @@ export function SpendPanel({
             Dépenses publicitaires
           </h2>
           <p className="mt-2 max-w-[62ch] text-[12.5px] leading-relaxed text-[var(--color-ink-soft)]">
-            Les coûts Meta arrivent seuls par AppsFlyer. Ajoute ici ce
-            qu&apos;il ne voit pas (influence, autre régie…).
+            Les coûts des régies reliées à AppsFlyer (Meta…) arrivent seuls,
+            dès qu&apos;AppsFlyer laisse lire son rapport agrégé (état dans
+            Sources, en bas). Saisis ici ce qu&apos;il ne voit pas, avec le
+            store visé si la campagne n&apos;en cible qu&apos;un.
             {entries.length > 0
               ? ` ${entries.length} saisie${entries.length > 1 ? "s" : ""}, réparties jour par jour sur leur période.`
               : ""}
@@ -133,7 +154,7 @@ export function SpendPanel({
       {open ? (
         <form
           onSubmit={add}
-          className="mt-4 grid grid-cols-1 gap-3 border-t border-[var(--color-line)] pt-4 sm:grid-cols-2 lg:grid-cols-6"
+          className="mt-4 grid grid-cols-1 gap-3 border-t border-[var(--color-line)] pt-4 sm:grid-cols-2 lg:grid-cols-4"
         >
           <label className="text-[12.5px] font-medium text-[var(--color-ink-soft)]">
             Du
@@ -171,6 +192,22 @@ export function SpendPanel({
             </Select>
           </label>
           <label className="text-[12.5px] font-medium text-[var(--color-ink-soft)]">
+            Store visé
+            <Select
+              value={platform}
+              onChange={(e) =>
+                setPlatform(e.target.value as "" | "ios" | "android")
+              }
+              className="mt-1 w-full"
+            >
+              {PLATFORMS.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
+            </Select>
+          </label>
+          <label className="text-[12.5px] font-medium text-[var(--color-ink-soft)]">
             Montant (€)
             <Input
               inputMode="decimal"
@@ -181,7 +218,7 @@ export function SpendPanel({
               className="mt-1 w-full"
             />
           </label>
-          <label className="text-[12.5px] font-medium text-[var(--color-ink-soft)]">
+          <label className="text-[12.5px] font-medium text-[var(--color-ink-soft)] lg:col-span-2">
             Note
             <Input
               value={note}
@@ -201,10 +238,11 @@ export function SpendPanel({
               Enregistrer
             </Button>
           </div>
-          <div className="sm:col-span-2 lg:col-span-6">
-            <Notice tone={appsflyerHasCost ? "warn" : "info"}>
-              Ne saisis pas une dépense qu&apos;AppsFlyer remonte déjà (Meta) :
-              elle compterait deux fois.
+          <div className="sm:col-span-2 lg:col-span-4">
+            <Notice tone={appsflyerHasCost || /meta/i.test(channel ?? "") ? "warn" : "info"}>
+              {appsflyerHasCost
+                ? "AppsFlyer remonte déjà des coûts (Meta…) : ne saisis pas une dépense qu'il voit, elle compterait deux fois."
+                : "Une dépense Meta saisie ici en attendant compterait deux fois le jour où AppsFlyer remontera ses coûts : il faudra alors la supprimer (elle sera signalée)."}
             </Notice>
           </div>
         </form>
@@ -226,7 +264,22 @@ export function SpendPanel({
               <span className="w-[110px] font-semibold tabular-nums">
                 {money(e.amount)}
               </span>
-              <span className="font-medium">{e.channel}</span>
+              <span className="font-medium">
+                {e.channel}
+                {e.platform ? (
+                  <span className="ml-1.5 rounded-full bg-[var(--color-surface-muted)] px-1.5 py-px text-[11px] font-medium text-[var(--color-ink-soft)]">
+                    {e.platform === "ios" ? "iOS" : "Android"}
+                  </span>
+                ) : null}
+                {overlaps(e) ? (
+                  <span
+                    className="ml-1.5 rounded-full bg-[var(--color-warn-soft)] px-1.5 py-px text-[11px] font-medium text-[var(--color-warn-ink)]"
+                    title="AppsFlyer remonte déjà des coûts sur ces jours : cette saisie les compte une deuxième fois"
+                  >
+                    compté deux fois ?
+                  </span>
+                ) : null}
+              </span>
               <span className="text-[var(--color-ink-soft)]">
                 {e.from === e.to
                   ? date(e.from)

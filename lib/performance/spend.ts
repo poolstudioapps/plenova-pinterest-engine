@@ -2,13 +2,16 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { config } from "@/lib/config";
 import { badRequest, notFound } from "@/lib/errors";
+import { isCalendarDay } from "@/lib/performance/compute";
 import { supabaseService } from "@/lib/store/supabase";
 
 /**
- * Ad spend entered by hand on the Performances page, for the channels
- * AppsFlyer gets no cost from (Meta's arrives through AppsFlyer itself). An
- * entry covers one day or a range (a month of TikTok Ads, say) and is spread
- * evenly over its days. Amounts in EUR, as paid.
+ * Ad spend entered by hand on the Performances page. AppsFlyer's raw data
+ * only carries the cost a network passes on its clicks, which Meta does not:
+ * nearly all spend is typed in here. An entry covers one day or a range (a
+ * month of TikTok Ads, say) and is spread evenly over its days; it can name
+ * the store its campaign targeted, for the costs per install of that store.
+ * Amounts in EUR, as paid.
  */
 
 export interface SpendEntry {
@@ -17,10 +20,15 @@ export interface SpendEntry {
   to: string;
   channel: string;
   amount: number;
+  /** The store the campaign targeted, null for both. */
+  platform: "ios" | "android" | null;
   note: string | null;
   createdBy: string | null;
   createdAt: string;
 }
+
+const platformOf = (v: unknown): SpendEntry["platform"] =>
+  v === "ios" || v === "android" ? v : null;
 
 function db() {
   if (!config.supabase.url || !config.supabase.serviceKey)
@@ -33,7 +41,7 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const isDay = (v: unknown): v is string =>
   typeof v === "string" &&
   DAY.test(v) &&
-  new Date(`${v}T00:00:00Z`).toISOString().startsWith(v);
+  isCalendarDay(v);
 
 export async function listSpend(): Promise<SpendEntry[]> {
   const { data, error } = await db()
@@ -48,6 +56,7 @@ export async function listSpend(): Promise<SpendEntry[]> {
     to: (r.end_day as string | null) ?? (r.day as string),
     channel: r.channel as string,
     amount: Number(r.amount_eur),
+    platform: platformOf(r.platform),
     note: (r.note as string | null) ?? null,
     createdBy: (r.created_by as string | null) ?? null,
     createdAt: r.created_at as string,
@@ -60,6 +69,7 @@ export async function addSpend(
     to?: unknown;
     channel?: unknown;
     amount?: unknown;
+    platform?: unknown;
     note?: unknown;
   },
   createdBy: string | null,
@@ -79,6 +89,14 @@ export async function addSpend(
       : Number(String(input.amount ?? "").replace(",", "."));
   if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000)
     throw badRequest("Montant invalide.");
+  if (
+    input.platform !== undefined &&
+    input.platform !== null &&
+    input.platform !== "" &&
+    platformOf(input.platform) === null
+  )
+    throw badRequest("Plateforme invalide.");
+  const platform = platformOf(input.platform);
   const note =
     typeof input.note === "string" && input.note.trim()
       ? input.note.trim().slice(0, 200)
@@ -90,6 +108,7 @@ export async function addSpend(
     end_day: to,
     channel,
     amount_eur: Math.round(amount * 100) / 100,
+    platform,
     note,
     created_by: createdBy,
   };
@@ -105,6 +124,7 @@ export async function addSpend(
     to,
     channel,
     amount: row.amount_eur,
+    platform,
     note,
     createdBy,
     createdAt: data.created_at as string,

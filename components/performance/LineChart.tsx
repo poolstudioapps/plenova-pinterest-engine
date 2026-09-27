@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { monotone, type Point } from "./curve";
 
 export interface LineSeries {
@@ -19,23 +19,43 @@ export function LineChart({
   labels,
   series,
   format,
+  tick = format,
+  minStep = 1,
+  zero = true,
   height = 220,
   ariaLabel,
+  animate = true,
 }: {
   labels: string[];
   series: LineSeries[];
+  /** The values in the tooltip. */
   format: (v: number) => string;
+  /** The axis, when it wants fewer decimals than the tooltip. */
+  tick?: (v: number) => string;
+  /** The smallest gap between two gridlines: 1 for counts and euros, less for rates. */
+  minStep?: number;
+  /**
+   * Whether zero is on the scale. Yes for amounts and counts per day; a level
+   * that only drifts (subscribers, MRR, MAU) reads flat against zero, so its
+   * scale fits the line instead.
+   */
+  zero?: boolean;
   height?: number;
   ariaLabel: string;
+  /** Whether the lines draw themselves in from the left when they appear. */
+  animate?: boolean;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(640);
   const [hover, setHover] = useState<number | null>(null);
   const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
 
-  useEffect(() => {
+  // Measured before the first paint: a chart swapped in under a tile shows
+  // at its real width at once, not stretched from a default for a frame.
+  useLayoutEffect(() => {
     const el = box.current;
     if (!el) return;
+    setWidth(Math.max(280, Math.round(el.getBoundingClientRect().width)));
     const observer = new ResizeObserver(([entry]) => {
       if (entry) setWidth(Math.max(280, Math.round(entry.contentRect.width)));
     });
@@ -52,19 +72,22 @@ export function LineChart({
     const all = series.flatMap((s) =>
       s.values.filter((v): v is number => v !== null),
     );
-    // Zero is always on the scale; a day of net refunds goes below it.
-    const top = Math.max(1, ...all);
-    const bottom = Math.min(0, ...all);
+    const fit = !zero && all.length > 0;
+    // Zero is on the scale unless the line is a level that only drifts; a
+    // day of net refunds goes below it.
+    const top = fit ? Math.max(...all) : Math.max(minStep, ...all);
+    const bottom = fit ? Math.min(...all) : Math.min(0, ...all);
     // A "nice" step: 1, 2 or 5 times a power of ten, about four gridlines,
-    // never under 1 (counts and euros: no "0 €, 1 €, 1 €").
-    const raw = (top - bottom) / 4;
+    // never under minStep (counts and euros: no "0 €, 1 €, 1 €").
+    const raw = Math.max((top - bottom) / 4, minStep);
     const pow = 10 ** Math.floor(Math.log10(raw));
     const step = Math.max(
-      1,
+      minStep,
       [1, 2, 5, 10].map((m) => m * pow).find((s) => s >= raw) ?? raw,
     );
     const niceMin = Math.floor(bottom / step) * step;
-    const niceMax = Math.ceil(top / step) * step;
+    // A flat line still gets a band to sit in.
+    const niceMax = Math.max(Math.ceil(top / step) * step, niceMin + step);
     return {
       min: niceMin,
       max: niceMax,
@@ -73,7 +96,7 @@ export function LineChart({
         (_, i) => niceMin + i * step,
       ),
     };
-  }, [series]);
+  }, [series, minStep, zero]);
 
   const x = (i: number) =>
     pad.left + (n <= 1 ? plotW / 2 : (i / (n - 1)) * plotW);
@@ -188,7 +211,7 @@ export function LineChart({
                 textAnchor="end"
                 className="fill-[var(--color-ink-faint)] text-[11px] tabular-nums"
               >
-                {format(t)}
+                {tick(t)}
               </text>
             </g>
           ))}
@@ -209,7 +232,7 @@ export function LineChart({
               {labels[i]}
             </text>
           ))}
-          <g className="draw-in">
+          <g className={animate ? "draw-in" : undefined}>
           {drawn.map((d) =>
             d.area ? <path key={`${d.name}-area`} d={d.area} fill={`url(#${d.gradient})`} /> : null,
           )}

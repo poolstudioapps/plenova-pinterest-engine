@@ -33,6 +33,8 @@ export interface PerfSpendEntry {
   to: string;
   channel: string;
   amount: number;
+  /** The store the campaign targeted, null for both. */
+  platform: "ios" | "android" | null;
   note: string | null;
   createdBy: string | null;
 }
@@ -44,6 +46,8 @@ export interface PerfSourceStatus {
   lastOk: string | null;
   lastAttempt: string | null;
   error: string | null;
+  /** Something the last good reading could not do, without failing (AppsFlyer's events). */
+  warning: string | null;
 }
 
 export interface PerfPayload {
@@ -90,6 +94,16 @@ export const addDays = (day: string, n: number) =>
   fromMs(toMs(day) + n * DAY_MS);
 export const dayCount = (r: Range) =>
   Math.round((toMs(r.to) - toMs(r.from)) / DAY_MS) + 1;
+
+/**
+ * A real calendar day: 2026-02-30 is refused rather than rolled over to March,
+ * and 2026-13-01 is refused rather than thrown on (toISOString of an invalid
+ * date throws).
+ */
+export function isCalendarDay(d: string): boolean {
+  const ms = Date.parse(`${d}T00:00:00Z`);
+  return Number.isFinite(ms) && new Date(ms).toISOString().startsWith(d);
+}
 
 export function daysOf(r: Range): string[] {
   const out: string[] = [];
@@ -165,15 +179,27 @@ export class Series {
   }
 }
 
-/** Spend per day: AppsFlyer's cost plus the entries typed in, spread evenly over their days. */
+/** A store, or both: the AppsFlyer section's filter. */
+export type Os = "all" | "ios" | "android";
+export const STORES = ["ios", "android"] as const;
+
+/**
+ * Spend per day: AppsFlyer's cost plus the entries typed in, spread evenly
+ * over their days. For one store, its own cost and the entries that name it
+ * only - an entry for both stores says nothing of how it split.
+ */
 export function spendByDay(
   payload: PerfPayload,
   r: Range,
+  os: Os = "all",
 ): Map<string, number> {
   const out = new Map<string, number>();
-  const cost = payload.series["appsflyer:cost"] ?? {};
+  const cost =
+    payload.series[os === "all" ? "appsflyer:cost" : `appsflyer:cost_${os}`] ??
+    {};
   for (const d of daysOf(r)) out.set(d, cost[d] ?? 0);
   for (const e of payload.spend) {
+    if (os !== "all" && e.platform !== os) continue;
     const span = dayCount({ from: e.from, to: e.to });
     const perDay = e.amount / span;
     const from = e.from > r.from ? e.from : r.from;
@@ -185,7 +211,7 @@ export function spendByDay(
   return out;
 }
 
-const ratio = (a: number | null, b: number | null) =>
+export const ratio = (a: number | null, b: number | null) =>
   a !== null && b !== null && b > 0 ? a / b : null;
 
 export interface Kpis {
@@ -459,15 +485,11 @@ export function trend(
 
 /* ------------------------------------------------------------- chart -- */
 
-export interface ChartPoint {
-  /** First day of the bucket. */
-  day: string;
-  label: string;
-  revenue: number;
-  spend: number;
-  dau: number | null;
-  newUsers: number;
-  installs: number;
+export interface Buckets {
+  /** One point per week (Sunday to Saturday) rather than per day. */
+  weekly: boolean;
+  ranges: Range[];
+  labels: string[];
 }
 
 const DAY_LABEL = new Intl.DateTimeFormat("fr-FR", {
@@ -477,42 +499,156 @@ const DAY_LABEL = new Intl.DateTimeFormat("fr-FR", {
 });
 
 /**
- * Daily points, or past 92 days one point per week (Sunday to Saturday, like
- * the cohorts) holding the average day of that week - a week cut by the range
- * or still running then does not look like a drop.
+ * The points of a chart over the range: one per day, or past 92 days one per
+ * week (Sunday to Saturday, like the cohorts) - 200 daily points are noise at
+ * that width. A week cut by the range or still running is its own shorter
+ * bucket, so values meant per day are averaged over its days, not summed.
  */
-export function chartPoints(
-  payload: PerfPayload,
-  r: Range,
-): { points: ChartPoint[]; weekly: boolean } {
-  const s = new Series(payload.series);
-  const spend = spendByDay(payload, r);
+export function buckets(r: Range): Buckets {
   const days = daysOf(r);
   const weekly = days.length > 92;
-  const buckets: string[][] = [];
+  const groups: string[][] = [];
   for (const d of days) {
     const sunday = new Date(`${d}T00:00:00Z`).getUTCDay() === 0;
-    const current = buckets.at(-1);
-    if (!current || !weekly || sunday) buckets.push([d]);
+    const current = groups.at(-1);
+    if (!current || !weekly || sunday) groups.push([d]);
     else current.push(d);
   }
-  const points: ChartPoint[] = [];
-  for (const bucket of buckets) {
-    const start = bucket[0];
-    const end = bucket.at(-1);
-    if (!start || !end) continue;
-    const range = { from: start, to: end };
-    const n = bucket.length;
-    const label = DAY_LABEL.format(new Date(`${start}T00:00:00Z`));
-    points.push({
-      day: start,
-      label: weekly ? `sem. du ${label}` : label,
-      revenue: s.sum("revenuecat:revenue", range) / n,
-      spend: bucket.reduce((sum, d) => sum + (spend.get(d) ?? 0), 0) / n,
-      dau: s.avg("amplitude:dau", range),
-      newUsers: s.sum("amplitude:new_users", range) / n,
-      installs: s.sum("appsflyer:installs", range) / n,
-    });
+  const ranges: Range[] = [];
+  const labels: string[] = [];
+  for (const g of groups) {
+    const from = g[0];
+    const to = g.at(-1);
+    if (!from || !to) continue;
+    ranges.push({ from, to });
+    const label = DAY_LABEL.format(new Date(`${from}T00:00:00Z`));
+    labels.push(weekly ? `sem. du ${label}` : label);
   }
-  return { points, weekly };
+  return { weekly, ranges, labels };
+}
+
+/** One value per bucket; `days` is the bucket's length, to turn a sum into a day's average. */
+export function over(
+  b: Buckets,
+  value: (range: Range, days: number) => number | null,
+): (number | null)[] {
+  return b.ranges.map((range) => value(range, dayCount(range)));
+}
+
+/* --------------------------------------------------------- appsflyer -- */
+
+/** An AppsFlyer metric (stored per store as `${metric}_ios`...) over a range, for one store or both. */
+export function afSum(s: Series, metric: string, os: Os, r: Range): number {
+  return os === "all"
+    ? STORES.reduce((n, p) => n + s.sum(`appsflyer:${metric}_${p}`, r), 0)
+    : s.sum(`appsflyer:${metric}_${os}`, r);
+}
+
+/** The purchases AppsFlyer saw: annual, monthly and one-time offer together. */
+export function afPurchases(s: Series, os: Os, r: Range): number {
+  return (
+    afSum(s, "purchases_annual", os, r) +
+    afSum(s, "purchases_monthly", os, r) +
+    afSum(s, "purchases_oto", os, r)
+  );
+}
+
+/**
+ * The first day AppsFlyer's in-app events were read for: its raw data goes
+ * back 90 days, so the days before have installs (kept from earlier) but no
+ * purchases - counting them as zero would sink every rate.
+ */
+export function afEventsFrom(payload: PerfPayload): string | null {
+  const days = Object.keys(payload.series["appsflyer:first_plant_ios"] ?? {});
+  return days.length ? days.reduce((a, b) => (a < b ? a : b)) : null;
+}
+
+/** The part of a range that has AppsFlyer events, or null if none of it has. */
+export function eventsRange(r: Range, eventsFrom: string | null): Range | null {
+  if (!eventsFrom || eventsFrom > r.to) return null;
+  return eventsFrom > r.from ? { from: eventsFrom, to: r.to } : r;
+}
+
+export interface AfKpis {
+  installs: number;
+  organic: number;
+  paid: number;
+  /** Over the part of the range that has events (see eventsRange). */
+  purchases: number | null;
+  purchasesAnnual: number | null;
+  purchasesMonthly: number | null;
+  purchasesOto: number | null;
+  purchasesPaid: number | null;
+  /** First plant added: the app's activation. */
+  activations: number | null;
+  /** Installs over the same days as the events, for the rates. */
+  eventInstalls: number;
+  activationRate: number | null;
+  purchaseRate: number | null;
+  spend: number;
+  /** For one store: the typed spend that names no store, left out of its costs. */
+  untagged: number;
+  cpi: number | null;
+  /** Spend ÷ installs from campaigns only. */
+  cpiPaid: number | null;
+  cpa: number | null;
+  cpaPaid: number | null;
+  costPerActivation: number | null;
+  has: boolean;
+  /** The events cover only part of the range (or none of it). */
+  eventsPartial: boolean;
+  eventsFrom: string | null;
+}
+
+export function afKpis(payload: PerfPayload, r: Range, os: Os): AfKpis {
+  const s = new Series(payload.series);
+  const eventsFrom = afEventsFrom(payload);
+  const ev = eventsRange(r, eventsFrom);
+  const spendOf = (range: Range) =>
+    [...spendByDay(payload, range, os).values()].reduce((a, b) => a + b, 0);
+  const installs = afSum(s, "installs", os, r);
+  const paid = afSum(s, "installs_paid", os, r);
+  const spend = spendOf(r);
+  const eventInstalls = ev ? afSum(s, "installs", os, ev) : 0;
+  const eventSpend = ev ? spendOf(ev) : 0;
+  const on = (metric: string) => (ev ? afSum(s, metric, os, ev) : null);
+  const purchases = ev ? afPurchases(s, os, ev) : null;
+  const purchasesPaid = on("purchases_paid");
+  const activations = on("first_plant");
+  let untagged = 0;
+  if (os !== "all") {
+    for (const e of payload.spend) {
+      if (e.platform !== null) continue;
+      const from = e.from > r.from ? e.from : r.from;
+      const to = e.to < r.to ? e.to : r.to;
+      if (from > to) continue;
+      untagged +=
+        (e.amount / dayCount({ from: e.from, to: e.to })) *
+        dayCount({ from, to });
+    }
+  }
+  return {
+    installs,
+    organic: afSum(s, "installs_organic", os, r),
+    paid,
+    purchases,
+    purchasesAnnual: on("purchases_annual"),
+    purchasesMonthly: on("purchases_monthly"),
+    purchasesOto: on("purchases_oto"),
+    purchasesPaid,
+    activations,
+    eventInstalls,
+    activationRate: ratio(activations, eventInstalls),
+    purchaseRate: ratio(purchases, eventInstalls),
+    spend,
+    untagged,
+    cpi: ratio(spend, installs),
+    cpiPaid: ratio(spend, paid),
+    cpa: ratio(eventSpend, purchases),
+    cpaPaid: ratio(eventSpend, purchasesPaid),
+    costPerActivation: ratio(eventSpend, activations),
+    has: STORES.some((p) => s.has(`appsflyer:installs_${p}`, r)),
+    eventsPartial: ev === null || ev.from !== r.from,
+    eventsFrom,
+  };
 }
