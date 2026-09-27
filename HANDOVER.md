@@ -184,7 +184,8 @@ serveur par la page d'accueil seulement (pas de route API), cache 10 min. Clé
 `REVENUECAT_API_KEY` = clé secrète API v2 **en lecture seule sur Charts & metrics
 uniquement**, posée par l'utilisateur dans Vercel (Production, Sensitive) - jamais dans
 le dépôt ni dans une conversation. Projet `proj1ba43566` (Plenova). Visible seulement
-des adresses `allowed_emails.sees_revenue = true` (les deux du propriétaire et celle de Dylan). Seuls
+des adresses `allowed_emails.sees_revenue = true` (aujourd'hui les quatre adresses de l'allowlist ; une nouvelle adresse n'y a pas
+accès tant qu'on ne coche pas `sees_revenue`). Seuls
 les chiffres agrégés (MRR, revenus 28 j, abonnés, essais, nouveaux clients,
 utilisateurs actifs) quittent le serveur.
 
