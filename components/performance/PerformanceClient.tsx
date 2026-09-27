@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import {
   ArrowsClockwise,
-  Broadcast,
   CalendarDots,
   Coins,
   CurrencyEur,
@@ -31,16 +30,17 @@ import {
   type Preset,
   type Range,
 } from "@/lib/performance/compute";
-import type { RevenueOverview } from "@/lib/revenue";
 import {
   projectLtv,
   subscriberEngagement,
   upcomingRenewals,
 } from "@/lib/performance/ltv";
+import { cacReal, cacTargets } from "@/lib/performance/cac";
 import { MIN_APP_VERSION } from "@/lib/performance/versions";
 import { saveView, type PerfView } from "@/lib/performance/view";
 import { cn } from "@/lib/utils";
 import { AcquisitionPanel, type AfPeriod } from "./AcquisitionPanel";
+import { CacPanel } from "./CacPanel";
 import {
   count,
   eur0,
@@ -88,13 +88,11 @@ const asPercent = (v: number | null) => (v === null ? null : v * 100);
 
 export function PerformanceClient({
   payload,
-  live,
   initial,
   initialView,
   initialAf,
 }: {
   payload: PerfPayload;
-  live: RevenueOverview | null;
   initial: InitialRange;
   initialView: PerfView;
   initialAf: AfPeriod;
@@ -169,6 +167,13 @@ export function PerformanceClient({
 
   // The user's rule: no spend in the period, no spend nor ROAS on screen.
   const spending = k.spend > 0;
+  // What a paying customer may cost (from the LTV, whatever the period), and
+  // what the period's campaigns really paid - only if something was spent.
+  const targets = useMemo(() => cacTargets(ltv, payload), [ltv, payload]);
+  const real = useMemo(
+    () => (spending ? cacReal(payload, range, targets) : null),
+    [spending, payload, range, targets],
+  );
   const churnMonths = (payload.rc?.churnMonths ?? []).filter(
     (m) => !m.incomplete && m.rate !== null,
   );
@@ -543,38 +548,10 @@ export function PerformanceClient({
         </Notice>
       ) : null}
 
-      {live ? (
-        <p className="flex flex-wrap items-center gap-x-5 gap-y-1 rounded-[16px] border border-[var(--color-edge)] bg-[var(--color-surface)] px-4 py-3 text-[13px] text-[var(--color-ink-soft)] shadow-[var(--shadow-card)]">
-          <span className="inline-flex items-center gap-1.5 font-semibold text-[var(--color-ink)]">
-            <Broadcast aria-hidden size={16} weight="duotone" className="text-[var(--color-accent)]" />
-            En direct · RevenueCat
-          </span>
-          <span>
-            MRR{" "}
-            <b className="tabular-nums text-[var(--color-ink)]">
-              {money(live.mrr)}
-            </b>
-          </span>
-          <span>
-            Abonnés actifs{" "}
-            <b className="tabular-nums text-[var(--color-ink)]">
-              {count(live.activeSubscriptions)}
-            </b>
-          </span>
-          <span>
-            Essais en cours{" "}
-            <b className="tabular-nums text-[var(--color-ink)]">
-              {count(live.activeTrials)}
-            </b>
-          </span>
-          <span>
-            Revenu 28 j{" "}
-            <b className="tabular-nums text-[var(--color-ink)]">
-              {money(live.revenue28)}
-            </b>
-          </span>
-        </p>
-      ) : null}
+      {/* ---------------------------------------------------------- CAC */}
+      {nothing ? null : (
+        <CacPanel targets={targets} real={real} paidInstalls={k.installsPaid} />
+      )}
 
       {/* ------------------------------------------------------ revenue */}
       <Section

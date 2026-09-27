@@ -279,8 +279,36 @@ lien du menu et routes vérifient tous `performanceAccess()` (`lib/performance/d
   sur Charts & metrics), `AMPLITUDE_API_KEY` + `AMPLITUDE_SECRET_KEY` (projet Plenova,
   la paire n'est pas en lecture seule chez Amplitude), `APPSFLYER_API_TOKEN` (token API V2).
   Elles sont masquées dans les erreurs (`lib/errors.ts`, `redact`).
-- **En direct** : `lib/revenue.ts` (vue d'ensemble RevenueCat, cache 10 min) alimente la
-  ligne « En direct » en haut de la page ; le reste suit les relevés.
+- **Plus de ligne « En direct »** (retirée à la demande des utilisateurs : tout est dans
+  les blocs en dessous) : la page ne lit que Supabase, aucun appel RevenueCat à l'ouverture.
+- **CAC en tête de page** (demande de l'utilisateur, 27/09 ; calculs `lib/performance/cac.ts`,
+  affichage `components/performance/CacPanel.tsx`, conception choisie par un panel) :
+  - **CAC cible**, toujours affiché, recalculé à chaque relevé d'après la LTV nette à
+    12 mois, sans lien avec la période : **maximum** = bas de sa fourchette à 80 %
+    (point mort à un an même avec des rétentions au plus bas), **idéal** = LTV ÷ 1,5,
+    jamais à moins de 15 % du maximum. Arrondis à l'euro inférieur. Le renouvellement
+    des annuels et les mois après le 12e ne sont pas comptés : c'est la marge de sécurité
+    (les payants venus des pubs renouvellent souvent moins). Repère CPI = maximum × part
+    des nouveaux utilisateurs qui paient sous 7 jours (90 derniers jours complets).
+    27/09 : idéal 16 €, maximum 21 €, CPI 0,26 €.
+  - **CAC réel des campagnes**, seulement s'il y a une dépense sur la période (iOS +
+    Android, filtre Acquisition ignoré). Les payants sont comptés comme la LTV (nouveaux
+    payants RevenueCat sous 7 jours, toutes versions), sur les jours de dépense d'au
+    moins 8 jours (les 7 derniers attendent leurs achats, affichés à part). Deux bornes :
+    « ≈ » = achats attribués aux campagnes par AppsFlyer, recalés sur RevenueCat
+    (payants RevenueCat ÷ achats AppsFlyer sur 90 jours, jamais plus que tous les
+    nouveaux payants), à partir de 5 achats attribués ; « au mieux » = dépense ÷ borne
+    haute (Poisson, 90 %) de tous les nouveaux payants de ces jours. Verdict : rouge
+    certain si même « au mieux » dépasse le maximum ; sinon couleur tirée du « ≈ » à
+    partir de 10 achats attribués ; « Trop tôt » / « Trop peu de dépense » tant que moins
+    que le maximum a été dépensé sur des jours complets (aucun chiffre de CAC avant).
+    Quand il y a un « ≈ », tout est lu sur les jours qui ont des événements AppsFlyer
+    (les jours d'avant sont signalés, pas comptés) : les deux bornes et le verdict
+    restent cohérents. Jours de dépense sans relevé RevenueCat : pas comptés, signalés
+    (« En attente de relevé » s'il n'y a qu'eux).
+  - Sans dépense : un emplacement en pointillés à la place du CAC réel (ou « AppsFlyer
+    voit N installs de campagnes… » s'il en voit). Dans Acquisition, la tuile CPA
+    s'appelle « CPA AppsFlyer » pour ne pas avoir deux « coût par achat » différents.
 - **Tuiles → graphique** (demande de l'utilisateur) : dans Revenus, Acquisition,
   Utilisation et Conversion, un clic sur une tuile affiche sa courbe sous les tuiles
   (anneau qui glisse d'une tuile à l'autre, `components/performance/parts.tsx`). Le

@@ -11,7 +11,6 @@ import {
 } from "@/lib/performance/dashboard";
 import { isCalendarDay } from "@/lib/performance/compute";
 import { parseView, VIEW_COOKIE } from "@/lib/performance/view";
-import { revenueOverview } from "@/lib/revenue";
 
 export const dynamic = "force-dynamic";
 
@@ -40,9 +39,8 @@ export default async function PerformancesPage({
     );
   }
 
-  const [payload, live, params, jar] = await Promise.all([
+  const [payload, params, jar] = await Promise.all([
     performancePayload(),
-    revenueOverview(),
     searchParams,
     cookies(),
   ]);
@@ -86,7 +84,6 @@ export default async function PerformancesPage({
       />
       <PerformanceClient
         payload={payload}
-        live={live.state === "ok" ? live.overview : null}
         initial={initial}
         initialView={parseView(jar.get(VIEW_COOKIE)?.value)}
         initialAf={initialAf}

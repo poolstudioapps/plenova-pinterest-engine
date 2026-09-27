@@ -440,13 +440,13 @@ export function AcquisitionPanel({
             />
             <Tile
               id="cpa"
-              label="CPA (coût par achat)"
+              label="CPA AppsFlyer"
               value={money(k.cpa)}
               sub={k.cpaPaid !== null ? `achats issus de campagnes : ${money(k.cpaPaid)}` : "tous achats confondus"}
               now={k.cpa}
               before={p?.cpa ?? null}
               better="down"
-              hint="Dépenses ÷ achats vus par AppsFlyer"
+              hint="Dépenses ÷ achats vus par AppsFlyer, qui en rate une partie"
             />
             <Tile
               id="cpact"
