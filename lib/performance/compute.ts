@@ -425,6 +425,38 @@ export function cohortRows(
   };
 }
 
+/* ------------------------------------------------------------ trends -- */
+
+/**
+ * One series over the range, for the small trend line of a KPI tile: the
+ * value of each day (null where there is none), or past 92 days the average
+ * day of each week, like the chart - a 7-month sparkline of 200 points is
+ * noise at that size.
+ */
+export function trend(
+  payload: PerfPayload,
+  key: string,
+  r: Range,
+): (number | null)[] {
+  const s = new Series(payload.series);
+  const days = daysOf(r);
+  if (days.length <= 92) return days.map((d) => s.avg(key, { from: d, to: d }));
+  const out: (number | null)[] = [];
+  let week: string[] = [];
+  const flush = () => {
+    const start = week[0];
+    const end = week.at(-1);
+    if (start && end) out.push(s.avg(key, { from: start, to: end }));
+    week = [];
+  };
+  for (const d of days) {
+    if (week.length && new Date(`${d}T00:00:00Z`).getUTCDay() === 0) flush();
+    week.push(d);
+  }
+  flush();
+  return out;
+}
+
 /* ------------------------------------------------------------- chart -- */
 
 export interface ChartPoint {

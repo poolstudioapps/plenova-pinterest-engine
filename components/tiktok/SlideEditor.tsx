@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { HANDED_OVER, Sliding } from "@/components/ui/Indicator";
 import { Button, Menu, MenuItem, Notice, Spinner } from "@/components/ui";
 import { EditorCanvas, type CanvasIssue } from "@/components/tiktok/editor/EditorCanvas";
 import { Filmstrip, type FilmstripItem } from "@/components/tiktok/editor/Filmstrip";
@@ -820,14 +821,14 @@ export function SlideEditor({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col bg-[var(--color-canvas)]"
+      className="fade-in fixed inset-0 z-50 flex flex-col bg-[var(--color-canvas)]"
       role="dialog"
       aria-modal="true"
       aria-label={t("editor.workspace")}
       aria-busy={saving}
     >
       {/* ------------------------------------------------------ toolbar */}
-      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2">
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] shadow-[0_1px_2px_rgb(29_47_27/0.04)]">
         <BarButton label={t("editor.close")} onClick={requestClose}>
           <Icon.Close />
           <span className="hidden sm:inline">{t("editor.close")}</span>
@@ -857,9 +858,11 @@ export function SlideEditor({
         </div>
 
         {carousel.languages.length > 1 ? (
-          <div
+          <Sliding
             role="tablist"
             aria-label={t("editor.displayLanguage")}
+            watch={lang}
+            indicatorClassName="rounded-full bg-[var(--color-pill)] shadow-[var(--shadow-card)]"
             className="flex gap-0.5 rounded-full bg-[var(--color-surface-muted)] p-1 shadow-[var(--shadow-inset)]"
           >
             {carousel.languages.map((l) => {
@@ -880,9 +883,9 @@ export function SlideEditor({
                     setLang(l);
                   }}
                   className={cn(
-                    "relative rounded-full px-3 py-1 text-[12.5px] font-semibold uppercase transition-colors",
+                    "relative rounded-full px-3 py-1 text-[12.5px] font-semibold uppercase transition-[background-color,color,box-shadow,scale] duration-150 active:scale-[0.95]",
                     l === lang
-                      ? "bg-[var(--color-surface)] text-[var(--color-ink)] shadow-[var(--shadow-card)]"
+                      ? `bg-[var(--color-surface)] text-[var(--color-ink)] shadow-[var(--shadow-card)] ${HANDED_OVER}`
                       : "text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]",
                   )}
                 >
@@ -893,7 +896,7 @@ export function SlideEditor({
                 </button>
               );
             })}
-          </div>
+          </Sliding>
         ) : null}
 
         <div className="ml-auto flex flex-wrap items-center gap-1">
@@ -1027,7 +1030,10 @@ export function SlideEditor({
           />
         </div>
 
-        <main className="flex min-w-0 flex-col items-center px-4 py-5 lg:min-h-0 lg:overflow-y-auto lg:px-8">
+        <section
+          aria-label="Aperçu de la slide"
+          className="flex min-w-0 flex-col items-center px-4 py-5 lg:min-h-0 lg:overflow-y-auto lg:px-8"
+        >
           <div
             className="my-auto w-full space-y-3"
             style={{ maxWidth: "min(100%, calc((100dvh - 200px) * 0.8))" }}
@@ -1041,7 +1047,7 @@ export function SlideEditor({
                 <button
                   type="button"
                   onClick={() => setMode("layout")}
-                  className="shrink-0 rounded-full bg-white/15 px-3 py-1 font-semibold hover:bg-white/25"
+                  className="shrink-0 rounded-full bg-[color-mix(in_oklab,var(--color-canvas)_16%,transparent)] px-3 py-1 font-semibold transition-colors hover:bg-[color-mix(in_oklab,var(--color-canvas)_26%,transparent)]"
                 >
                   {t("editor.cropDone")}
                 </button>
@@ -1103,7 +1109,7 @@ export function SlideEditor({
               {t("editor.canvasHint")}
             </p>
           </div>
-        </main>
+        </section>
 
         <aside className="border-t border-[var(--color-line)] bg-[var(--color-surface)] lg:min-h-0 lg:overflow-y-auto lg:border-t-0 lg:border-l">
           <TextSection
@@ -1295,7 +1301,7 @@ export function SlideEditor({
       {toast ? (
         <div
           role="status"
-          className="pointer-events-none fixed bottom-6 left-1/2 z-[80] max-w-[90vw] -translate-x-1/2 rounded-full bg-[var(--color-ink-fill)] px-4 py-2 text-center text-[13px] font-medium text-[var(--color-canvas)] shadow-[var(--shadow-raised)]"
+          className="dialog-in pointer-events-none fixed bottom-[max(1.5rem,env(safe-area-inset-bottom))] left-1/2 z-[80] max-w-[90vw] -translate-x-1/2 rounded-full bg-[var(--color-ink-fill)] px-4 py-2 text-center text-[13px] font-medium text-[var(--color-canvas)] shadow-[var(--shadow-raised)]"
         >
           {toast}
         </div>
@@ -1306,7 +1312,7 @@ export function SlideEditor({
 
 function barClass(pressed: boolean | undefined): string {
   return cn(
-    "inline-flex h-9 items-center gap-1.5 rounded-[10px] px-2.5 text-[13px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-35",
+    "inline-flex h-9 items-center gap-1.5 rounded-[10px] px-2.5 text-[13px] font-medium transition-[background-color,color,scale] duration-150 active:not-disabled:scale-[0.95] disabled:cursor-not-allowed disabled:opacity-35",
     pressed
       ? "bg-[var(--color-accent-soft)] text-[var(--color-accent-ink)]"
       : "text-[var(--color-ink-soft)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-ink)] aria-expanded:bg-[var(--color-surface-muted)] aria-expanded:text-[var(--color-ink)]",
@@ -1353,7 +1359,7 @@ function Layer({
 }) {
   return (
     <div
-      className="fixed inset-0 z-[70] grid place-items-center bg-black/45 p-4"
+      className="fade-in fixed inset-0 z-[70] grid place-items-center bg-[rgb(8_16_7/0.42)] p-4 backdrop-blur-[3px]"
       onPointerDown={(e) => {
         if (e.target === e.currentTarget) onDismiss();
       }}
@@ -1362,7 +1368,7 @@ function Layer({
         role="dialog"
         aria-modal="true"
         aria-label={label}
-        className="w-full max-w-md rounded-[var(--radius-card)] border border-[var(--color-line)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-raised)]"
+        className="dialog-in w-full max-w-md rounded-[var(--radius-card)] border border-[var(--color-edge)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-raised)]"
       >
         {children}
       </div>

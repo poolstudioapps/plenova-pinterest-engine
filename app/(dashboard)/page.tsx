@@ -12,7 +12,17 @@ import {
 } from "@phosphor-icons/react/ssr";
 import type { Icon } from "@phosphor-icons/react";
 import { Plant3D } from "@/components/plants/Plant3D";
-import { Badge, ButtonLink, Card, Notice, SectionHeader, StatusBadge } from "@/components/ui";
+import {
+  Badge,
+  ButtonLink,
+  Card,
+  Notice,
+  SectionHeader,
+  StatusBadge,
+  TILE,
+  TILE_LABEL,
+  TILE_VALUE,
+} from "@/components/ui";
 import { readiness } from "@/lib/config";
 import { plantIdentity } from "@/lib/data/localize";
 import { PLANTS } from "@/lib/data/plants";
@@ -41,36 +51,17 @@ const CAROUSEL_TONE: Record<CarouselRecord["status"], string> = {
   failed: "bg-[var(--color-danger-soft)] text-[var(--color-danger)]",
 };
 
-/*
- * Four counters as one strip ruled by hairlines, not four tinted boxes: the
- * numbers are what matter, and a box around each one was louder than they
- * were. The rules are the strip's own background showing through a 1px gap,
- * so they stay right whether it lays out as a row or two by two.
- */
+/* The counters of a channel: the same tiles as everywhere else in the studio. */
 function Stats({ children, className }: { children: React.ReactNode; className?: string }) {
-  return (
-    <div
-      className={cn(
-        "grid grid-cols-2 gap-px overflow-hidden rounded-[14px] border border-[var(--color-edge)] bg-[var(--color-edge)]",
-        className,
-      )}
-    >
-      {children}
-    </div>
-  );
+  return <div className={cn("grid grid-cols-2 gap-3", className)}>{children}</div>;
 }
 
 function Stat({ label, value, tone }: { label: string; value: number | string; tone?: "warn" }) {
   const alarm = tone === "warn" && Number(value) > 0;
   return (
-    <div className="bg-[var(--color-canvas)] px-3.5 pt-3 pb-3.5">
-      <p className="truncate text-[12px] font-medium text-[var(--color-ink-faint)]">{label}</p>
-      <p
-        className={cn(
-          "figures mt-1.5 text-[26px] leading-none font-semibold tracking-[-0.03em]",
-          alarm && "text-[var(--color-danger)]",
-        )}
-      >
+    <div className={cn(TILE, "pb-3.5")}>
+      <p className={TILE_LABEL}>{label}</p>
+      <p className={cn(TILE_VALUE, "mt-auto pt-3", alarm && "text-[var(--color-danger)]")}>
         {value}
       </p>
     </div>
@@ -89,7 +80,7 @@ function GoLink({ href, children }: { href: string; children: React.ReactNode })
         aria-hidden
         size={14}
         weight="bold"
-        className="transition-transform duration-200 ease-out group-hover:translate-x-0.5"
+        className="transition-transform duration-200 ease-out motion-safe:group-hover:translate-x-0.5"
       />
     </Link>
   );

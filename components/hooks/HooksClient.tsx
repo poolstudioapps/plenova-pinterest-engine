@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useArrival } from "@/components/ui/Indicator";
+import { HANDED_OVER, Sliding } from "@/components/ui/Indicator";
 import { useRouter } from "next/navigation";
 import { HookDetail } from "@/components/hooks/HookDetail";
 import { HookSuggestions } from "@/components/hooks/HookSuggestions";
@@ -51,6 +53,8 @@ export function HooksClient({
   defaultLanguages: ContentLocale[];
   hasPexels: boolean;
 }) {
+  // Cards cascade in when the list first appears, not on every filter or keystroke.
+  const arriving = useArrival();
   const t = translator();
   const router = useRouter();
   const [hooks, setHooks] = useState(initialHooks);
@@ -301,7 +305,7 @@ export function HooksClient({
 
   /** One hook in the tier list: its cover, its words, what it did. */
   const tierCard = (hook: HookView) => (
-    <li key={hook.id} className="card-link flex gap-3 rounded-[14px] border border-[var(--color-edge)] bg-[var(--color-surface)] p-2.5">
+    <li key={hook.id} className="flex gap-3 rounded-[14px] border border-[var(--color-edge)] bg-[var(--color-surface)] p-2.5 transition-[border-color,box-shadow] duration-200 hover:border-[var(--color-line-strong)] hover:shadow-[var(--shadow-card)]">
       <HookThumb
         src={hook.spy?.images[0]?.url}
         className="h-[92px] w-[69px]"
@@ -313,7 +317,7 @@ export function HooksClient({
           type="button"
           onClick={() => setDetail(hook.id)}
           className={cn(
-            "line-clamp-3 text-left text-[13.5px] leading-snug font-semibold hover:underline",
+            "line-clamp-3 text-left text-[13.5px] leading-snug font-semibold select-text hover:underline",
             hook.status === "used" && "text-[var(--color-ink-soft)]",
           )}
         >
@@ -393,7 +397,12 @@ export function HooksClient({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 border-t border-[var(--color-line)] px-4 py-3 md:px-5">
-          <div role="tablist" className="flex gap-0.5 rounded-full bg-[var(--color-surface-muted)] p-1 shadow-[var(--shadow-inset)]">
+          <Sliding
+            role="tablist"
+            watch={view}
+            indicatorClassName="rounded-full bg-[var(--color-pill)] shadow-[var(--shadow-card)]"
+            className="flex gap-0.5 rounded-full bg-[var(--color-surface-muted)] p-1 shadow-[var(--shadow-inset)]"
+          >
             {(["tiers", "list"] as const).map((v) => (
               <button
                 key={v}
@@ -402,17 +411,22 @@ export function HooksClient({
                 aria-selected={view === v}
                 onClick={() => setView(v)}
                 className={cn(
-                  "rounded-full px-3.5 py-1 text-[12.5px] font-semibold transition-colors",
+                  "relative rounded-full px-3.5 py-1 text-[12.5px] font-semibold transition-[color,scale] duration-200 active:scale-[0.96]",
                   view === v
-                    ? "bg-[var(--color-surface)] text-[var(--color-ink)] shadow-[var(--shadow-card)]"
+                    ? `bg-[var(--color-surface)] text-[var(--color-ink)] shadow-[var(--shadow-card)] ${HANDED_OVER}`
                     : "text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]",
                 )}
               >
                 {v === "tiers" ? t("hooks.viewTiers") : t("hooks.viewList")}
               </button>
             ))}
-          </div>
-          <div role="tablist" className="flex gap-0.5 rounded-full bg-[var(--color-surface-muted)] p-1 shadow-[var(--shadow-inset)]">
+          </Sliding>
+          <Sliding
+            role="tablist"
+            watch={status}
+            indicatorClassName="rounded-full bg-[var(--color-pill)] shadow-[var(--shadow-card)]"
+            className="flex gap-0.5 rounded-full bg-[var(--color-surface-muted)] p-1 shadow-[var(--shadow-inset)]"
+          >
             {statusTabs.map((f) => (
               <button
                 key={f.key}
@@ -421,17 +435,17 @@ export function HooksClient({
                 aria-selected={status === f.key}
                 onClick={() => setStatus(f.key)}
                 className={cn(
-                  "rounded-full px-3 py-1 text-[12.5px] font-medium transition-colors",
+                  "relative rounded-full px-3 py-1 text-[12.5px] font-medium transition-[color,scale] duration-200 active:scale-[0.96]",
                   status === f.key
-                    ? "bg-[var(--color-surface)] text-[var(--color-ink)] shadow-[var(--shadow-card)]"
+                    ? `bg-[var(--color-surface)] text-[var(--color-ink)] shadow-[var(--shadow-card)] ${HANDED_OVER}`
                     : "text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]",
                 )}
               >
                 {t(f.label)}
               </button>
             ))}
-          </div>
-          <div className="grow basis-[136px] sm:grow-0 sm:basis-44">
+          </Sliding>
+          <div className="min-w-0 grow basis-[136px] sm:grow-0 sm:basis-44">
             <Picker
               options={[
                 { value: "all", label: t("hooks.sourceAll") },
@@ -442,7 +456,7 @@ export function HooksClient({
               onChange={(v) => setSource(v as Source)}
             />
           </div>
-          <div className="grow basis-[136px] sm:grow-0 sm:basis-44">
+          <div className="min-w-0 grow basis-[136px] sm:grow-0 sm:basis-44">
             <Picker
               options={[
                 { value: "", label: t("hooks.allAccounts") },
@@ -452,7 +466,7 @@ export function HooksClient({
               onChange={setAccount}
             />
           </div>
-          <div className="grow basis-[136px] sm:grow-0 sm:basis-44">
+          <div className="min-w-0 grow basis-[136px] sm:grow-0 sm:basis-44">
             <Picker
               options={[
                 { value: "", label: t("hooks.allFormats") },
@@ -463,7 +477,7 @@ export function HooksClient({
             />
           </div>
           {view === "list" ? (
-            <div className="grow basis-[136px] sm:grow-0 sm:basis-40">
+            <div className="min-w-0 grow basis-[136px] sm:grow-0 sm:basis-40">
               <Picker
                 options={[
                   { value: "views", label: t("hooks.sortViews") },
@@ -503,7 +517,7 @@ export function HooksClient({
               return (
                 <section key="ours" className="grid grid-cols-1 gap-3 md:grid-cols-[120px_minmax(0,1fr)]">
                   <p className="text-[12.5px] font-semibold text-[var(--color-ink-soft)]">{t("hooks.noStats")}</p>
-                  <ul className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">{onPage.map(tierCard)}</ul>
+                  <ul className={cn(arriving && "stagger", "grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3")}>{onPage.map(tierCard)}</ul>
                 </section>
               );
             }
@@ -519,7 +533,7 @@ export function HooksClient({
                     {t("hooks.shown", { n: inTier })}
                   </p>
                 </div>
-                <ul className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">{onPage.map(tierCard)}</ul>
+                <ul className={cn(arriving && "stagger", "grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3")}>{onPage.map(tierCard)}</ul>
               </section>
             );
           })}
@@ -576,7 +590,7 @@ export function HooksClient({
                         type="button"
                         onClick={() => setDetail(hook.id)}
                         className={cn(
-                          "text-left text-[14.5px] font-medium hover:underline",
+                          "text-left text-[14.5px] font-medium select-text hover:underline",
                           hook.status === "used" && "text-[var(--color-ink-soft)]",
                         )}
                       >

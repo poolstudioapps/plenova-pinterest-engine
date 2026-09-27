@@ -385,7 +385,7 @@ const FR = {
   "library.allLanguages": "Toutes les langues",
   "library.allVarieties": "Tous les cultivars",
   "library.search": "Rechercher un titre, un texte ou un mot-clé",
-  "library.count": "{shown} Pins sur {total}",
+  "library.count": "{shown} sur {total}",
   "library.editing": "Édition",
   "library.close": "Fermer",
   "library.edit": "Éditer",

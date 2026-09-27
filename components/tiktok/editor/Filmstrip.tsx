@@ -1,6 +1,7 @@
 "use client";
 
 import { memo } from "react";
+import { Leaf } from "@phosphor-icons/react";
 import { SlidePreview } from "@/components/tiktok/SlidePreview";
 import { SortableGrid } from "@/components/ui";
 import { translator } from "@/lib/i18n";
@@ -147,15 +148,15 @@ const Thumb = memo(function Thumb({
         {mention ? (
           <span
             title={t("editor.thumbMention")}
-            className="grid size-4 place-items-center rounded-full bg-white/90 text-[9px] text-[var(--color-accent)]"
+            className="grid size-4 place-items-center rounded-full bg-white/90 text-[var(--color-accent)]"
           >
-            ◆
+            <Leaf aria-hidden size={10} weight="fill" />
           </span>
         ) : null}
         {missing ? (
           <span
             title={t("editor.thumbMissing")}
-            className="grid size-4 place-items-center rounded-full bg-[var(--color-warn)] text-[10px] font-bold text-white"
+            className="grid size-4 place-items-center rounded-full bg-[var(--color-warn)] text-[10px] font-bold text-[var(--color-on-warn)]"
           >
             !
           </span>
@@ -164,7 +165,7 @@ const Thumb = memo(function Thumb({
       {dirty ? (
         <span
           title={t("editor.thumbDirtyHint")}
-          className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-[var(--color-warn)] px-1.5 py-px text-[9.5px] font-semibold text-white shadow"
+          className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-[var(--color-warn)] px-1.5 py-px text-[9.5px] font-semibold text-[var(--color-on-warn)] shadow"
         >
           {t("editor.thumbDirty")}
         </span>

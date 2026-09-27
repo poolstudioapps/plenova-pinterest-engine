@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useArrival } from "@/components/ui/Indicator";
+import { PencilSimple, Trash } from "@phosphor-icons/react";
 import {
-  Badge,
   Button,
   Card,
   ButtonLink,
@@ -22,7 +23,7 @@ import {
 import { identityForAsset } from "@/lib/media";
 import type { PlantIdentity } from "@/lib/data/localize";
 import type { PinRecord, PinStatus } from "@/lib/types";
-import { relativeTime } from "@/lib/utils";
+import { cn, relativeTime } from "@/lib/utils";
 
 interface Props {
   initialPins: PinRecord[];
@@ -66,6 +67,8 @@ const PIN_STATUS_KEYS: Record<PinStatus, TranslationKey> = {
 };
 
 export function LibraryClient({ initialPins, plants, angles }: Props) {
+  // Cards cascade in when the list first appears, not on every filter or keystroke.
+  const arriving = useArrival();
   const t = translator();
   // Built from a prop, not imported: the plant catalog carries every care
   // field and has no business in a browser bundle.
@@ -139,7 +142,7 @@ export function LibraryClient({ initialPins, plants, angles }: Props) {
 
   return (
     <div className="space-y-6">
-      <Card className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 lg:grid-cols-6">
+      <Card className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3">
         {/* `p.primary` + `p.latin`, not the flat `p.label`: the picker draws a
             second line, so the botanical name no longer has to be folded into
             the first one to fit an <option>. */}
@@ -221,7 +224,8 @@ export function LibraryClient({ initialPins, plants, angles }: Props) {
       ) : null}
 
       <p className="text-[13px] text-[var(--color-ink-soft)]">
-        {t("library.count", { shown: filtered.length, total: pins.length })}
+        {t("library.count", { shown: filtered.length, total: pins.length })}{" "}
+        {pins.length > 1 ? "Pins" : "Pin"}
       </p>
 
       {filtered.length === 0 ? (
@@ -230,20 +234,20 @@ export function LibraryClient({ initialPins, plants, angles }: Props) {
           description={t("library.noMatchBody")}
         />
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className={cn(arriving && "stagger", "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4")}>
           {filtered.map((pin) => (
             <Card key={pin.id} className="overflow-hidden">
               <button
                 type="button"
                 onClick={() => setSelected(pin)}
-                className="block w-full text-left"
+                className="group block w-full overflow-hidden text-left"
               >
                 {pin.imageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={pin.imageUrl}
                     alt={pin.altText}
-                    className="aspect-pin w-full object-cover"
+                    className="aspect-pin w-full object-cover transition-[scale] duration-300 ease-out motion-safe:pointer-fine:group-hover:scale-[1.03]"
                   />
                 ) : (
                   <div className="aspect-pin w-full bg-[var(--color-surface-muted)]" />
@@ -268,26 +272,35 @@ export function LibraryClient({ initialPins, plants, angles }: Props) {
                   </p>
                 </div>
 
-                <div className="flex items-center justify-between pt-1">
-                  <div className="flex gap-1.5">
-                    <Badge className="uppercase">{pin.locale}</Badge>
-                    <Badge>{relativeTime(pin.createdAt)}</Badge>
-                  </div>
-                  <div className="flex gap-1">
-                    <Button
-                      variant="ghost"
-                      className="px-2 py-1 text-[12px]"
+                {/* One quiet line of facts and two icon buttons: two badges and
+                    two worded buttons did not fit a card this narrow and
+                    folded into columns. */}
+                <div className="flex items-center justify-between gap-2 pt-1">
+                  <p className="min-w-0 truncate text-[11.5px] text-[var(--color-ink-faint)]">
+                    <span className="font-semibold text-[var(--color-ink-soft)] uppercase">
+                      {pin.locale}
+                    </span>{" "}
+                    · {relativeTime(pin.createdAt)}
+                  </p>
+                  <div className="-mr-1.5 flex shrink-0 gap-0.5">
+                    <button
+                      type="button"
                       onClick={() => setSelected(pin)}
+                      aria-label={t("library.edit")}
+                      title={t("library.edit")}
+                      className="grid size-8 place-items-center rounded-full text-[var(--color-ink-soft)] transition-[background-color,color,scale] duration-150 hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-ink)] active:scale-[0.92]"
                     >
-                      {t("library.edit")}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      className="px-2 py-1 text-[12px] text-[var(--color-danger)]"
+                      <PencilSimple aria-hidden size={15} />
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => void remove(pin.id)}
+                      aria-label={t("library.delete")}
+                      title={t("library.delete")}
+                      className="grid size-8 place-items-center rounded-full text-[var(--color-ink-faint)] transition-[background-color,color,scale] duration-150 hover:bg-[var(--color-danger-soft)] hover:text-[var(--color-danger)] active:scale-[0.92]"
                     >
-                      {t("library.delete")}
-                    </Button>
+                      <Trash aria-hidden size={15} />
+                    </button>
                   </div>
                 </div>
               </div>

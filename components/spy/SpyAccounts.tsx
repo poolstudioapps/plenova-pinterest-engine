@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useArrival } from "@/components/ui/Indicator";
 import { SpyComputers } from "@/components/spy/SpyComputers";
 import { Badge, Button, Card, Input, Notice, Picker, RowMenu, RowMenuItem, type PickerOption } from "@/components/ui";
 import { translator } from "@/lib/i18n";
@@ -27,6 +28,8 @@ export function SpyAccounts({
   onChange: (update: (accounts: SpyAccount[]) => SpyAccount[]) => void;
   mode: "competitors" | "ours";
 }) {
+  // Cards cascade in when the list first appears, not on every filter or keystroke.
+  const arriving = useArrival();
   const t = translator();
   const ours = mode === "ours";
   const [draft, setDraft] = useState("");
@@ -118,7 +121,7 @@ export function SpyAccounts({
     return (
       <div
         key={account.username}
-        className={cn("flex flex-wrap items-center gap-3 px-4 py-3", !account.enabled && "opacity-60")}
+        className={cn("flex flex-wrap items-center gap-3 px-4 py-3 transition-colors hover:bg-[var(--color-canvas)]/70", !account.enabled && "opacity-60")}
       >
         {account.avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -236,7 +239,7 @@ export function SpyAccounts({
       {listed.length === 0 ? (
         <p className="text-[13px] text-[var(--color-ink-faint)]">{t("spy.accountsEmpty")}</p>
       ) : (
-        <Card className="divide-y divide-[var(--color-line)]">{listed.map(row)}</Card>
+        <Card className={cn(arriving && "stagger", "divide-y divide-[var(--color-line)] overflow-hidden")}>{listed.map(row)}</Card>
       )}
 
       {ours ? null : (

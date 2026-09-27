@@ -1,6 +1,8 @@
 "use client";
 
 import type { LtvInputs, Upcoming } from "@/lib/performance/ltv";
+import { cn } from "@/lib/utils";
+import { TILE, TILE_LABEL, TILE_VALUE } from "@/components/ui";
 
 const eur0 = new Intl.NumberFormat("fr-FR", {
   style: "currency",
@@ -20,6 +22,35 @@ const monthLabel = (ym: string) =>
     year: "numeric",
     timeZone: "UTC",
   });
+
+/**
+ * How the period ends split up, as one bar: renewing (the green of things
+ * going right), cancelled (red), stuck on payment (amber). Each part is also
+ * written out above it, so the colours are a picture of the numbers, never
+ * the only way to read them.
+ */
+function Split({ renew, cancel, billing }: { renew: number; cancel: number; billing: number }) {
+  const total = renew + cancel + billing;
+  if (total <= 0) return null;
+  const parts = [
+    { value: renew, color: "var(--color-accent)" },
+    { value: billing, color: "var(--color-warn)" },
+    { value: cancel, color: "var(--color-danger)" },
+  ].filter((part) => part.value > 0);
+  return (
+    <div aria-hidden className="mt-auto pt-3.5">
+      <div className="flex h-1.5 gap-0.5">
+        {parts.map((part, i) => (
+          <span
+            key={i}
+            className="grow-x-in h-full min-w-1.5 rounded-full"
+            style={{ flexGrow: part.value, background: part.color, ["--i" as string]: i }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /**
  * Subscriptions coming to the end of their period in the next days: how many
@@ -57,15 +88,12 @@ export function UpcomingPanel({
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {upcoming.plans.map((p) => (
-            <div
-              key={p.plan}
-              className="rounded-[16px] border border-[var(--color-edge)] bg-[var(--color-canvas)] px-4 pt-3.5 pb-3"
-            >
-              <p className="text-[12px] font-medium text-[var(--color-ink-faint)]">
+            <div key={p.plan} className={TILE}>
+              <p className={TILE_LABEL}>
                 {p.label} · {n(p.ending)} fin{p.ending >= 1.5 ? "s" : ""} de
                 période
               </p>
-              <p className="figures mt-2 text-[24px] leading-none font-semibold tracking-[-0.03em]">
+              <p className={cn(TILE_VALUE, "mt-3")}>
                 {n(p.renew)}{" "}
                 <span className="text-[12px] font-medium tracking-normal text-[var(--color-ink-soft)]">
                   renouvellement{p.renew >= 1.5 ? "s" : ""}
@@ -81,6 +109,7 @@ export function UpcomingPanel({
                 {approx}
                 {eur0.format(p.net)} net attendus ({eur0.format(p.gross)} brut)
               </p>
+              <Split renew={p.renew} cancel={p.cancel} billing={p.billing} />
             </div>
           ))}
         </div>

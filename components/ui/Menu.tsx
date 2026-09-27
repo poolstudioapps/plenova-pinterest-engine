@@ -144,8 +144,10 @@ export function Menu({
                   left: box.left + box.width,
                   top: box.top,
                   transform: box.above ? "translate(-100%, -100%)" : "translateX(-100%)",
-                  // It grows out of its button's corner, not out of nowhere.
-                  transformOrigin: box.above ? "bottom right" : "top right",
+                  // It grows out of its button's corner. The origin is taken on
+                  // the box BEFORE the translate above moves it, so "top left"
+                  // is the corner that ends up against the button either way.
+                  transformOrigin: "top left",
                 }}
                 className="pop-in z-[100] min-w-[200px] overflow-hidden rounded-[14px] border border-[var(--color-edge)] bg-[var(--color-surface)] p-1 shadow-[var(--shadow-raised)]"
               >

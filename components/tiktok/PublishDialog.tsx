@@ -280,12 +280,12 @@ export function PublishDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
+      className="fade-in fixed inset-0 z-[50] grid place-items-center bg-[rgb(8_16_7/0.42)] p-4 backdrop-blur-[3px]"
       role="dialog"
       aria-modal="true"
       aria-label={t("publish.title")}
     >
-      <Card className="max-h-[90vh] w-full max-w-lg overflow-y-auto p-5">
+      <Card className="dialog-in max-h-[90dvh] w-full max-w-lg overflow-y-auto p-5 shadow-[var(--shadow-raised)]">
         <h2 className="text-[16px] font-semibold">{t("publish.title")}</h2>
 
         <div className="mt-4 space-y-4">

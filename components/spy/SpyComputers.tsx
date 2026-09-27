@@ -145,11 +145,11 @@ export function SpyComputers() {
       {agents === null ? null : sorted.length === 0 ? (
         <p className="text-[13px] text-[var(--color-ink-faint)]">{t("spy.computersEmpty")}</p>
       ) : (
-        <Card className="divide-y divide-[var(--color-line)]">
+        <Card className="divide-y divide-[var(--color-line)] overflow-hidden">
           {sorted.map((agent) => (
             <div
               key={agent.id}
-              className={cn("flex items-center gap-3 px-4 py-2.5", agent.revokedAt && "opacity-55")}
+              className={cn("flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-[var(--color-canvas)]/70", agent.revokedAt && "opacity-55")}
             >
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">

@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { cn } from "@/lib/utils";
+import { TILE, TILE_LABEL, TILE_VALUE } from "@/components/ui";
 import {
   CREDIBILITY,
   FLOOR,
@@ -50,20 +52,18 @@ function LtvTile({
   sub: string;
 }) {
   return (
-    <div className="rounded-[16px] border border-[var(--color-edge)] bg-[var(--color-canvas)] px-4 pt-3.5 pb-3">
-      <p className="text-[12px] font-medium text-[var(--color-ink-faint)]">
-        {label}
-      </p>
-      <p className="figures mt-2 text-[24px] leading-none font-semibold tracking-[-0.03em]">
+    <div className={TILE}>
+      <p className={cn(TILE_LABEL, "min-h-[2lh]")}>{label}</p>
+      <p className={cn(TILE_VALUE, "mt-1.5")}>
         {money(net)}{" "}
         <span className="text-[12px] font-medium tracking-normal text-[var(--color-ink-soft)]">
           net
         </span>
       </p>
-      <p className="figures mt-1.5 text-[12.5px] text-[var(--color-ink-soft)]">
+      <p className="figures mt-2 text-[12.5px] font-medium text-[var(--color-ink-soft)]">
         {money(gross)} brut
       </p>
-      <p className="mt-1 text-[11.5px] leading-snug text-[var(--color-ink-faint)]">
+      <p className="mt-auto pt-2 text-[11.5px] leading-snug text-[var(--color-ink-faint)]">
         {sub}
       </p>
     </div>
@@ -93,14 +93,14 @@ function SurvivalBars({ ltv }: { ltv: LtvProjection }) {
         role="img"
         aria-label="Part des abonnés mensuels qui paient encore, par mois"
       >
-        {rows.map((r) => (
+        {rows.map((r, i) => (
           <div key={r.m} className="flex min-w-0 flex-col items-center">
             <span className="h-[14px] text-[10.5px] leading-[14px] tabular-nums text-[var(--color-ink-faint)]">
               {Math.round(r.value * 100)}
             </span>
             <div className="mt-1 flex h-[78px] w-full items-end">
               <div
-                className="w-full rounded-t-[4px]"
+                className="grow-in w-full rounded-t-[4px]"
                 title={
                   r.m === 0
                     ? "Mois 0 : 100 % (premier paiement)"
@@ -109,6 +109,7 @@ function SurvivalBars({ ltv }: { ltv: LtvProjection }) {
                       : `Mois ${r.m} : ${Math.round(r.value * 100)} % (projeté)`
                 }
                 style={{
+                  ["--i" as string]: i,
                   height: `${Math.max(2, r.value * 100)}%`,
                   background: r.measured
                     ? "var(--color-accent)"
@@ -159,9 +160,12 @@ function SurvivalBars({ ltv }: { ltv: LtvProjection }) {
 export function LtvPanel({
   ltv,
   engagement,
+  lead,
 }: {
   ltv: LtvProjection;
   engagement: SubscriberEngagement | null;
+  /** A tile placed first in the same row (the page's ARPPU), so it does not sit alone above. */
+  lead?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const mix = ltv.plans
@@ -173,7 +177,8 @@ export function LtvPanel({
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+      <div className={cn("grid grid-cols-1 gap-3 sm:grid-cols-2", lead ? "lg:grid-cols-4" : "lg:grid-cols-3")}>
+        {lead}
         {HORIZONS.map((h) => (
           <LtvTile
             key={h}

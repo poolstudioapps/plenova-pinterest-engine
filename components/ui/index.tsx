@@ -60,6 +60,22 @@ export function SectionHeader({
   );
 }
 
+/* ---------------------------------------------------------------- tiles -- */
+
+/**
+ * The one shape of a figure tile, everywhere a number is shown on its own
+ * (Performances, Publication, LTV, due dates, Versus): a white chip lifted
+ * off whatever it sits on by a hairline and a soft green shadow, rather than
+ * a tinted block. Tinted blocks on a white card read as grey slabs; a lifted
+ * chip reads as an object you can look at.
+ */
+export const TILE =
+  "relative flex flex-col overflow-hidden rounded-[18px] bg-[var(--color-tile)] px-4 pt-3.5 pb-4 ring-1 ring-[var(--color-edge)] shadow-[0_1px_2px_rgb(29_47_27/0.05),0_8px_20px_-14px_rgb(29_47_27/0.35)]";
+/** The label on a tile: small, medium weight, quiet. */
+export const TILE_LABEL = "text-[12.5px] leading-snug font-medium text-[var(--color-ink-soft)]";
+/** The figure on a tile: the largest thing in it, figures that do not jitter. */
+export const TILE_VALUE = "figures text-[28px] leading-none font-semibold tracking-[-0.035em]";
+
 /* --------------------------------------------------------------- button -- */
 
 type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "ink";
@@ -94,7 +110,7 @@ const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
  * which a phone would leave stuck), fast, on a curve that starts at once.
  */
 const BUTTON_BASE =
-  "inline-flex items-center justify-center gap-2 rounded-[var(--radius-pill)] font-medium whitespace-nowrap transition-[filter,background-color,border-color,box-shadow,scale] duration-150 ease-out active:not-disabled:scale-[0.97] disabled:cursor-not-allowed";
+  "inline-flex items-center justify-center gap-2 rounded-[var(--radius-pill)] text-center font-medium transition-[filter,background-color,border-color,box-shadow,scale] duration-150 ease-out active:not-disabled:scale-[0.97] disabled:cursor-not-allowed";
 
 /* Generous horizontal padding, because a pill needs it to read as one. */
 const BUTTON_SIZES = {
@@ -388,7 +404,7 @@ export function Notice({
   return (
     <div
       className={cn(
-        "flex gap-3 rounded-[14px] border px-4 py-3 text-[13.5px] leading-relaxed",
+        "panel-in flex gap-3 rounded-[14px] border px-4 py-3 text-[13.5px] leading-relaxed",
         tones[tone],
       )}
     >

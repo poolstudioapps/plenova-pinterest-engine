@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { HANDED_OVER, Sliding } from "@/components/ui/Indicator";
 import { SpyAccounts } from "@/components/spy/SpyAccounts";
-import { Notice } from "@/components/ui";
+import { Notice, TILE, TILE_LABEL, TILE_VALUE } from "@/components/ui";
 import { VersusHero } from "@/components/versus/VersusHero";
 import { compactNumber, percent } from "@/lib/spy-format";
 import type { SpyAccount, SpyPost, Team } from "@/lib/types";
@@ -96,7 +97,13 @@ export function VersusClient({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div role="tablist" aria-label="Période" className="flex gap-1 rounded-full bg-[#0d0e1a] p-1">
+        <Sliding
+          role="tablist"
+          aria-label="Période"
+          watch={period}
+          indicatorClassName="rounded-full bg-white"
+          className="flex gap-1 rounded-full bg-[#0d0e1a] p-1"
+        >
           {PERIODS.map((p) => (
             <button
               key={p.key}
@@ -105,14 +112,16 @@ export function VersusClient({
               aria-selected={period === p.key}
               onClick={() => setPeriod(p.key)}
               className={cn(
-                "rounded-full px-4 py-1.5 text-[13px] font-semibold transition-colors",
-                period === p.key ? "bg-white text-[#0d0e1a]" : "text-white/70 hover:text-white",
+                // The colours change as fast as the white pill slides, so no
+                // label is ever white on white or dark on dark on the way.
+                "relative rounded-full px-4 py-1.5 text-[13px] font-semibold transition-[color,scale] duration-[260ms,150ms] ease-[var(--ease-in-out),var(--ease-out)] active:scale-[0.96]",
+                period === p.key ? `bg-white text-[#0d0e1a] ${HANDED_OVER}` : "text-white/70 hover:text-white",
               )}
             >
               {p.label}
             </button>
           ))}
-        </div>
+        </Sliding>
         <p className="text-[12px] text-[var(--color-ink-faint)]">
           Abonnés et likes totaux : profils TikTok. Vues, enregistrements, commentaires, partages : total des posts
           publiés sur la période, suivis par le spy{trackedSince ? ` depuis le ${trackedSince}` : ""}.
@@ -207,9 +216,9 @@ export function VersusClient({
               ["Engagement", format(all.engagement, "percent"), `${format(all.avgViews, "number")} vues / post`],
             ] as const
           ).map(([label, value, sub]) => (
-            <div key={label} className="rounded-[16px] border border-[var(--color-edge)] bg-[var(--color-surface)] px-4 pt-3.5 pb-3 shadow-[var(--shadow-card)]">
-              <p className="text-[12px] font-medium text-[var(--color-ink-faint)]">{label}</p>
-              <p className="figures mt-2 text-[24px] leading-none font-semibold tracking-[-0.03em]">{value}</p>
+            <div key={label} className={TILE}>
+              <p className={TILE_LABEL}>{label}</p>
+              <p className={`${TILE_VALUE} mt-3`}>{value}</p>
               <p className="figures mt-2 text-[11.5px] text-[var(--color-ink-faint)]">{sub}</p>
             </div>
           ))}

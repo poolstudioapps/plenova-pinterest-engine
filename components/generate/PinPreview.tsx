@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Sparkle } from "@phosphor-icons/react";
 import {
   Badge,
   Button,
@@ -161,7 +162,18 @@ export function PinPreview({ pin, plants, loading, onChange }: Props) {
     return (
       <Card className="grid place-items-center p-10 text-center">
         <div className="max-w-xs">
-          <div className="mx-auto aspect-pin w-40 rounded-[12px] border border-dashed border-[var(--color-line-strong)]" />
+          {/* A pin still to come: its 2:3 shape, the lines of its title
+              sketched in, a spark where the picture will be. */}
+          <div
+            aria-hidden
+            className="relative mx-auto flex aspect-pin w-40 flex-col justify-end overflow-hidden rounded-[14px] bg-linear-to-b from-[var(--color-surface-muted)] to-[var(--color-canvas)] p-3 ring-1 ring-[var(--color-edge)] shadow-[var(--shadow-card)]"
+          >
+            <span className="absolute top-[38%] left-1/2 grid size-11 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-[var(--color-surface)] text-[var(--color-accent)] shadow-[var(--shadow-card)]">
+              <Sparkle size={20} weight="duotone" />
+            </span>
+            <span className="block h-2.5 w-4/5 rounded-full bg-[var(--color-surface)]/80" />
+            <span className="mt-1.5 block h-2 w-3/5 rounded-full bg-[var(--color-surface)]/60" />
+          </div>
           <p className="mt-5 text-[14px] font-medium">{t("preview.empty")}</p>
           <p className="mt-1 text-[13px] leading-relaxed text-[var(--color-ink-soft)]">
             {t("preview.emptyBody")}

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Binoculars,
   Cards,
@@ -20,6 +20,7 @@ import {
   type Icon,
 } from "@phosphor-icons/react";
 import { PlenovaMark } from "@/components/layout/PlenovaMark";
+import { Indicator, useIndicator } from "@/components/ui/Indicator";
 import { translator, type TranslationKey } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -90,7 +91,9 @@ export function Sidebar({
   const pathname = usePathname();
   const t = translator();
   const [leaving, setLeaving] = useState(false);
-  const strip = useRef<HTMLDivElement>(null);
+  // The white highlight of the current page slides to the next one on a click.
+  const nav = useIndicator<HTMLDivElement>(pathname);
+  const strip = nav.ref;
 
   async function signOut() {
     setLeaving(true);
@@ -153,13 +156,19 @@ export function Sidebar({
 
       <div
         ref={strip}
+        data-indicator={nav.ready ? "ready" : undefined}
         className={cn(
-          "flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto py-2 pr-4 pl-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+          "group/nav relative flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto py-2 pr-4 pl-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
           // The strip fades out at its edges: there is more that way.
           "[mask-image:linear-gradient(to_right,transparent,black_14px,black_calc(100%-28px),transparent)]",
           "md:flex-col md:items-stretch md:gap-0 md:overflow-x-visible md:overflow-y-auto md:py-0 md:pr-0 md:pl-0 md:[mask-image:none]",
         )}
       >
+        <Indicator
+          box={nav.box}
+          moving={nav.moving}
+          className="rounded-[10px] bg-[var(--color-surface)] shadow-[var(--shadow-card)]"
+        />
         {items.map((group) =>
           group.items.length === 0 ? null : (
             <div key={group.key} className="flex shrink-0 md:mb-5 md:block">
@@ -176,11 +185,16 @@ export function Sidebar({
                     <li key={item.href} className="shrink-0">
                       <Link
                         href={item.href}
+                        // Every page reads the database; prefetching all twelve
+                        // on every view would be twelve server calls for pages
+                        // mostly never opened. The loading skeleton still
+                        // shows on the click.
+                        prefetch={false}
                         aria-current={active ? "page" : undefined}
                         className={cn(
-                          "group flex shrink-0 items-center gap-2 rounded-[10px] px-2.5 py-1.5 text-[13.5px] whitespace-nowrap transition-[background-color,color,box-shadow,scale] duration-150 active:scale-[0.97] md:gap-2.5 md:py-[7px] md:text-[14px]",
+                          "group relative flex shrink-0 items-center gap-2 rounded-[10px] px-2.5 py-1.5 text-[13.5px] whitespace-nowrap transition-[background-color,color,box-shadow,scale] duration-150 active:scale-[0.97] md:gap-2.5 md:py-[7px] md:text-[14px]",
                           active
-                            ? "bg-[var(--color-surface)] font-semibold text-[var(--color-ink)] shadow-[var(--shadow-card)]"
+                            ? "bg-[var(--color-surface)] font-semibold text-[var(--color-ink)] shadow-[var(--shadow-card)] group-data-[indicator=ready]/nav:bg-transparent group-data-[indicator=ready]/nav:shadow-none"
                             : "font-medium text-[var(--color-ink-soft)] hover:bg-[var(--color-surface)]/55 hover:text-[var(--color-ink)]",
                         )}
                       >

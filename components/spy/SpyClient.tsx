@@ -1,6 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useArrival } from "@/components/ui/Indicator";
+import { HANDED_OVER, Sliding } from "@/components/ui/Indicator";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Button,
@@ -83,6 +85,8 @@ export function SpyClient({
   /** Set by the signed-in address: shown, not chosen. */
   teamFixed: boolean;
 }) {
+  // Cards cascade in when the list first appears, not on every filter or keystroke.
+  const arriving = useArrival();
   const t = translator();
   const router = useRouter();
   const [posts, setPosts] = useState(initialPosts);
@@ -302,7 +306,12 @@ export function SpyClient({
 
       <Card className="overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-x-4 border-b border-[var(--color-line)]">
-        <div role="tablist" className="-mb-px flex flex-wrap">
+        <Sliding
+          role="tablist"
+          watch={[tab, inbox.length, accounts.length, doneBy("stark").length, doneBy("mousk").length].join("|")}
+          indicatorClassName="border-b-2 border-[var(--color-accent)]"
+          className="-mb-px flex flex-wrap"
+        >
           {TABS.map((item) => {
             const count =
               item.key === "inbox"
@@ -318,9 +327,9 @@ export function SpyClient({
                 aria-selected={tab === item.key}
                 onClick={() => setTab(item.key)}
                 className={cn(
-                  "-mb-px flex items-center gap-2 border-b-2 px-5 py-3.5 text-[14px] font-medium transition-colors",
+                  "relative -mb-px flex items-center gap-2 border-b-2 px-5 py-3.5 text-[14px] font-medium transition-colors",
                   tab === item.key
-                    ? "border-[var(--color-accent)] text-[var(--color-ink)]"
+                    ? `border-[var(--color-accent)] text-[var(--color-ink)] ${HANDED_OVER}`
                     : "border-transparent text-[var(--color-ink-faint)] hover:text-[var(--color-ink)]",
                 )}
               >
@@ -331,7 +340,7 @@ export function SpyClient({
               </button>
             );
           })}
-        </div>
+        </Sliding>
           {/* Who the viewer processes for: from the address, or picked here. */}
           <div className="flex items-center gap-2 px-4 py-2 text-[12.5px] text-[var(--color-ink-soft)]">
             {teamFixed && team ? (
@@ -395,7 +404,7 @@ export function SpyClient({
             ) : null}
           </div>
         ) : (
-          <div className="p-4 md:p-5">
+          <div className="panel-in p-4 md:p-5">
             <SpyAccounts accounts={accounts} onChange={setAccounts} mode="competitors" />
           </div>
         )}
@@ -412,8 +421,9 @@ export function SpyClient({
           description={tab === "inbox" ? t("spy.inboxEmptyBody") : t("spy.doneEmptyBody")}
         />
       ) : (
-        <div ref={listTop} className="scroll-mt-4 space-y-4">
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        // Keyed on the tab: another tab's list fades in rather than swapping.
+        <div key={tab} ref={listTop} className="panel-in scroll-mt-4 space-y-4">
+        <div className={cn(arriving && "stagger", "grid grid-cols-1 gap-4 xl:grid-cols-2")}>
           {current.items.map((post) => (
             <SpyPostCard
               key={post.id}

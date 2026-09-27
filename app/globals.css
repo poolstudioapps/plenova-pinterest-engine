@@ -48,6 +48,7 @@
   --color-warn: #b07617;
   --color-warn-ink: #7a5210;
   --color-warn-soft: #fdf4e3;
+  --color-on-warn: #ffffff;
 
   /* Data series (Performances charts): validated pair, one hue per job - money in, money out. */
   --color-series-revenue: #2a78d6;
@@ -65,6 +66,10 @@
    * canvas, the frame, a muted panel - instead of a drawn border.
    */
   --color-edge: rgb(14 26 12 / 0.075);
+  /* The chosen segment of a segmented control: above its track in both themes. */
+  --color-pill: #ffffff;
+  /* A figure tile: white on the white cards here, a step lighter in the dark. */
+  --color-tile: #ffffff;
 
   --radius-card: 20px;
   --radius-control: 12px;
@@ -132,6 +137,14 @@
     -webkit-text-size-adjust: 100%;
   }
 
+  /* On a phone the navigation stays stuck to the top: whatever is scrolled
+     into view (a list after a page change) stops below it, not under it. */
+  @media (max-width: 767px) {
+    html {
+      scroll-padding-top: 4rem;
+    }
+  }
+
   body {
     background-color: var(--color-canvas);
     color: var(--color-ink);
@@ -195,6 +208,9 @@
       --color-ink-fill: #eef5ec;
       --color-frame: #070e06;
       --color-edge: rgb(238 245 236 / 0.07);
+      /* Lighter than the muted track, as white is in the light theme. */
+      --color-pill: #2a3c27;
+      --color-tile: #182717;
 
       /*
        * A light-ink shadow is invisible on a dark ground, so the separation
@@ -216,6 +232,7 @@
       --color-danger: #e08a7a;
       --color-danger-soft: #2e1a17;
       --color-on-danger: #1a0906;
+      --color-on-warn: #1f1405;
       --color-warn: #dfae62;
       --color-warn-ink: #f0d9ab;
       --color-warn-soft: #2b2113;
@@ -303,15 +320,149 @@
     }
   }
 
-  /* A page settles into place when you arrive on it. Short: it is seen all day. */
+  /*
+   * A page settles into place when you arrive on it, block after block, top
+   * to bottom. On the CHILDREN of the wrapper, not the wrapper: an animation
+   * plays when an element is inserted, so the loading skeleton cascades in
+   * on the click and the page's own blocks cascade in again when they replace
+   * it. Short and close together: it is seen all day.
+   */
   @keyframes rise {
     from {
       opacity: 0;
-      translate: 0 6px;
+      translate: 0 8px;
     }
   }
-  .rise-in {
-    animation: rise 260ms var(--ease-out) backwards;
+  .rise-in > * {
+    animation: rise 240ms var(--ease-out) backwards;
+  }
+  .rise-in > :nth-child(2) { animation-delay: 25ms; }
+  .rise-in > :nth-child(3) { animation-delay: 50ms; }
+  .rise-in > :nth-child(4) { animation-delay: 75ms; }
+  .rise-in > :nth-child(n + 5) { animation-delay: 100ms; }
+
+  /* The same cascade for the cards of a grid or a list, on arrival. */
+  .stagger > * {
+    animation: rise 300ms var(--ease-out) backwards;
+  }
+  .stagger > :nth-child(2) { animation-delay: 40ms; }
+  .stagger > :nth-child(3) { animation-delay: 80ms; }
+  .stagger > :nth-child(4) { animation-delay: 120ms; }
+  .stagger > :nth-child(5) { animation-delay: 160ms; }
+  .stagger > :nth-child(6) { animation-delay: 200ms; }
+  .stagger > :nth-child(n + 7) { animation-delay: 240ms; }
+  /* Past the first screenful nothing is watching: a long list stays still. */
+  .stagger > :nth-child(n + 13) { animation: none; }
+
+  /* The content of a tab, arriving when its tab is chosen (or unhidden). */
+  @keyframes panel {
+    from {
+      opacity: 0;
+      translate: 0 4px;
+    }
+  }
+  .panel-in {
+    animation: panel 220ms var(--ease-out) backwards;
+  }
+
+  /*
+   * A figure that changed - another period, a fresh reading - crossfades
+   * through a slight blur, so it reads as the same number updating rather
+   * than a new one blinking in. Keyed on the value by the caller.
+   */
+  @keyframes value {
+    from {
+      opacity: 0.25;
+      filter: blur(3px);
+      translate: 0 3px;
+    }
+  }
+  .value-in {
+    animation: value 260ms var(--ease-out) backwards;
+  }
+
+  /* A chart drawing itself from the left the first time it is shown. */
+  @keyframes draw {
+    from {
+      clip-path: inset(0 100% 0 0);
+    }
+  }
+  .draw-in {
+    animation: draw 500ms var(--ease-out) backwards;
+  }
+
+  /* Bars rising from their baseline, one after the other (--i). */
+  @keyframes grow {
+    from {
+      opacity: 0.2;
+      scale: 1 0.15;
+    }
+  }
+  .grow-in {
+    transform-origin: bottom;
+    animation: grow 360ms var(--ease-out) backwards;
+    animation-delay: calc(var(--i, 0) * 25ms);
+  }
+
+  /* The same, sideways: the parts of a split bar filling in from the left. */
+  @keyframes grow-x {
+    from {
+      opacity: 0.2;
+      scale: 0.15 1;
+    }
+  }
+  .grow-x-in {
+    transform-origin: left;
+    animation: grow-x 360ms var(--ease-out) backwards;
+    animation-delay: calc(var(--i, 0) * 60ms);
+  }
+
+  /* A tick that appears when something gets chosen. */
+  .tick-in {
+    transition:
+      opacity 160ms var(--ease-out),
+      scale 160ms var(--ease-out);
+    @starting-style {
+      opacity: 0;
+      scale: 0.7;
+    }
+  }
+
+  /*
+   * The highlight that slides between tabs, segments and pages (Indicator):
+   * placed without motion first, then every change travels on the on-screen
+   * curve - it moves across, it does not enter.
+   */
+  .indicator[data-moving] {
+    transition:
+      transform 260ms var(--ease-in-out),
+      width 260ms var(--ease-in-out),
+      height 260ms var(--ease-in-out);
+  }
+
+  /* A placeholder with the shape of what is loading, a light passing over it. */
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    background-color: var(--color-surface-muted);
+  }
+  .skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    translate: -100% 0;
+    background-image: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in oklab, var(--color-surface) 55%, transparent),
+      transparent
+    );
+    animation: sweep 1.4s var(--ease-in-out) infinite;
+  }
+  @keyframes sweep {
+    to {
+      translate: 100% 0;
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -324,7 +475,22 @@
     .card-link:active {
       transform: none;
     }
-    .rise-in {
+    .rise-in > *,
+    .stagger > *,
+    .panel-in,
+    .value-in,
+    .draw-in,
+    .grow-in,
+    .grow-x-in {
+      animation: none;
+    }
+    .indicator[data-moving] {
+      transition: none;
+    }
+    .tick-in {
+      transition-property: opacity;
+    }
+    .skeleton::after {
       animation: none;
     }
   }

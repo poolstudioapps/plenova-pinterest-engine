@@ -23,13 +23,16 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-/* The phone's status bar takes the colour at the top of the page, per theme. */
+/*
+ * The phone's status bar takes the colour at the top of the page, per theme.
+ * No viewport-fit=cover: the pages pad themselves for the notch only at the
+ * top, and in landscape the sides would slide under the sensor housing.
+ */
 export const viewport: Viewport = {
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#e4eee0" },
     { media: "(prefers-color-scheme: dark)", color: "#070e06" },
   ],
-  viewportFit: "cover",
 };
 
 /**

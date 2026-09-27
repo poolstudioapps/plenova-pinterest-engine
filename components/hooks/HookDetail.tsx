@@ -81,7 +81,7 @@ export function HookDetail({
               <p className="text-[18px] leading-snug font-semibold">{hook.text}</p>
               {spy?.original ? (
                 <p className="mt-1.5 text-[13px] text-[var(--color-ink-soft)]">
-                  <span className="mr-1.5 text-[11px] font-semibold tracking-wide text-[var(--color-ink-faint)] uppercase">
+                  <span className="mr-1.5 rounded-[6px] bg-[var(--color-surface-muted)] px-1.5 py-0.5 text-[11px] font-semibold text-[var(--color-ink-soft)]">
                     {t("hooks.original")}
                     {spy.lang ? ` · ${spy.lang}` : ""}
                   </span>
@@ -100,14 +100,14 @@ export function HookDetail({
             <>
               <div>
                 <p className="mb-2 text-[12.5px] font-semibold text-[var(--color-ink-soft)]">{t("hooks.slides")}</p>
-                <div className="flex gap-2 overflow-x-auto pb-1">
+                <div className="flex snap-x snap-mandatory gap-2 overflow-x-auto overscroll-x-contain pb-2 [mask-image:linear-gradient(to_right,black_calc(100%-32px),transparent)] [scrollbar-color:var(--color-line-strong)_transparent] [scrollbar-width:thin]">
                   {spy.images.map((image, i) => (
                     <button
                       key={image.url}
                       type="button"
                       onClick={() => setViewing(i)}
                       aria-label={t("spy.slideAlt", { n: i + 1 })}
-                      className="shrink-0 overflow-hidden rounded-[10px] border border-[var(--color-line)] transition-transform hover:scale-[1.02]"
+                      className="shrink-0 snap-start overflow-hidden rounded-[12px] bg-[var(--color-surface-muted)] ring-1 ring-[var(--color-edge)] transition-[scale,box-shadow] duration-200 ease-out hover:shadow-[var(--shadow-raised)] active:scale-[0.97] motion-safe:pointer-fine:hover:scale-[1.03]"
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
@@ -124,11 +124,12 @@ export function HookDetail({
 
               <div>
                 <p className="mb-2 text-[12.5px] font-semibold text-[var(--color-ink-soft)]">{t("hooks.stats")}</p>
-                <dl className="grid grid-cols-3 gap-x-3 gap-y-2 sm:grid-cols-6">
+                {/* One strip ruled by hairlines, like the counters on the dashboard. */}
+                <dl className="grid grid-cols-3 gap-px overflow-hidden rounded-[14px] border border-[var(--color-edge)] bg-[var(--color-edge)] sm:grid-cols-6">
                   {stats.map((s) => (
-                    <div key={s.label}>
-                      <dt className="truncate text-[11px] text-[var(--color-ink-faint)]">{s.label}</dt>
-                      <dd className="text-[15px] font-semibold tabular-nums">{s.value}</dd>
+                    <div key={s.label} className="bg-[var(--color-canvas)] px-3 py-2.5">
+                      <dt className="truncate text-[11px] font-medium text-[var(--color-ink-faint)]">{s.label}</dt>
+                      <dd className="figures mt-1 text-[16px] leading-none font-semibold tracking-[-0.02em]">{s.value}</dd>
                     </div>
                   ))}
                 </dl>

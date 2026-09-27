@@ -45,12 +45,24 @@ export function ImageModeChoice({
             disabled={o.disabled}
             onClick={() => onChange(o.mode)}
             className={cn(
-              "rounded-[12px] border px-3.5 py-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-55",
+              "relative rounded-[14px] border py-3 pr-9 pl-3.5 text-left transition-[border-color,background-color,box-shadow,scale] duration-150 active:not-disabled:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-55",
               value === o.mode
-                ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)]"
-                : "border-[var(--color-line-strong)] hover:border-[var(--color-accent)]",
+                ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-accent)_14%,transparent)]"
+                : "border-[var(--color-line-strong)] hover:border-[var(--color-ink-faint)]",
             )}
           >
+            {/* A radio you can see, not only a tint: which one is chosen reads at once. */}
+            <span
+              aria-hidden
+              className={cn(
+                "absolute top-3 right-3 grid size-[18px] place-items-center rounded-full border-2 transition-colors",
+                value === o.mode ? "border-[var(--color-accent)]" : "border-[var(--color-line-strong)]",
+              )}
+            >
+              {value === o.mode ? (
+                <span className="tick-in size-2 rounded-full bg-[var(--color-accent)]" />
+              ) : null}
+            </span>
             <span className="block text-[13.5px] font-semibold">{o.label}</span>
             <span className="mt-0.5 block text-[12px] leading-snug text-[var(--color-ink-soft)]">
               {o.hint}

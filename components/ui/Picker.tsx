@@ -198,7 +198,7 @@ function Row({
             : "border-[var(--color-line-strong)]",
         )}
       >
-        {selected ? <Check size={10} weight="bold" /> : null}
+        {selected ? <Check size={10} weight="bold" className="tick-in" /> : null}
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[13.5px] font-medium">
@@ -250,8 +250,9 @@ function Panel({
         width: box.width,
         maxHeight: MAX_PANEL,
         ...(box.above ? { transform: "translateY(-100%)" } : {}),
-        // It unfolds from the field it belongs to.
-        transformOrigin: box.above ? "bottom center" : "top center",
+        // It unfolds from the field it belongs to. Measured on the box before
+        // the upward translate, so "top" is the edge against the field either way.
+        transformOrigin: "top center",
       }}
       className="pop-in z-[100] overflow-y-auto overscroll-contain rounded-[14px] border border-[var(--color-edge)] bg-[var(--color-surface)] p-1 shadow-[var(--shadow-raised)]"
     >

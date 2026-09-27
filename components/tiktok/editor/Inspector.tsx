@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { HANDED_OVER, Sliding } from "@/components/ui/Indicator";
 import { Button, Notice, Picker } from "@/components/ui";
 import {
   CONTENT_LOCALE_LABELS,
@@ -100,10 +101,12 @@ function Segmented<T extends string>({
   onChange: (value: T) => void;
 }) {
   return (
-    <div
+    <Sliding
       role="radiogroup"
       aria-label={label}
-      className="flex gap-1 rounded-[11px] bg-[var(--color-surface-muted)] p-1"
+      watch={value}
+      indicatorClassName="rounded-[8px] bg-[var(--color-pill)] shadow-[var(--shadow-card)]"
+      className="flex gap-1 rounded-[11px] bg-[var(--color-surface-muted)] p-1 shadow-[var(--shadow-inset)]"
     >
       {options.map((o) => (
         <button
@@ -115,16 +118,16 @@ function Segmented<T extends string>({
           aria-label={o.title}
           onClick={() => onChange(o.value)}
           className={cn(
-            "flex min-w-0 flex-1 items-center justify-center gap-1.5 truncate rounded-[8px] px-2 py-1.5 text-[12.5px] font-medium transition-colors",
+            "relative flex min-w-0 flex-1 items-center justify-center gap-1.5 truncate rounded-[8px] px-2 py-1.5 text-[12.5px] font-medium transition-[color,scale] duration-200 active:scale-[0.96]",
             value === o.value
-              ? "bg-[var(--color-surface)] text-[var(--color-ink)] shadow-[var(--shadow-card)]"
+              ? `bg-[var(--color-surface)] text-[var(--color-ink)] shadow-[var(--shadow-card)] ${HANDED_OVER}`
               : "text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]",
           )}
         >
           {o.content}
         </button>
       ))}
-    </div>
+    </Sliding>
   );
 }
 
@@ -153,7 +156,7 @@ export function ToolButton({
       aria-pressed={pressed}
       title={title}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-[10px] border px-2.5 py-1.5 text-[12.5px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+        "inline-flex items-center gap-1.5 rounded-[10px] border px-2.5 py-1.5 text-[12.5px] font-medium transition-[background-color,border-color,color,scale] duration-150 active:not-disabled:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50",
         wide && "w-full justify-start",
         pressed
           ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent-ink)]"
@@ -343,7 +346,9 @@ export function TextSection({
               onFocus={() => onSelect(key)}
               onChange={(e) => onText(key, e.target.value)}
               className={cn(
-                "block w-full resize-y rounded-[10px] border bg-[var(--color-surface)] px-3 py-2 text-[13.5px] leading-snug outline-none transition-[border-color,box-shadow] focus:border-[var(--color-accent)] focus:shadow-[0_0_0_3px_var(--color-accent-soft)]",
+                // Grows with its text (where the browser can), so a long
+                // subtitle is read whole instead of behind a scrollbar.
+                "block max-h-48 w-full resize-y rounded-[10px] border bg-[var(--color-surface)] px-3 py-2 text-[13.5px] leading-snug outline-none transition-[border-color,box-shadow] [field-sizing:content] focus:border-[var(--color-accent)] focus:shadow-[0_0_0_3px_var(--color-accent-soft)] pointer-coarse:text-[16px]",
                 selected === key
                   ? "border-[var(--color-accent)]"
                   : "border-[var(--color-line-strong)]",

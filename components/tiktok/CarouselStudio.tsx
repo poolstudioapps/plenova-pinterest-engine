@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { HANDED_OVER, Sliding } from "@/components/ui/Indicator";
 import { CheckCircle, CircleNotch, Leaf, PencilSimple, XCircle } from "@phosphor-icons/react";
 import {
   Badge,
@@ -577,7 +578,12 @@ export function CarouselStudio({
         one is ever being used.
       */}
       <Card className="overflow-hidden">
-        <div role="tablist" className="flex border-b border-[var(--color-line)]">
+        <Sliding
+          role="tablist"
+          watch={mode}
+          indicatorClassName="border-b-2 border-[var(--color-accent)]"
+          className="flex border-b border-[var(--color-line)]"
+        >
           {TABS.map((tab) => (
             <button
               key={tab.key}
@@ -589,16 +595,16 @@ export function CarouselStudio({
               tabIndex={mode === tab.key ? 0 : -1}
               onClick={() => setMode(tab.key)}
               className={cn(
-                "-mb-px border-b-2 px-5 py-3.5 text-[14px] font-medium transition-colors",
+                "relative -mb-px border-b-2 px-5 py-3.5 text-[14px] font-medium transition-colors",
                 mode === tab.key
-                  ? "border-[var(--color-accent)] text-[var(--color-ink)]"
+                  ? `border-[var(--color-accent)] text-[var(--color-ink)] ${HANDED_OVER}`
                   : "border-transparent text-[var(--color-ink-faint)] hover:text-[var(--color-ink)]",
               )}
             >
               {t(tab.labelKey)}
             </button>
           ))}
-        </div>
+        </Sliding>
 
         {/*
           Above the panels, not inside one.
@@ -632,7 +638,7 @@ export function CarouselStudio({
           id="panel-new"
           aria-labelledby="tab-new"
           hidden={mode !== "new"}
-          className="p-5 md:p-6"
+          className="panel-in p-5 md:p-6"
         >
           <div className="grid max-w-[760px] grid-cols-[minmax(0,1fr)] gap-5">
             {/*
@@ -763,7 +769,7 @@ export function CarouselStudio({
           id="panel-repost"
           aria-labelledby="tab-repost"
           hidden={mode !== "repost"}
-          className="p-5 md:p-6"
+          className="panel-in p-5 md:p-6"
         >
           <RepostPanel
             languages={languages}

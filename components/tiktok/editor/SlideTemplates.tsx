@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { HANDED_OVER, Sliding } from "@/components/ui/Indicator";
 import { Button, Notice, Picker, Spinner } from "@/components/ui";
 import { SlidePreview } from "@/components/tiktok/SlidePreview";
 import {
@@ -364,7 +365,7 @@ export function TemplateDialog({
 
   return (
     <div
-      className="fixed inset-0 z-[70] grid place-items-center bg-black/50 p-4"
+      className="fade-in fixed inset-0 z-[70] grid place-items-center bg-[rgb(8_16_7/0.42)] p-4 backdrop-blur-[3px]"
       onPointerDown={(e) => {
         if (e.target === e.currentTarget && !saving) onClose();
       }}
@@ -373,7 +374,7 @@ export function TemplateDialog({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-line)] bg-[var(--color-surface)] shadow-[var(--shadow-raised)]"
+        className="dialog-in flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-edge)] bg-[var(--color-surface)] shadow-[var(--shadow-raised)]"
       >
         <header className="flex items-center justify-between gap-3 border-b border-[var(--color-line)] px-5 py-3.5">
           <h3 className="text-[15px] font-semibold">{title}</h3>
@@ -432,9 +433,11 @@ export function TemplateDialog({
               <span className="mb-1.5 block text-[12px] font-medium text-[var(--color-ink-soft)]">
                 {t("templates.wordsPerLanguage")}
               </span>
-              <div
+              <Sliding
                 role="tablist"
                 aria-label={t("templates.languages")}
+                watch={`${lang}|${written.join()}`}
+                indicatorClassName="rounded-full bg-[var(--color-pill)] shadow-[var(--shadow-card)]"
                 className="flex flex-wrap gap-1 rounded-full bg-[var(--color-surface-muted)] p-1 shadow-[var(--shadow-inset)]"
               >
                 {CONTENT_LOCALES.map((l) => (
@@ -445,9 +448,9 @@ export function TemplateDialog({
                     aria-selected={l === lang}
                     onClick={() => setLang(l)}
                     className={cn(
-                      "flex items-center gap-1 rounded-full px-3 py-1 text-[12.5px] font-semibold transition-colors",
+                      "relative flex items-center gap-1 rounded-full px-3 py-1 text-[12.5px] font-semibold transition-[color,scale] duration-200 active:scale-[0.96]",
                       l === lang
-                        ? "bg-[var(--color-surface)] text-[var(--color-ink)] shadow-[var(--shadow-card)]"
+                        ? `bg-[var(--color-surface)] text-[var(--color-ink)] shadow-[var(--shadow-card)] ${HANDED_OVER}`
                         : "text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]",
                     )}
                   >
@@ -459,7 +462,7 @@ export function TemplateDialog({
                     ) : null}
                   </button>
                 ))}
-              </div>
+              </Sliding>
             </div>
 
             {FIELDS.map((field) => (

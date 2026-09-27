@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { useArrival } from "@/components/ui/Indicator";
 import { Trash } from "@phosphor-icons/react";
 import {
   TemplateDialog,
@@ -28,7 +29,7 @@ import {
 import type { PlantIdentity } from "@/lib/data/localize";
 import { translator, type TranslationKey } from "@/lib/i18n";
 import type { MediaAsset, MediaRole, SlideTemplate } from "@/lib/types";
-import { relativeTime } from "@/lib/utils";
+import { cn, relativeTime } from "@/lib/utils";
 
 interface Props {
   initialAssets: MediaAsset[];
@@ -54,6 +55,8 @@ const SHELVES: { role: MediaRole; title: TranslationKey; hint: TranslationKey }[
  *    look for a reusable image: "what do I already have for a Monstera?".
  */
 export function MediaClient({ initialAssets, plants, styles }: Props) {
+  // Cards cascade in when the list first appears, not on every filter or keystroke.
+  const arriving = useArrival();
   const t = translator();
   const styleLabels = useMemo(
     () => new Map(styles.map((s) => [s.slug, s.label])),
@@ -235,7 +238,7 @@ export function MediaClient({ initialAssets, plants, styles }: Props) {
                 </span>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-5 xl:grid-cols-6">
+              <div className={cn(arriving && "stagger", "grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-5 xl:grid-cols-6")}>
                 {group.assets.map((asset) => (
                   <Card key={asset.id} className="overflow-hidden">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -328,6 +331,8 @@ function Shelf({
   onAdded: (assets: MediaAsset[]) => void;
   onRemove: (id: string) => void;
 }) {
+  // Cards cascade in when the list first appears, not on every filter or keystroke.
+  const arriving = useArrival();
   const t = translator();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<{ done: number; total: number } | null>(null);
@@ -422,7 +427,7 @@ function Shelf({
           {t("media.shelfEmptyDrop")}
         </button>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4 lg:grid-cols-6">
+        <div className={cn(arriving && "stagger", "grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4 lg:grid-cols-6")}>
           {assets.map((asset) => (
             <Card key={asset.id} className="overflow-hidden">
               {/* eslint-disable-next-line @next/next/no-img-element */}

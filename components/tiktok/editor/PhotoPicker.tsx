@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { HANDED_OVER, Sliding } from "@/components/ui/Indicator";
 import { Button, FileDropZone, Notice, PlantName, Spinner } from "@/components/ui";
 import { shrinkImage } from "@/lib/client-image";
 import type { PlantIdentity } from "@/lib/data/localize";
@@ -188,7 +189,7 @@ export function PhotoPicker({
 
   return (
     <div
-      className="fixed inset-0 z-[60] grid place-items-center bg-black/55 p-4"
+      className="fade-in fixed inset-0 z-[60] grid place-items-center bg-[rgb(8_16_7/0.42)] p-4 backdrop-blur-[3px]"
       onPointerDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -197,13 +198,15 @@ export function PhotoPicker({
         role="dialog"
         aria-modal="true"
         aria-label={heading}
-        className="flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-line)] bg-[var(--color-surface)] shadow-[var(--shadow-raised)]"
+        className="dialog-in flex max-h-[88dvh] w-full max-w-4xl flex-col overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-edge)] bg-[var(--color-surface)] shadow-[var(--shadow-raised)]"
       >
         <header className="flex flex-wrap items-center gap-3 border-b border-[var(--color-line)] px-5 py-3.5">
           <h3 className="text-[15px] font-semibold">{heading}</h3>
-          <div
+          <Sliding
             role="tablist"
             aria-label={heading}
+            watch={`${tab}|${onTemplates}|${templates?.count ?? 0}|${plantLabel}|${tabs.map((tb) => shelves[tb.id].length).join()}`}
+            indicatorClassName="rounded-full bg-[var(--color-pill)] shadow-[var(--shadow-card)]"
             className="flex flex-wrap gap-1 rounded-full bg-[var(--color-surface-muted)] p-1 shadow-[var(--shadow-inset)]"
           >
             {templates ? (
@@ -213,9 +216,9 @@ export function PhotoPicker({
                 aria-selected={onTemplates}
                 onClick={() => setTab("templates")}
                 className={cn(
-                  "rounded-full px-3 py-1 text-[12.5px] font-medium transition-colors",
+                  "relative rounded-full px-3 py-1 text-[12.5px] font-medium transition-[color,scale] duration-200 active:scale-[0.96]",
                   onTemplates
-                    ? "bg-[var(--color-surface)] text-[var(--color-ink)] shadow-[var(--shadow-card)]"
+                    ? `bg-[var(--color-surface)] text-[var(--color-ink)] shadow-[var(--shadow-card)] ${HANDED_OVER}`
                     : "text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]",
                 )}
               >
@@ -233,9 +236,9 @@ export function PhotoPicker({
                 aria-selected={tab === tb.id}
                 onClick={() => setTab(tb.id)}
                 className={cn(
-                  "rounded-full px-3 py-1 text-[12.5px] font-medium transition-colors",
+                  "relative rounded-full px-3 py-1 text-[12.5px] font-medium transition-[color,scale] duration-200 active:scale-[0.96]",
                   tab === tb.id
-                    ? "bg-[var(--color-surface)] text-[var(--color-ink)] shadow-[var(--shadow-card)]"
+                    ? `bg-[var(--color-surface)] text-[var(--color-ink)] shadow-[var(--shadow-card)] ${HANDED_OVER}`
                     : "text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]",
                 )}
               >
@@ -245,7 +248,7 @@ export function PhotoPicker({
                 </span>
               </button>
             ))}
-          </div>
+          </Sliding>
 
           <div className="ml-auto flex items-center gap-2">
             <label className="relative flex items-center">
@@ -335,20 +338,20 @@ export function PhotoPicker({
                       onClick={() => onPick(asset)}
                       aria-pressed={current}
                       className={cn(
-                        "overflow-hidden rounded-[12px] border bg-[var(--color-surface)] text-left transition-[border-color,box-shadow]",
+                        "group overflow-hidden rounded-[12px] border bg-[var(--color-surface)] text-left transition-[border-color,box-shadow,scale] duration-200 ease-out active:scale-[0.97]",
                         current
                           ? "border-[var(--color-accent)] shadow-[0_0_0_2px_var(--color-accent)]"
-                          : "border-[var(--color-line)] hover:border-[var(--color-accent)]",
+                          : "border-[var(--color-edge)] hover:border-[var(--color-accent)] hover:shadow-[var(--shadow-raised)]",
                       )}
                     >
-                      <span className="relative block">
+                      <span className="relative block overflow-hidden">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={asset.url}
                           alt={identity.label}
                           loading="lazy"
                           draggable={false}
-                          className="aspect-[4/5] w-full object-cover"
+                          className="aspect-[4/5] w-full object-cover transition-[scale] duration-300 ease-out motion-safe:pointer-fine:group-hover:scale-[1.04]"
                         />
                         {current ? (
                           <span className="absolute top-1.5 right-1.5 rounded-full bg-[var(--color-accent)] px-2 py-0.5 text-[10.5px] font-semibold text-[var(--color-on-accent)]">

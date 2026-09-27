@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState, type ReactNode } from "react";
+import { HANDED_OVER, Sliding } from "@/components/ui/Indicator";
+import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 import {
   ArrowDownRight,
   ArrowsClockwise,
@@ -18,13 +19,14 @@ import {
   UsersThree,
   type Icon,
 } from "@phosphor-icons/react";
-import { Button, Card, Notice } from "@/components/ui";
+import { Button, Card, Notice, TILE, TILE_LABEL, TILE_VALUE } from "@/components/ui";
 import {
   chartPoints,
   cohortRows,
   kpis,
   presetRange,
   previousRange,
+  trend,
   type Kpis,
   type PerfPayload,
   type Preset,
@@ -39,6 +41,7 @@ import {
 import { MIN_APP_VERSION } from "@/lib/performance/versions";
 import { cn } from "@/lib/utils";
 import { LineChart } from "./LineChart";
+import { Sparkline } from "./Sparkline";
 import { LtvPanel } from "./LtvPanel";
 import { UpcomingPanel } from "./UpcomingPanel";
 import { SpendPanel } from "./SpendPanel";
@@ -135,6 +138,13 @@ function Delta({
   );
 }
 
+/*
+ * Whether figures crossfade when they change: yes for a period picked from
+ * the presets, no while dates are being typed - a blur on every keystroke is
+ * noise, not information.
+ */
+const Crossfade = createContext(true);
+
 function Tile({
   label,
   value,
@@ -143,6 +153,7 @@ function Tile({
   now,
   before,
   better = "up",
+  spark,
 }: {
   label: string;
   value: string;
@@ -151,24 +162,34 @@ function Tile({
   now?: number | null;
   before?: number | null;
   better?: Better;
+  /** The figure day by day over the period, drawn along the foot of the tile. */
+  spark?: (number | null)[];
 }) {
+  const crossfade = useContext(Crossfade);
   return (
-    <div
-      className="flex flex-col rounded-[16px] border border-[var(--color-edge)] bg-[var(--color-canvas)] px-4 pt-3.5 pb-3"
-      title={hint}
-    >
-      <p className="text-[12px] leading-snug font-medium text-[var(--color-ink-faint)]">
-        {label}
-      </p>
-      <p className="figures mt-2 text-[24px] leading-none font-semibold tracking-[-0.03em]">
-        {value}
-      </p>
-      <div className="mt-2.5 flex min-h-[18px] flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] leading-snug text-[var(--color-ink-faint)]">
+    <div className={TILE} title={hint}>
+      {/* Two lines kept for every label, so the figures of a row line up. */}
+      <p className={cn(TILE_LABEL, "min-h-[2lh]")}>{label}</p>
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+        {/* Keyed on the value: another period re-inserts it, and it crossfades in. */}
+        <p key={value} className={cn(TILE_VALUE, crossfade && "value-in")}>
+          {value}
+        </p>
         {now !== undefined && before !== undefined ? (
           <Delta now={now} before={before} better={better} />
         ) : null}
-        {sub ? <span className="figures">{sub}</span> : null}
       </div>
+      {sub ? (
+        <p className="figures mt-2 text-[11.5px] leading-snug text-[var(--color-ink-faint)]">
+          {sub}
+        </p>
+      ) : null}
+      {spark ? (
+        // Full-bleed along the foot of the tile, fading into it.
+        <div className="-mx-4 mt-auto -mb-4 pt-3">
+          <Sparkline values={spark} label={`${label}, jour après jour`} />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -211,6 +232,19 @@ function Section({
 }
 
 const GRID = "grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4";
+
+/*
+ * The native date field, stripped to its text inside the range pill. Its own
+ * calendar icon is hidden (the pill has one), so a click on the field opens
+ * the calendar - otherwise a mouse could only type the date.
+ */
+const openCalendar = (e: React.MouseEvent<HTMLInputElement>) => {
+  try {
+    e.currentTarget.showPicker?.();
+  } catch {
+    // Refused (not a user gesture, or not supported): typing still works.
+  }
+};
 
 /* The native date field, stripped to its text inside the range pill. */
 const DATE =
@@ -267,6 +301,21 @@ export function PerformanceClient({
     [payload, previous],
   );
   const chart = useMemo(() => chartPoints(payload, range), [payload, range]);
+  // The small trend lines of the tiles. Not for revenue or daily users: the
+  // big charts right under those tiles already draw them.
+  const spark = useMemo(() => {
+    const of = (key: string) => trend(payload, key, range);
+    return {
+      mrr: of("revenuecat:mrr"),
+      actives: of("revenuecat:actives"),
+      newCustomers: of("revenuecat:new_customers"),
+      installs: of("appsflyer:installs"),
+      newUsers: of("amplitude:new_users"),
+      wau: of("amplitude:wau"),
+      mau: of("amplitude:mau"),
+      buyers: of("amplitude:buyers_v2"),
+    };
+  }, [payload, range]);
   const cohorts = useMemo(() => cohortRows(payload, range), [payload, range]);
   // One number for the whole history, whatever the period picked.
   const ltv = useMemo(
@@ -381,16 +430,28 @@ export function PerformanceClient({
     payload.series["amplitude:new_users_v2"] !== undefined ||
     payload.series["revenuecat:conv_new_customers_v2"] !== undefined;
   const afMissing = missing("appsflyer", k.has.appsflyer);
+  const ARPPU = (
+    <Tile
+      label="ARPPU / mois"
+      value={money(k.arppuMonthly)}
+      hint="Revenu ramené à 30 jours ÷ abonnés actifs moyens"
+      now={k.arppuMonthly}
+      before={p?.arppuMonthly ?? null}
+    />
+  );
   const lastFullMonth =
     payload.rc?.churnMonths.filter((m) => !m.incomplete).pop() ?? null;
 
   return (
+    <Crossfade.Provider value={preset !== null}>
     <div className="space-y-5">
       {/* ---------------------------------------------------- period bar */}
       <div className="flex flex-wrap items-center gap-2.5">
-        <div
+        <Sliding
           role="group"
           aria-label="Période"
+          watch={preset}
+          indicatorClassName="rounded-full bg-[var(--color-pill)] shadow-[var(--shadow-card)]"
           className="flex flex-wrap gap-0.5 rounded-full bg-[var(--color-surface-muted)] p-1 shadow-[var(--shadow-inset)]"
         >
           {PRESETS.map((x) => (
@@ -400,20 +461,20 @@ export function PerformanceClient({
               onClick={() => pickPreset(x.id)}
               aria-pressed={preset === x.id}
               className={cn(
-                "rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-[background-color,color,box-shadow,scale] duration-150 active:scale-[0.96]",
+                "relative rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-[background-color,color,box-shadow,scale] duration-200 active:scale-[0.96]",
                 preset === x.id
-                  ? "bg-[var(--color-surface)] text-[var(--color-ink)] shadow-[var(--shadow-card)]"
+                  ? `bg-[var(--color-surface)] text-[var(--color-ink)] shadow-[var(--shadow-card)] ${HANDED_OVER}`
                   : "text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]",
               )}
             >
               {x.label}
             </button>
           ))}
-        </div>
+        </Sliding>
         {/* A chosen period lights the pill up; a preset leaves it quiet. */}
         <div
           className={cn(
-            "flex max-w-full min-w-0 items-center gap-1 rounded-full border bg-[var(--color-surface)] py-1 pr-2 pl-3 transition-[border-color,box-shadow]",
+            "flex max-w-full min-w-0 flex-wrap items-center gap-1 rounded-[20px] border bg-[var(--color-surface)] py-1 pr-2 pl-3 transition-[border-color,box-shadow]",
             preset === null
               ? "border-[var(--color-accent)] shadow-[0_0_0_3px_var(--color-accent-soft)]"
               : "border-[var(--color-line-strong)]",
@@ -427,6 +488,7 @@ export function PerformanceClient({
             min={payload.firstDay}
             max={payload.today}
             onChange={(e) => pickDates({ from: e.target.value, to: range.to })}
+            onClick={openCalendar}
             className={DATE}
           />
           <span aria-hidden className="text-[12px] text-[var(--color-ink-faint)]">→</span>
@@ -437,6 +499,7 @@ export function PerformanceClient({
             min={payload.firstDay}
             max={payload.today}
             onChange={(e) => pickDates({ from: range.from, to: e.target.value })}
+            onClick={openCalendar}
             className={DATE}
           />
         </div>
@@ -529,18 +592,21 @@ export function PerformanceClient({
           <Tile
             label="MRR (fin de période)"
             value={money(k.mrr)}
+            spark={spark.mrr}
             now={k.mrr}
             before={p?.mrr ?? null}
           />
           <Tile
             label="Abonnés actifs"
             value={count(k.activeSubscriptions)}
+            spark={spark.actives}
             now={k.activeSubscriptions}
             before={p?.activeSubscriptions ?? null}
           />
           <Tile
             label="Nouveaux clients"
             value={count(k.newCustomers)}
+            spark={spark.newCustomers}
             now={k.newCustomers}
             before={p?.newCustomers ?? null}
             hint="Clients vus pour la première fois par RevenueCat"
@@ -642,6 +708,7 @@ export function PerformanceClient({
             <Tile
               label="Installs"
               value={count(k.installs)}
+              spark={spark.installs}
               sub={`${count(k.installsOrganic)} organiques · ${count(k.installsPaid)} campagnes`}
               now={k.installs}
               before={p?.installs ?? null}
@@ -651,6 +718,7 @@ export function PerformanceClient({
           <Tile
             label="Nouveaux utilisateurs"
             value={count(k.newUsers)}
+            spark={spark.newUsers}
             now={k.newUsers}
             before={p?.newUsers ?? null}
             hint="Amplitude : premier événement dans l'app"
@@ -713,6 +781,7 @@ export function PerformanceClient({
           <Tile
             label="WAU (7 j glissants)"
             value={count(k.wau)}
+            spark={spark.wau}
             now={k.wau}
             before={p?.wau ?? null}
             sub={`au ${shortDay(range.to)}`}
@@ -720,6 +789,7 @@ export function PerformanceClient({
           <Tile
             label="MAU (30 j glissants)"
             value={count(k.mau)}
+            spark={spark.mau}
             now={k.mau}
             before={p?.mau ?? null}
             sub={`au ${shortDay(range.to)}`}
@@ -799,6 +869,7 @@ export function PerformanceClient({
           <Tile
             label="Acheteurs"
             value={count(k.buyers)}
+            spark={spark.buyers}
             sub={`${pct(k.buyersRate)} des ${count(k.newUsersV2)} nouveaux utilisateurs`}
             hint="Utilisateurs ayant acheté un abonnement pendant la période, rapportés aux nouveaux utilisateurs de la période"
             now={k.buyers}
@@ -814,23 +885,17 @@ export function PerformanceClient({
         source="RevenueCat · Amplitude"
         missing={rcMissing}
       >
-        <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Tile
-            label="ARPPU / mois"
-            value={money(k.arppuMonthly)}
-            hint="Revenu ramené à 30 jours ÷ abonnés actifs moyens"
-            now={k.arppuMonthly}
-            before={p?.arppuMonthly ?? null}
-          />
-        </div>
         {ltv && ltv.plans.length > 0 && ltv.gross[6] > 0 ? (
-          <LtvPanel ltv={ltv} engagement={engagement} />
+          <LtvPanel ltv={ltv} engagement={engagement} lead={ARPPU} />
         ) : (
+          <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{ARPPU}</div>
           <p className="text-[13px] text-[var(--color-ink-soft)]">
             {ltv
               ? "LTV par payeur indisponible : RevenueCat n'a pas renvoyé de ventes exploitables au dernier relevé."
               : "La LTV par payeur arrive au prochain relevé RevenueCat."}
           </p>
+          </div>
         )}
       </Section>
 
@@ -998,5 +1063,6 @@ export function PerformanceClient({
         </ul>
       </Card>
     </div>
+    </Crossfade.Provider>
   );
 }

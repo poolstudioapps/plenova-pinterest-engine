@@ -110,7 +110,7 @@ export function SpyPostCard({
             key={image.url}
             type="button"
             onClick={() => setViewing(i)}
-            className="shrink-0 snap-start overflow-hidden rounded-[10px] bg-[var(--color-surface-muted)] ring-1 ring-[var(--color-edge)] transition-[scale,box-shadow] duration-200 ease-out hover:shadow-[var(--shadow-raised)] active:scale-[0.97] pointer-fine:hover:scale-[1.03]"
+            className="shrink-0 snap-start overflow-hidden rounded-[10px] bg-[var(--color-surface-muted)] ring-1 ring-[var(--color-edge)] transition-[scale,box-shadow] duration-200 ease-out hover:shadow-[var(--shadow-raised)] active:scale-[0.97] motion-safe:pointer-fine:hover:scale-[1.03]"
             aria-label={t("spy.slideAlt", { n: i + 1 })}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -212,7 +212,7 @@ export function SlideViewer({
   }, [images.length, onClose]);
 
   const arrow =
-    "grid size-11 shrink-0 place-items-center rounded-full bg-white/12 text-white ring-1 ring-white/15 backdrop-blur-md transition-[background-color,scale] duration-150 hover:bg-white/25 active:scale-[0.94] disabled:pointer-events-none disabled:opacity-25";
+    "grid size-11 shrink-0 place-items-center rounded-full bg-white/12 text-white ring-1 ring-white/15 backdrop-blur-md transition-[background-color,scale] duration-150 hover:bg-white/25 active:not-disabled:scale-[0.94] disabled:cursor-default disabled:opacity-25";
 
   return createPortal(
     <div
