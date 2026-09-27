@@ -42,6 +42,11 @@ import { supabaseService } from "@/lib/store/supabase";
 /** The app's first days: first AppsFlyer install 2026-02-26, first purchase 2026-02-26. */
 export const PERF_EPOCH = "2026-02-01";
 const RECENT_DAYS = 45;
+/**
+ * AppsFlyer's ordinary reading is shorter: one row per install to download,
+ * and its late corrections are few - the weekly re-read covers its 90 days.
+ */
+const RECENT_DAYS_APPSFLYER = 14;
 const WEEKLY_EVERY_MS = 7 * 86_400_000;
 /**
  * The weekly re-read: RevenueCat and Amplitude make the same number of calls
@@ -70,7 +75,7 @@ const KEEP_SNAPSHOTS_DAYS = 14;
  * apps, Amplitude's Home funnel limited to app 2.0.0 and later (2026-09-27);
  * AppsFlyer read from its raw data, per store, with its events (2026-09-27).
  */
-const DATA_VERSION: Record<"revenuecat" | "amplitude" | "appsflyer", number> = {
+export const DATA_VERSION: Record<"revenuecat" | "amplitude" | "appsflyer", number> = {
   revenuecat: 2,
   amplitude: 2,
   appsflyer: 2,
@@ -182,7 +187,11 @@ export async function refreshPerformance(): Promise<SourceOutcome[]> {
         window === "first" || (window === "weekly" && weekly === "all")
           ? PERF_EPOCH
           : daysAgo(
-              window === "weekly" && weekly !== "all" ? weekly : RECENT_DAYS,
+              window === "weekly" && weekly !== "all"
+                ? weekly
+                : source === "appsflyer"
+                  ? RECENT_DAYS_APPSFLYER
+                  : RECENT_DAYS,
             );
 
       let timer: ReturnType<typeof setTimeout> | undefined;

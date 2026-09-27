@@ -12,7 +12,7 @@ import type {
   PerfSourceStatus,
 } from "@/lib/performance/compute";
 import { utcDay } from "@/lib/performance/http";
-import { PERF_EPOCH } from "@/lib/performance/refresh";
+import { DATA_VERSION, PERF_EPOCH } from "@/lib/performance/refresh";
 import { revenueCatConfigured } from "@/lib/performance/revenuecat";
 import { listSpend } from "@/lib/performance/spend";
 import {
@@ -122,6 +122,22 @@ export async function performancePayload(): Promise<PerfPayload> {
   ): PerfSourceStatus => {
     const s = snapshots[source];
     const warnings = s.last?.ok ? s.last.data.warnings : null;
+    // A failure of a former way of reading (AppsFlyer's aggregate reports,
+    // refused on 27/09) says nothing of the current one.
+    const outdated =
+      s.last !== null &&
+      !s.last.ok &&
+      s.last.data.dataVersion !== DATA_VERSION[source];
+    if (outdated)
+      return {
+        source,
+        label,
+        configured,
+        lastOk: s.good?.takenAt ?? null,
+        lastAttempt: s.last?.takenAt ?? null,
+        error: null,
+        warning: "Nouvelle lecture pas encore faite : elle part au prochain relevé (ou avec Actualiser).",
+      };
     return {
       source,
       label,

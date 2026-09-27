@@ -173,7 +173,7 @@ export function Sidebar({
         />
         {items.map((group) =>
           group.items.length === 0 ? null : (
-            <div key={group.key} className="flex shrink-0 md:mb-5 md:block">
+            <div key={group.key} className="flex shrink-0 md:mb-4 md:block">
               {group.labelKey ? (
                 <p className="hidden px-2.5 pb-1.5 text-[12px] font-medium text-[var(--color-ink-faint)] md:block">
                   {t(group.labelKey)}
@@ -194,7 +194,7 @@ export function Sidebar({
                         prefetch={false}
                         aria-current={active ? "page" : undefined}
                         className={cn(
-                          "group relative flex shrink-0 items-center gap-2 rounded-[10px] px-2.5 py-1.5 text-[13.5px] whitespace-nowrap transition-[background-color,color,box-shadow,scale] duration-150 active:scale-[0.97] md:gap-2.5 md:py-[7px] md:text-[14px]",
+                          "group relative flex shrink-0 items-center gap-2 rounded-[10px] px-2.5 py-1.5 text-[13.5px] whitespace-nowrap transition-[background-color,color,box-shadow,scale] duration-150 active:scale-[0.97] md:gap-2.5 md:py-[6px] md:text-[14px]",
                           active
                             ? "bg-[var(--color-surface)] font-semibold text-[var(--color-ink)] shadow-[var(--shadow-card)] group-data-[indicator=ready]/nav:bg-transparent group-data-[indicator=ready]/nav:shadow-none"
                             : "font-medium text-[var(--color-ink-soft)] hover:bg-[var(--color-surface)]/55 hover:text-[var(--color-ink)]",
@@ -233,7 +233,7 @@ export function Sidebar({
         </button>
       </div>
 
-      <div className="mt-auto hidden border-t border-[var(--color-edge)] px-1 pt-3 md:block">
+      <div className="mt-auto hidden border-t border-[var(--color-edge)] px-1 pt-2.5 md:block">
         <AragogSwitch />
         {email ? (
           <p
@@ -247,7 +247,7 @@ export function Sidebar({
           type="button"
           onClick={() => void signOut()}
           disabled={leaving}
-          className="group flex w-full items-center gap-2.5 rounded-[10px] px-1.5 py-[7px] text-left text-[13.5px] font-medium text-[var(--color-ink-soft)] transition-colors hover:bg-[var(--color-surface)]/55 hover:text-[var(--color-ink)] disabled:opacity-50"
+          className="group flex w-full items-center gap-2.5 rounded-[10px] px-1.5 py-[5px] text-left text-[13.5px] font-medium text-[var(--color-ink-soft)] transition-colors hover:bg-[var(--color-surface)]/55 hover:text-[var(--color-ink)] disabled:opacity-50"
         >
           <SignOut
             aria-hidden
@@ -273,7 +273,7 @@ function AragogSwitch() {
       role="switch"
       aria-checked={on}
       onClick={() => setAragogEnabled(!on)}
-      className="group mb-1 flex w-full items-center gap-2.5 rounded-[10px] px-1.5 py-[7px] text-left text-[13.5px] font-medium text-[var(--color-ink-soft)] transition-colors hover:bg-[var(--color-surface)]/55 hover:text-[var(--color-ink)]"
+      className="group flex w-full items-center gap-2.5 rounded-[10px] px-1.5 py-[5px] text-left text-[13.5px] font-medium text-[var(--color-ink-soft)] transition-colors hover:bg-[var(--color-surface)]/55 hover:text-[var(--color-ink)]"
     >
       <Bug
         aria-hidden

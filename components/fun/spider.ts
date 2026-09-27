@@ -1,7 +1,7 @@
 /**
  * Aragog: a small black spider that lives on the main pages. It waits where
- * the page puts it - in a web in the corner of a card, hanging from a thread
- * under one, or inside its hole at the edge of the sheet - then chases the
+ * the page puts it - in a web in the corner of the page, hanging from a thread
+ * off its top edge, or hidden in the gap along its left edge - then chases the
  * pointer without ever stopping, slower than it and never quite straight,
  * and circles it once it has caught up. A click on it squashes it (cartoon
  * splat); another comes out a while later.
@@ -299,21 +299,21 @@ function svg(tag: string, attrs: Record<string, string | number>): SVGElement {
 /** A page point, from a point on screen. */
 const page = (x: number, y: number): V => ({ x: x + window.scrollX, y: y + window.scrollY });
 
-/** The first card well in view, to put the web, the thread or the hole on. */
-function anchorCard(): DOMRect | null {
-  for (const el of document.querySelectorAll<HTMLElement>("#main .card")) {
-    const r = el.getBoundingClientRect();
-    if (
-      r.width > 240 &&
-      r.height > 120 &&
-      r.top > 40 &&
-      r.top < window.innerHeight * 0.6 &&
-      r.right < window.innerWidth
-    )
-      return r;
-  }
-  return null;
+/**
+ * The sheet the pages are written on (app/(dashboard)/layout.tsx): the one
+ * container every main page has, in the same place whatever loads inside it.
+ * The web, the thread and the hole hang on it - never on a card, which moves
+ * as a page fills in - and follow it if it moves.
+ */
+function sheetRect(): DOMRect | null {
+  const el = document.querySelector<HTMLElement>("#main > div");
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  return r.width > 200 && r.height > 200 ? r : null;
 }
+
+/** The sheet's rounded corner (its radius in px), which the web spans. */
+const SHEET_RADIUS = 22;
 
 /* -------------------------------------------------------------- engine -- */
 
@@ -364,9 +364,20 @@ export function startAragog(start: Start): () => void {
   let twitchAt = 0;
   let orbit: 1 | -1 = 1;
   let orbitUntil = 0;
-  // Scenario furniture.
-  let hole: { at: V; out: number; el: SVGElement } | null = null;
-  let thread: { anchor: V; length: number; target: number; line: SVGElement; svgEl: SVGElement; fading: number } | null = null;
+  // Scenario furniture, placed from the sheet: `at` is a function of it.
+  let web: { el: SVGElement; at: (r: DOMRect) => V; hub: V } | null = null;
+  /** Its lair: the gap along the sheet's left edge, `at` a point of that edge. */
+  let hole: { at: V; place: (r: DOMRect) => V } | null = null;
+  let thread: {
+    anchor: V;
+    place: (r: DOMRect) => V;
+    length: number;
+    target: number;
+    line: SVGElement;
+    svgEl: SVGElement;
+    fading: number;
+  } | null = null;
+  let lastSheet = "";
 
   const plant = () => {
     for (const l of legs) {
@@ -379,27 +390,32 @@ export function startAragog(start: Start): () => void {
   /* --- scenarios --------------------------------------------------- */
 
   function setupWeb(r: DOMRect) {
-    const corner = page(r.right, r.top);
-    const box = 96;
+    // In the top right corner of the sheet, spanning its rounded corner: the
+    // anchors on the straight edges, one on the curve.
+    const at = (sr: DOMRect) => page(sr.right, sr.top);
+    const corner = at(r);
+    const box = 100;
     const s = svg("svg", {
       width: box,
       height: box,
       viewBox: `${-box} 0 ${box} ${box}`,
       style: `position:absolute;left:${corner.x - box}px;top:${corner.y}px;overflow:visible`,
     });
-    const hub: V = { x: -31, y: 31 };
+    const hub: V = { x: -36, y: 36 };
+    const arc = SHEET_RADIUS * (1 - Math.SQRT1_2);
     const anchors: V[] = [
-      { x: -86, y: 0 }, { x: -60, y: 0 }, { x: -36, y: 0 }, { x: -14, y: 0 },
-      { x: -5, y: 5 }, { x: 0, y: 14 }, { x: 0, y: 36 }, { x: 0, y: 60 }, { x: 0, y: 86 },
+      { x: -94, y: 0.5 }, { x: -66, y: 0.5 }, { x: -44, y: 0.5 }, { x: -SHEET_RADIUS - 2, y: 0.5 },
+      { x: -arc, y: arc },
+      { x: -0.5, y: SHEET_RADIUS + 2 }, { x: -0.5, y: 44 }, { x: -0.5, y: 66 }, { x: -0.5, y: 94 },
     ];
-    // An irregular corner web: radials to both edges, a sagging spiral between them.
+    // Radials from the hub to both edges, a sagging spiral between them.
     const radials = anchors
       .map((a) => ({ a, ang: Math.atan2(a.y - hub.y, a.x - hub.x) }))
       .sort((p, q) => p.ang - q.ang);
     let d = "";
-    for (const { a } of radials) d += `M${hub.x},${hub.y}L${a.x},${a.y}`;
+    for (const { a } of radials) d += `M${hub.x},${hub.y}L${a.x.toFixed(1)},${a.y.toFixed(1)}`;
     for (let ring = 1; ring <= 7; ring++) {
-      const f = ring / 8 + rand(-0.03, 0.03);
+      const f = ring / 8 + rand(-0.025, 0.025);
       for (let i = 0; i < radials.length - 1; i++) {
         const p = lerp(hub, radials[i]!.a, f);
         const q = lerp(hub, radials[i + 1]!.a, f + rand(-0.02, 0.02));
@@ -407,21 +423,23 @@ export function startAragog(start: Start): () => void {
         d += `M${p.x.toFixed(1)},${p.y.toFixed(1)}Q${m.x.toFixed(1)},${m.y.toFixed(1)} ${q.x.toFixed(1)},${q.y.toFixed(1)}`;
       }
     }
-    // A few stray threads, as a real one has.
-    d += `M-70,0Q-60,22 -44,34M0,70Q-24,62 -40,46M-20,0L-2,20`;
     s.appendChild(
       svg("path", { d, fill: "none", stroke: silk(), "stroke-width": 0.6, "stroke-linecap": "round" }),
     );
     layer.appendChild(s);
+    web = { el: s, at, hub };
     pos = add(corner, hub);
     heading = Math.atan2(1, -1) + rand(-0.3, 0.3);
     plant();
   }
 
-  function setupThread(r: DOMRect | null) {
-    const anchor = r
-      ? page(r.left + r.width * rand(0.62, 0.82), r.bottom - 1)
-      : page(window.innerWidth * 0.72, 0);
+  function setupThread(r: DOMRect) {
+    // From the top edge of the sheet, right of the page title.
+    // Clear of the page's description (at most 62 characters wide) and of
+    // the plant drawn on the Publication page.
+    const fx = rand(0.63, 0.68);
+    const place = (sr: DOMRect) => page(sr.left + sr.width * fx, sr.top);
+    const anchor = place(r);
     const s = svg("svg", {
       width: 1,
       height: 1,
@@ -434,57 +452,22 @@ export function startAragog(start: Start): () => void {
     });
     s.appendChild(line);
     layer.appendChild(s);
-    thread = { anchor, length: 0, target: rand(70, 120), line, svgEl: s, fading: 0 };
+    thread = { anchor, place, length: 0, target: rand(70, 110), line, svgEl: s, fading: 0 };
     heading = Math.PI / 2; // head down, hanging by its spinnerets
     pos = add(anchor, { x: 0, y: 13 });
     plant();
   }
 
-  function setupLair() {
-    const sheet = document.querySelector<HTMLElement>("#main > div");
-    const sr = sheet?.getBoundingClientRect();
-    const x = sr ? sr.left + 22 : 24;
-    const y = window.innerHeight * rand(0.45, 0.7);
-    const at = page(x, y);
-    const s = svg("svg", {
-      width: 40,
-      height: 28,
-      viewBox: "-20 -14 40 28",
-      style: `position:absolute;left:${at.x - 20}px;top:${at.y - 14}px;overflow:visible`,
-    });
-    // A clean round hole, as in a cartoon: a shaded rim, a deep inside
-    // (darkest under the top edge), a lit lower lip - it reads as a hole, not
-    // as a stain.
-    const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const defs = svg("defs", {});
-    const g = svg("linearGradient", { id: "aragog-hole", x1: 0, y1: 0, x2: 0, y2: 1 });
-    g.appendChild(svg("stop", { offset: "0%", "stop-color": "#000" }));
-    g.appendChild(svg("stop", { offset: "100%", "stop-color": "#26262a" }));
-    defs.appendChild(g);
-    s.appendChild(defs);
-    s.appendChild(
-      svg("ellipse", {
-        cx: 0,
-        cy: 0.6,
-        rx: 16.5,
-        ry: 11,
-        fill: dark ? "rgba(255,255,255,0.08)" : "rgba(29,47,27,0.13)",
-      }),
-    );
-    s.appendChild(svg("ellipse", { cx: 0, cy: 0, rx: 14, ry: 9, fill: "url(#aragog-hole)" }));
-    s.appendChild(
-      svg("path", {
-        d: "M-12.4,4.2A14,9 0 0 0 12.4,4.2",
-        fill: "none",
-        stroke: dark ? "rgba(255,255,255,0.28)" : "rgba(255,255,255,0.75)",
-        "stroke-width": 1.1,
-        "stroke-linecap": "round",
-      }),
-    );
-    layer.appendChild(s);
-    hole = { at, out: 0, el: s };
-    heading = rand(-0.5, 0.5); // facing into the page
-    pos = add(at, mul(dir(heading), -7));
+  function setupLair(r: DOMRect) {
+    // Its lair is the gap between the menu and the page: nothing is drawn
+    // there, it is simply hidden on the far side of the sheet's left edge,
+    // two front legs showing, and walks out onto the page.
+    const dy = window.innerHeight * rand(0.4, 0.6) - r.top;
+    const place = (sr: DOMRect) => page(sr.left, sr.top + dy);
+    const at = place(r);
+    hole = { at, place };
+    heading = rand(-0.12, 0.12);
+    pos = { x: at.x - 10, y: at.y };
     plant();
   }
 
@@ -494,13 +477,52 @@ export function startAragog(start: Start): () => void {
     vel = { x: 0, y: 0 };
     omega = 0;
     legs = makeLegs();
-    const r = anchorCard();
-    if (kind === "web" && r) setupWeb(r);
-    else if (kind === "thread") setupThread(r);
-    else {
-      scenario = "lair";
-      setupLair();
+    lastSheet = "";
+    const r = sheetRect();
+    if (!r) {
+      // No sheet (should not happen on a main page): it simply walks in.
+      pos = page(window.innerWidth * 0.8, window.innerHeight * 0.3);
+      plant();
+      state = "walk";
+      return;
     }
+    if (kind === "web") setupWeb(r);
+    else if (kind === "thread") setupThread(r);
+    else setupLair(r);
+  }
+
+  /**
+   * Keeps the furniture on the sheet: if the sheet moved (a resize, the menu
+   * folding), the web, thread and hole move with it - and so does the spider
+   * while it is still in them.
+   */
+  function follow() {
+    const r = sheetRect();
+    if (!r) return;
+    const key = `${r.left},${r.top},${r.width},${r.height},${window.scrollX},${window.scrollY}`;
+    if (key === lastSheet) return;
+    lastSheet = key;
+    if (web) {
+      const c = web.at(r);
+      web.el.style.left = `${c.x - 100}px`;
+      web.el.style.top = `${c.y}px`;
+      if (state === "hold") {
+        const was = pos;
+        pos = add(c, web.hub);
+        const shift = sub(pos, was);
+        for (const l of legs) l.foot = add(l.foot, shift);
+      }
+    }
+    if (hole) {
+      const at = hole.place(r);
+      const shift = sub(at, hole.at);
+      hole.at = at;
+      if (state === "hold") {
+        pos = add(pos, shift);
+        for (const l of legs) l.foot = add(l.foot, shift);
+      }
+    }
+    if (thread && thread.fading === 0) thread.anchor = thread.place(r);
   }
 
   /* --- behaviour --------------------------------------------------- */
@@ -617,6 +639,17 @@ export function startAragog(start: Start): () => void {
         }
         return;
       }
+      if (hole) {
+        // In the gap: legs drawn in (out of sight), only the two front ones
+        // out over the edge, feeling about.
+        for (const l of legs) {
+          const front = l.rest.x > 15;
+          const feel = front ? Math.sin(clock * 5 + l.side) * 1.6 : 0;
+          const reach = front ? { x: l.rest.x + feel, y: l.rest.y * 0.8 } : mul(l.rest, 0.5);
+          l.foot = add(pos, rot(reach, heading));
+        }
+        return;
+      }
       shuffle(now);
       stepLegs(dt);
       return;
@@ -626,15 +659,9 @@ export function startAragog(start: Start): () => void {
       // Out of the hole, slowly, straight ahead.
       steer(dt, mul(dir(heading), 26), 120);
       turnBody(dt, heading);
-      if (len(sub(pos, hole.at)) > 34) {
+      if (pos.x - hole.at.x > 26) {
         state = "walk";
-        // Out and gone: the hole closes behind it, so nothing is left lying there.
-        const el = hole.el;
-        setTimeout(() => {
-          el.style.transition = "opacity 900ms ease";
-          el.style.opacity = "0";
-          setTimeout(() => el.remove(), 950);
-        }, 1600);
+        hole = null;
       }
       stepLegs(dt);
       return;
@@ -700,23 +727,18 @@ export function startAragog(start: Start): () => void {
     const speed = len(vel);
     const sway = Math.sin(gait) * 0.55 * Math.min(1, speed / 40);
     const abd = clamp(-omega * 0.07, -0.4, 0.4);
-    drawSpider(ctx, center, heading, drawn, sway, abd);
+    // Waiting in its hole, only the two front legs are out; the rest is inside.
+    const shown =
+      hole && state === "hold" ? drawn.filter((_, i) => legs[i]!.rest.x > 15) : drawn;
+    drawSpider(ctx, center, heading, shown, sway, abd);
 
     // Inside the hole, what has not come out yet stays in the dark.
     if (hole && (state === "hold" || state === "emerge")) {
-      const h = local(hole.at);
+      const edge = local(hole.at).x;
       ctx.save();
       ctx.globalCompositeOperation = "destination-out";
-      ctx.translate(h.x, h.y);
-      ctx.scale(1, 9 / 14);
-      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 15);
-      g.addColorStop(0, "rgba(0,0,0,1)");
-      g.addColorStop(0.72, "rgba(0,0,0,0.95)");
-      g.addColorStop(1, "rgba(0,0,0,0)");
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(0, 0, 15, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, Math.max(0, edge), SIZE);
       ctx.restore();
     }
 
@@ -781,6 +803,7 @@ export function startAragog(start: Start): () => void {
     if (!alive) return;
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
+    follow();
     if (state !== "gone") {
       update(dt, now);
       render();

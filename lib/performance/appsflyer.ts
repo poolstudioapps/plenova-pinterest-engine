@@ -13,8 +13,8 @@ import type { DailyPoint } from "@/lib/performance/store";
  *   - installs_report / organic_installs_report: installs from a campaign or
  *     organic, with the cost a network passes on the click;
  *   - in_app_events_report / organic_in_app_events_report, limited to the
- *     app's five events: purchases (annual, monthly, one-time offer), first
- *     plant added, first quick scan.
+ *     four events the page shows: purchases (annual, monthly, one-time
+ *     offer) and first plant added.
  * Raw data only goes back 90 days: the days before stay as stored. Days are
  * UTC days (the apps' own time zone is UTC too). The quota counts per report,
  * app and day from 00:00 UTC: lib/performance/refresh.ts spaces the reads.
@@ -39,7 +39,6 @@ const EVENTS: Record<string, string> = {
   af_purchase_monthly: "purchases_monthly",
   af_purchase_one_time_offer: "purchases_oto",
   af_first_plant_added: "first_plant",
-  af_first_quick_scan: "first_scan",
 };
 
 /** Stored per platform (`installs_ios`...), and for these four also in total. */
@@ -51,7 +50,6 @@ const EVENT_METRICS = [
   // Purchases by users who came from a campaign.
   "purchases_paid",
   "first_plant",
-  "first_scan",
 ];
 const PLATFORMS = ["ios", "android"] as const;
 
