@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { AUTH_COOKIE, readSession, sessionSecret } from "@/lib/auth";
+import { performanceAccess } from "@/lib/performance/dashboard";
 
 /**
  * The signed-in shell: navigation, and the column everything is written in.
@@ -27,7 +28,7 @@ export default async function DashboardLayout({
 
   return (
     <div className="md:flex">
-      <Sidebar email={email} />
+      <Sidebar email={email} showPerformance={(await performanceAccess()).allowed} />
       <main className="min-w-0 flex-1 px-5 py-8 md:px-10 md:py-12">
         {/*
           Narrower than it was. A form field stretched across a wide screen is

@@ -2,7 +2,8 @@ import "server-only";
 import { config } from "@/lib/config";
 
 /**
- * The Plenova app's revenue, from RevenueCat, for the dashboard.
+ * The Plenova app's revenue right now, from RevenueCat: the "En direct" line of
+ * the Performances page (the rest of that page comes from lib/performance/).
  *
  * Asked for "extremely secure", so:
  *  - the key is a RevenueCat API v2 secret key with read-only access to
@@ -13,7 +14,7 @@ import { config } from "@/lib/config";
  *    browser - and is never logged or sent anywhere but api.revenuecat.com;
  *  - only these aggregate figures leave the server, and only to the
  *    addresses the allowlist marks as seeing revenue (the owner's);
- *  - there is no API route for it: the dashboard page reads it server-side.
+ *  - there is no API route for it: the Performances page reads it server-side.
  */
 
 export interface RevenueOverview {

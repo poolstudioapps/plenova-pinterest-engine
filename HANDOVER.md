@@ -179,15 +179,39 @@ s'affichent dans le Spy, historique compris ; ceux importés en couverture seule
 plan, `complete: true` sur `/posts`), puis deviennent traitables. Spy et Hooks
 s'affichent par pages de 20 (`components/ui/Pager.tsx`).
 
-**Revenus de l'app sur le tableau de bord (RevenueCat)** : `lib/revenue.ts`, lu côté
-serveur par la page d'accueil seulement (pas de route API), cache 10 min. Clé
-`REVENUECAT_API_KEY` = clé secrète API v2 **en lecture seule sur Charts & metrics
-uniquement**, posée par l'utilisateur dans Vercel (Production, Sensitive) - jamais dans
-le dépôt ni dans une conversation. Projet `proj1ba43566` (Plenova). Visible seulement
-des adresses `allowed_emails.sees_revenue = true` (aujourd'hui les quatre adresses de l'allowlist ; une nouvelle adresse n'y a pas
-accès tant qu'on ne coche pas `sees_revenue`). Seuls
-les chiffres agrégés (MRR, revenus 28 j, abonnés, essais, nouveaux clients,
-utilisateurs actifs) quittent le serveur.
+**Page Performances (`/performances`, demande de l'utilisateur)** : le tableau de bord
+est coupé en deux, « Performances » (l'app) et « Publication » (carrousels et Pins, `/`).
+Réservée aux adresses `allowed_emails.sees_revenue = true` (les quatre de l'allowlist ;
+une nouvelle adresse n'y a pas accès tant qu'on ne coche pas `sees_revenue`) : page,
+lien du menu et routes vérifient tous `performanceAccess()` (`lib/performance/dashboard.ts`).
+- **Sources** : RevenueCat (revenus, MRR, abonnés, churn, conversion payante 7 j,
+  remboursements, LTV réalisée et projetée, cohortes hebdo J0/J7/J30/à date), Amplitude
+  (DAU, WAU, MAU glissants, nouveaux, acheteurs, entonnoirs onboarding, welcome → home
+  en 2.0.0+, achat ≤ 7 j), AppsFlyer (installs organiques/campagnes, coûts).
+  Modules `lib/performance/{revenuecat,amplitude,appsflyer}.ts`.
+- **Relevés** : `lib/performance/refresh.ts`, lancé par le cron Vercel horaire
+  `/api/cron/performance` qui ne travaille qu'à 9 h, 18 h et 22 h heure de Paris, ou par
+  le bouton « Actualiser » (15 min entre deux). Tout est stocké **par jour** dans
+  `perf_daily` depuis `PERF_EPOCH` (2026-02-01) : la page calcule n'importe quelle période
+  dans le navigateur (7/30/60 j, depuis le début, calendrier) sans appeler de fournisseur
+  (`lib/performance/compute.ts`). Relecture complète une fois par semaine, sinon les
+  45 derniers jours. AppsFlyer : 24 appels/jour/app max, donc pas plus d'un relevé toutes
+  les 3 h. `perf_snapshots` est un cache (purgé au-delà de 14 jours, le dernier bon relevé
+  de chaque source reste toujours).
+- **Dépenses et ROAS** : coûts AppsFlyer (intégration Meta faite par l'utilisateur, les
+  coûts arrivent dès qu'une campagne tourne) + saisies à la main dans `perf_spend`
+  (réparties par jour, pour les canaux qu'AppsFlyer ne voit pas). **Règle de
+  l'utilisateur : pas de dépense sur la période = dépenses, ROAS, coût par install et
+  colonnes ROAS masqués.** ROAS = revenu RevenueCat ÷ dépenses, tous utilisateurs
+  confondus (RevenueCat ne connaît pas l'origine des clients) ; ROAS de cohorte =
+  revenu des nouveaux clients d'une semaine au jour N ÷ dépenses de cette semaine.
+- **Clés** (Vercel, Production, **Sensitive**, posées par l'utilisateur, jamais dans le
+  dépôt ni dans une conversation) : `REVENUECAT_API_KEY` (clé secrète v2 en lecture seule
+  sur Charts & metrics), `AMPLITUDE_API_KEY` + `AMPLITUDE_SECRET_KEY` (projet Plenova,
+  la paire n'est pas en lecture seule chez Amplitude), `APPSFLYER_API_TOKEN` (token API V2).
+  Elles sont masquées dans les erreurs (`lib/errors.ts`, `redact`).
+- **En direct** : `lib/revenue.ts` (vue d'ensemble RevenueCat, cache 10 min) alimente la
+  ligne « En direct » en haut de la page ; le reste suit les relevés.
 
 **Traitement par équipe (demande de l'utilisateur)** : Mr Stark et Mr Mousk traitent
 les mêmes carrousels chacun de leur côté. `allowed_emails.team` dit pour qui traite

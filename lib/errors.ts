@@ -59,6 +59,10 @@ const SECRET_ENV_KEYS = [
   "TOKEN_ENCRYPTION_KEY",
   "BLOB_READ_WRITE_TOKEN",
   "CRON_SECRET",
+  "REVENUECAT_API_KEY",
+  "AMPLITUDE_API_KEY",
+  "AMPLITUDE_SECRET_KEY",
+  "APPSFLYER_API_TOKEN",
 ];
 
 /** Replaces any live secret value found in a string with `[redacted]`. */
@@ -72,6 +76,7 @@ export function redact(input: string): string {
   }
   // Bearer tokens, plus the token shapes each provider issues.
   out = out.replace(/Bearer\s+[A-Za-z0-9._\-]+/g, "Bearer [redacted]");
+  out = out.replace(/Basic\s+[A-Za-z0-9+/=]+/g, "Basic [redacted]");
   out = out.replace(/\bpina_[A-Za-z0-9._\-]+/g, "[redacted]");
   // TikTok access and refresh tokens.
   out = out.replace(/\bact\.[A-Za-z0-9._\-]+/g, "[redacted]");

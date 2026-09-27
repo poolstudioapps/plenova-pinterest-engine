@@ -24,6 +24,9 @@ const GROUPS: {
   {
     key: "top",
     items: [
+      // The app's business: revenue, usage, acquisition (RevenueCat, Amplitude, AppsFlyer).
+      { href: "/performances", key: "nav.performance" },
+      // The content side: carousels and Pins.
       { href: "/", key: "nav.dashboard" },
       // Our own accounts, Mr Stark against Mr Mousk.
       { href: "/versus", key: "nav.versus" },
@@ -57,7 +60,13 @@ const GROUPS: {
   },
 ];
 
-export function Sidebar({ email }: { email: string | null }) {
+export function Sidebar({
+  email,
+  showPerformance,
+}: {
+  email: string | null;
+  showPerformance: boolean;
+}) {
   const pathname = usePathname();
   const t = translator();
   const [leaving, setLeaving] = useState(false);
@@ -83,7 +92,9 @@ export function Sidebar({ email }: { email: string | null }) {
       <div className="mb-0 hidden items-center gap-2.5 px-3 md:mb-7 md:flex">
         <PlenovaMark size={32} />
         <div className="leading-tight">
-          <p className="text-[14px] font-semibold tracking-[-0.01em]">Plenova</p>
+          <p className="text-[14px] font-semibold tracking-[-0.01em]">
+            Plenova
+          </p>
           <p className="text-[11.5px] text-[var(--color-ink-faint)]">Studio</p>
         </div>
       </div>
@@ -96,32 +107,35 @@ export function Sidebar({ email }: { email: string | null }) {
             </p>
           ) : null}
 
-          {group.items.map((item) => {
-            const active = isActive(item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-current={active ? "page" : undefined}
-                className={cn(
-                  "relative shrink-0 rounded-[9px] px-3 py-2 text-[14px] transition-colors md:block",
-                  active
-                    ? "bg-[var(--color-accent-soft)] font-semibold text-[var(--color-accent-ink)]"
-                    : "font-medium text-[var(--color-ink-soft)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-ink)]",
-                )}
-              >
-                {/* A marker on the edge, so the current page is findable
+          {group.items
+            // Performances only for the addresses that see revenue.
+            .filter((item) => item.href !== "/performances" || showPerformance)
+            .map((item) => {
+              const active = isActive(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  aria-current={active ? "page" : undefined}
+                  className={cn(
+                    "relative shrink-0 rounded-[9px] px-3 py-2 text-[14px] transition-colors md:block",
+                    active
+                      ? "bg-[var(--color-accent-soft)] font-semibold text-[var(--color-accent-ink)]"
+                      : "font-medium text-[var(--color-ink-soft)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-ink)]",
+                  )}
+                >
+                  {/* A marker on the edge, so the current page is findable
                     without relying on a tint alone. */}
-                {active ? (
-                  <span
-                    aria-hidden
-                    className="absolute top-1/2 -left-3 hidden h-5 w-1 -translate-y-1/2 rounded-r bg-[var(--color-accent)] md:block"
-                  />
-                ) : null}
-                {t(item.key)}
-              </Link>
-            );
-          })}
+                  {active ? (
+                    <span
+                      aria-hidden
+                      className="absolute top-1/2 -left-3 hidden h-5 w-1 -translate-y-1/2 rounded-r bg-[var(--color-accent)] md:block"
+                    />
+                  ) : null}
+                  {t(item.key)}
+                </Link>
+              );
+            })}
         </div>
       ))}
 

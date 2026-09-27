@@ -134,6 +134,29 @@ export const config = {
     apiKey: env("REVENUECAT_API_KEY"),
     projectId: env("REVENUECAT_PROJECT_ID") ?? "proj1ba43566",
   },
+  /**
+   * Usage figures for the Performances dashboard (lib/performance/amplitude.ts).
+   * The project's API key + secret key (Basic auth, US region). Amplitude has
+   * no read-only key: the pair opens every project-level REST API, so it lives
+   * in Vercel as Sensitive and is only ever used for GET reports.
+   */
+  amplitude: {
+    apiKey: env("AMPLITUDE_API_KEY"),
+    secretKey: env("AMPLITUDE_SECRET_KEY"),
+    baseUrl: env("AMPLITUDE_BASE_URL") ?? "https://amplitude.com",
+  },
+  /**
+   * Installs (and spend, once a cost integration feeds it) for the
+   * Performances dashboard (lib/performance/appsflyer.ts). An AppsFlyer API
+   * token V2, used only for GET reports on the two Plenova apps.
+   */
+  appsflyer: {
+    apiToken: env("APPSFLYER_API_TOKEN"),
+    appIds: (env("APPSFLYER_APP_IDS") ?? "id6759450522,com.poolstudio.plenova")
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean),
+  },
   security: {
     tokenEncryptionKey: env("TOKEN_ENCRYPTION_KEY"),
     cronSecret: env("CRON_SECRET"),

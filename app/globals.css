@@ -46,6 +46,10 @@
   --color-warn-ink: #7a5210;
   --color-warn-soft: #fdf4e3;
 
+  /* Data series (Performances charts): validated pair, one hue per job - money in, money out. */
+  --color-series-revenue: #2a78d6;
+  --color-series-spend: #eb6834;
+
   --radius-card: 20px;
   --radius-control: 12px;
   /* 251 elements on plenova.fr use it - it is the brand's geometry. */
@@ -150,6 +154,8 @@
       --color-warn: #dfae62;
       --color-warn-ink: #f0d9ab;
       --color-warn-soft: #2b2113;
+      --color-series-revenue: #3987e5;
+      --color-series-spend: #d95926;
     }
   }
 }

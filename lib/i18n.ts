@@ -96,7 +96,8 @@ export const LOCALE_WRITING: Record<
  * "publish.modeDraft" rendered to the screen.
  */
 const FR = {
-  "nav.dashboard": "Tableau de bord",
+  "nav.dashboard": "Publication",
+  "nav.performance": "Performances",
   "nav.versus": "Versus",
   "nav.groupPinterest": "Pinterest",
   "nav.groupTikTok": "TikTok",
@@ -277,7 +278,7 @@ const FR = {
   "generate.reuseNone": "Générer une nouvelle image",
   "generate.reuseAvailable": "{n} disponible(s) pour cette plante",
 
-  "dashboard.title": "Tableau de bord",
+  "dashboard.title": "Publication",
   "dashboard.subtitle": "Où en sont TikTok et Pinterest, et par où continuer.",
   "dashboard.newCarousel": "Nouveau carrousel TikTok",
   "dashboard.newPins": "Générer des Pins",
