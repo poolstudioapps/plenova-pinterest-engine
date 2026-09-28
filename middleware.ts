@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { AUTH_COOKIE, isPublicPath, readSession, sessionSecret } from "@/lib/auth";
+import { isReviewer, reviewEmail, reviewerMay } from "@/lib/review";
 
 /**
  * Gate for the whole dashboard. Runs before every route except the allowlist
@@ -21,7 +22,22 @@ export async function middleware(request: NextRequest) {
 
   const secret = await sessionSecret();
   const session = request.cookies.get(AUTH_COOKIE)?.value;
-  if (secret && (await readSession(secret, session))) {
+  const identity = secret ? await readSession(secret, session) : null;
+  // The platform reviewers' test account reads and writes nothing, and its
+  // sessions end the moment the account is taken out of Vercel (lib/review.ts).
+  const reviewer = isReviewer(identity);
+  if (identity && (!reviewer || reviewEmail())) {
+    if (reviewer && !reviewerMay(request.method, pathname)) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "read_only",
+            message: "Review account: read-only, this action is disabled.",
+          },
+        },
+        { status: 403 },
+      );
+    }
     return NextResponse.next();
   }
 

@@ -28,9 +28,11 @@ export function LoginForm() {
   const params = useSearchParams();
   const codeInput = useRef<HTMLInputElement>(null);
 
-  const [step, setStep] = useState<"email" | "code">("email");
+  const [step, setStep] = useState<"email" | "code" | "password">("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
+  /** The platform reviewers' test account only (lib/review.ts). */
+  const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** Seconds before another mail may be asked for - Supabase allows one a minute. */
@@ -148,6 +150,33 @@ export function LoginForm() {
     }
   }
 
+  async function signInWithPassword(event: React.FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/auth/password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as {
+          error?: { message?: string };
+        };
+        setError(data.error?.message ?? t("login.badPassword"));
+        setPassword("");
+        return;
+      }
+      router.replace(safeNext(params.get("next")));
+      router.refresh();
+    } catch {
+      setError(t("login.unreachable"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   // The page draws the card around it; this is only what goes inside.
   if (fromLink) {
     return (
@@ -184,6 +213,66 @@ export function LoginForm() {
             {busy ? null : <ArrowRight aria-hidden size={16} weight="bold" />}
           </Button>
           {error ? <Notice tone="danger">{error}</Notice> : null}
+          {/* Reviewers cannot read our mail: they get a password instead. */}
+          <button
+            type="button"
+            onClick={() => {
+              setStep("password");
+              setError(null);
+            }}
+            className="block w-full text-center text-[12.5px] text-[var(--color-ink-faint)] transition-colors hover:text-[var(--color-accent)]"
+          >
+            {t("login.reviewer")}
+          </button>
+        </form>
+      ) : step === "password" ? (
+        <form onSubmit={signInWithPassword} className="space-y-4">
+          <p className="text-[14px] font-semibold text-[var(--color-ink)]">
+            {t("login.reviewerTitle")}
+          </p>
+          <Field label={t("login.email")} htmlFor="review-email">
+            <Input
+              id="review-email"
+              type="email"
+              inputMode="email"
+              autoFocus
+              autoComplete="username"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </Field>
+          <Field label={t("login.password")} htmlFor="review-password">
+            <Input
+              id="review-password"
+              type="password"
+              autoComplete="current-password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </Field>
+          <Button
+            type="submit"
+            variant="primary"
+            className="w-full"
+            loading={busy}
+            disabled={email.trim().length < 5 || password.length === 0}
+          >
+            {t("login.verify")}
+          </Button>
+          {error ? <Notice tone="danger">{error}</Notice> : null}
+          <button
+            type="button"
+            onClick={() => {
+              setStep("email");
+              setPassword("");
+              setError(null);
+            }}
+            className="block w-full text-center text-[12.5px] text-[var(--color-ink-faint)] transition-colors hover:text-[var(--color-ink)]"
+          >
+            {t("login.backToLink")}
+          </button>
         </form>
       ) : (
         <form onSubmit={verify} className="space-y-4">

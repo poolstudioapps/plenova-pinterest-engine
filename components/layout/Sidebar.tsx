@@ -23,6 +23,7 @@ import {
 import { setAragogEnabled, useAragogEnabled } from "@/components/fun/aragog-pref";
 import { PlenovaMark } from "@/components/layout/PlenovaMark";
 import { Indicator, useIndicator } from "@/components/ui/Indicator";
+import { APP_NAME } from "@/lib/brand";
 import { translator, type TranslationKey } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -143,12 +144,12 @@ export function Sidebar({
       <Link
         href="/"
         className="flex shrink-0 items-center gap-2.5 rounded-[12px] py-2 pl-4 md:mb-6 md:px-2.5 md:py-1"
-        aria-label="Plenova Studio"
+        aria-label={APP_NAME}
       >
         <PlenovaMark size={30} className="size-7 md:size-[30px]" />
         <span className="hidden leading-none md:block">
           <span className="block text-[14.5px] font-semibold tracking-[-0.015em]">
-            Plenova
+            L&apos;Atelier UGC
           </span>
           <span className="mt-1 block text-[11.5px] text-[var(--color-ink-faint)]">
             Studio

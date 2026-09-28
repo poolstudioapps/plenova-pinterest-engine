@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+import { APP_NAME } from "@/lib/brand";
 import "./globals.css";
 
 /*
@@ -17,7 +18,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Plenova Studio",
+  // Must match the app name declared to TikTok and the domain (lib/brand.ts).
+  title: APP_NAME,
   description:
     "Rédiger, illustrer et publier les contenus Plenova sur Pinterest et TikTok.",
   robots: { index: false, follow: false },

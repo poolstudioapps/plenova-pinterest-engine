@@ -11,7 +11,7 @@ Dernière mise à jour : 10 septembre 2026.
 
 | Champ | Valeur |
 | --- | --- |
-| Nom | `Plenova Tool` |
+| Nom | `L'Atelier UGC Studio` (avant : `Plenova Tool`, refusé le 28/09 : le nom doit égaler le titre du site et le domaine, `lib/brand.ts`) |
 | Catégorie | Lifestyle |
 | Icône | feuille verte, 1024×1024 |
 | Plateforme | **Web** (case à cocher obligatoire, c'est elle qui débloque la redirect URI) |
@@ -42,9 +42,18 @@ vérifié chez TikTok.
 > guidelines font référence lorsqu'elles exigent que le domaine visible dans la
 > vidéo de démo corresponde au site déclaré — donc celle que tu filmeras.
 >
-> La page d'accueil est l'écran de connexion : il présente l'outil et renvoie
-> vers les deux pages légales, pour qu'un reviewer qui l'ouvre comprenne
-> immédiatement de quoi il s'agit.
+> La page d'accueil est l'écran de connexion (en anglais) : il présente l'outil
+> et renvoie vers les deux pages légales, pour qu'un reviewer qui l'ouvre
+> comprenne immédiatement de quoi il s'agit.
+>
+> **Compte de test reviewer** (exigé par TikTok quand le site est une page de
+> connexion, refus du 28/09) : `REVIEW_EMAIL` + `REVIEW_PASSWORD` dans Vercel
+> (12 caractères minimum), lien « Reviewing this app… Sign in with the test
+> account » sous le formulaire. Session en lecture seule (middleware) : pas
+> d'écriture, pas de connexion Pinterest/TikTok, pas de Performances. Retirer
+> les variables ferme l'accès et les sessions déjà ouvertes (`lib/review.ts`).
+> Les identifiants vont dans le champ « Explain how each product and scope
+> works » (la Description est limitée à 120 caractères).
 
 Les deux pages légales sont générées par le tool (`app/legal/`) et restent
 **publiques** malgré la protection par mot de passe — les reviewers TikTok

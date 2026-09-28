@@ -1,6 +1,7 @@
 import { LoginForm } from "@/components/layout/LoginForm";
 import { PlenovaMark } from "@/components/layout/PlenovaMark";
 import { Plant3D } from "@/components/plants/Plant3D";
+import { APP_NAME } from "@/lib/brand";
 import { translator } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +12,8 @@ export default async function LoginPage() {
   return (
     // Its own full-height shell now: the login page sits outside the dashboard
     // group, so nothing else on screen belongs to the signed-in tool.
-    <div className="relative grid min-h-dvh place-items-center overflow-hidden bg-[var(--color-frame)] px-5 py-10">
+    // In English, like the legal pages: platform reviewers land here.
+    <div lang="en" className="relative grid min-h-dvh place-items-center overflow-hidden bg-[var(--color-frame)] px-5 py-10">
       {/* A pool of light behind the plant: the frame green lifts to the
           page green where the eye should land. */}
       <div
@@ -26,7 +28,7 @@ export default async function LoginPage() {
           <div className="mb-4 flex items-center gap-3">
             <PlenovaMark size={40} />
             <div className="leading-none">
-              <h1 className="text-[21px] font-bold tracking-[-0.02em]">Plenova Studio</h1>
+              <h1 className="text-[21px] font-bold tracking-[-0.02em]">{APP_NAME}</h1>
             </div>
           </div>
           {/*
