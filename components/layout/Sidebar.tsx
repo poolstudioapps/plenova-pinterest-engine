@@ -25,6 +25,7 @@ import { PlenovaMark } from "@/components/layout/PlenovaMark";
 import { Indicator, useIndicator } from "@/components/ui/Indicator";
 import { APP_NAME } from "@/lib/brand";
 import { translator, type TranslationKey } from "@/lib/i18n";
+import { REVIEW_PAGES, reviewerPage } from "@/lib/review";
 import { cn } from "@/lib/utils";
 
 /**
@@ -87,9 +88,12 @@ const GROUPS: {
 export function Sidebar({
   email,
   showPerformance,
+  reviewer = false,
 }: {
   email: string | null;
   showPerformance: boolean;
+  /** The platform reviewers' test account: the TikTok pages only, no Aragog. */
+  reviewer?: boolean;
 }) {
   const pathname = usePathname();
   const t = translator();
@@ -127,8 +131,12 @@ export function Sidebar({
 
   const items = GROUPS.map((group) => ({
     ...group,
-    // Performances only for the addresses that see revenue.
-    items: group.items.filter((item) => item.href !== "/performances" || showPerformance),
+    items: group.items.filter((item) =>
+      reviewer
+        ? reviewerPage(item.href)
+        : // Performances only for the addresses that see revenue.
+          item.href !== "/performances" || showPerformance,
+    ),
   }));
 
   return (
@@ -142,7 +150,7 @@ export function Sidebar({
       )}
     >
       <Link
-        href="/"
+        href={reviewer ? REVIEW_PAGES[0] : "/"}
         className="flex shrink-0 items-center gap-2.5 rounded-[12px] py-2 pl-4 md:mb-6 md:px-2.5 md:py-1"
         aria-label={APP_NAME}
       >
@@ -235,7 +243,7 @@ export function Sidebar({
       </div>
 
       <div className="mt-auto hidden border-t border-[var(--color-edge)] px-1 pt-2.5 md:block">
-        <AragogSwitch />
+        {reviewer ? null : <AragogSwitch />}
         {email ? (
           <p
             className="truncate px-1.5 pb-1 text-[12px] text-[var(--color-ink-faint)]"

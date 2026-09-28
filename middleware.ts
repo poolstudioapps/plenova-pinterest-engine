@@ -1,6 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { AUTH_COOKIE, isPublicPath, readSession, sessionSecret } from "@/lib/auth";
-import { isReviewer, reviewEmail, reviewerMay } from "@/lib/review";
+import {
+  isReviewer,
+  REVIEW_PAGES,
+  reviewEmail,
+  reviewerMay,
+  reviewerPage,
+} from "@/lib/review";
 
 /**
  * Gate for the whole dashboard. Runs before every route except the allowlist
@@ -37,6 +43,10 @@ export async function middleware(request: NextRequest) {
         },
         { status: 403 },
       );
+    }
+    // ...and sees only the TikTok pages: any other page leads to the first.
+    if (reviewer && !pathname.startsWith("/api/") && !reviewerPage(pathname)) {
+      return NextResponse.redirect(new URL(REVIEW_PAGES[0], request.url));
     }
     return NextResponse.next();
   }

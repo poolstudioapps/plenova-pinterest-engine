@@ -38,6 +38,20 @@ export function isReviewer(identity: string | null): boolean {
   return identity?.startsWith(REVIEW_MARK) ?? false;
 }
 
+/** The address shown for an identity: the review mark is not part of it. */
+export const shownEmail = (identity: string | null) =>
+  identity && isReviewer(identity) ? identity.slice(REVIEW_MARK.length) : identity;
+
+/**
+ * The only pages the review account sees: what the TikTok integration is
+ * about, nothing else of the tool. Any other page sends it to the first.
+ */
+export const REVIEW_PAGES = ["/carousels", "/tiktok"] as const;
+
+export function reviewerPage(pathname: string): boolean {
+  return REVIEW_PAGES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
 /** Linking an account of ours: a GET that ends up writing our tokens. */
 const CONNECT = ["/api/pinterest/connect", "/api/tiktok/connect"];
 

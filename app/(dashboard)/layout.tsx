@@ -3,6 +3,7 @@ import { Aragog } from "@/components/fun/Aragog";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { AUTH_COOKIE, readSession, sessionSecret } from "@/lib/auth";
 import { performanceAccess } from "@/lib/performance/dashboard";
+import { isReviewer, shownEmail } from "@/lib/review";
 
 /**
  * The signed-in shell: navigation, and the column everything is written in.
@@ -23,13 +24,19 @@ export default async function DashboardLayout({
   // Who is signed in, for the foot of the sidebar. Null where sessions are off
   // (local development without a secret).
   const secret = await sessionSecret();
-  const email = secret
+  const identity = secret
     ? await readSession(secret, (await cookies()).get(AUTH_COOKIE)?.value)
     : null;
+  // The platform reviewers' test account sees the TikTok pages only (lib/review.ts).
+  const reviewer = isReviewer(identity);
 
   return (
     <div className="min-h-dvh bg-[var(--color-frame)] md:flex">
-      <Sidebar email={email} showPerformance={(await performanceAccess()).allowed} />
+      <Sidebar
+        email={shownEmail(identity)}
+        showPerformance={(await performanceAccess()).allowed}
+        reviewer={reviewer}
+      />
       {/*
         The pages sit on a sheet laid on the frame, rather than on the same
         ground as the navigation: the edge between the two is what makes it
@@ -45,8 +52,8 @@ export default async function DashboardLayout({
           <div className="mx-auto max-w-5xl">{children}</div>
         </div>
       </main>
-      {/* The house spider of the main pages (components/fun/Aragog.tsx). */}
-      <Aragog />
+      {/* The house spider of the main pages (components/fun/Aragog.tsx); not for reviewers. */}
+      {reviewer ? null : <Aragog />}
     </div>
   );
 }
