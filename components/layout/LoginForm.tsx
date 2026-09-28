@@ -27,6 +27,7 @@ export function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
   const codeInput = useRef<HTMLInputElement>(null);
+  const passwordInput = useRef<HTMLInputElement>(null);
 
   const [step, setStep] = useState<"email" | "code" | "password">("email");
   const [email, setEmail] = useState("");
@@ -107,6 +108,13 @@ export function LoginForm() {
           error?: { message?: string };
         };
         setError(data.error?.message ?? t("login.failed"));
+        return;
+      }
+      const data = (await res.json().catch(() => ({}))) as { method?: string };
+      // The reviewers' test account: no mail, its password is asked right here.
+      if (data.method === "password") {
+        setStep("password");
+        window.setTimeout(() => passwordInput.current?.focus(), 0);
         return;
       }
       setStep("code");
@@ -213,38 +221,29 @@ export function LoginForm() {
             {busy ? null : <ArrowRight aria-hidden size={16} weight="bold" />}
           </Button>
           {error ? <Notice tone="danger">{error}</Notice> : null}
-          {/* Reviewers cannot read our mail: they get a password instead. */}
-          <button
-            type="button"
-            onClick={() => {
-              setStep("password");
-              setError(null);
-            }}
-            className="block w-full text-center text-[12.5px] text-[var(--color-ink-faint)] transition-colors hover:text-[var(--color-accent)]"
-          >
-            {t("login.reviewer")}
-          </button>
         </form>
       ) : step === "password" ? (
+        // The reviewers' test account, recognised from the address just typed.
         <form onSubmit={signInWithPassword} className="space-y-4">
-          <p className="text-[14px] font-semibold text-[var(--color-ink)]">
-            {t("login.reviewerTitle")}
-          </p>
-          <Field label={t("login.email")} htmlFor="review-email">
-            <Input
-              id="review-email"
-              type="email"
-              inputMode="email"
-              autoFocus
-              autoComplete="username"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </Field>
+          <div className="rounded-[12px] bg-[var(--color-accent-soft)] px-4 py-3">
+            <p className="text-[14px] font-semibold text-[var(--color-accent-ink)]">
+              {t("login.reviewerTitle")}
+            </p>
+            <p className="mt-1 text-[13px] break-all text-[var(--color-ink-soft)]">{email.trim()}</p>
+          </div>
+          {/* For password managers: the address this password goes with. */}
+          <input
+            type="email"
+            name="username"
+            autoComplete="username"
+            value={email.trim()}
+            readOnly
+            hidden
+          />
           <Field label={t("login.password")} htmlFor="review-password">
             <Input
               id="review-password"
+              ref={passwordInput}
               type="password"
               autoComplete="current-password"
               required
@@ -271,7 +270,7 @@ export function LoginForm() {
             }}
             className="block w-full text-center text-[12.5px] text-[var(--color-ink-faint)] transition-colors hover:text-[var(--color-ink)]"
           >
-            {t("login.backToLink")}
+            {t("login.changeEmail")}
           </button>
         </form>
       ) : (

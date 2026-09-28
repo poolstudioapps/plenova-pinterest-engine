@@ -6,6 +6,7 @@ import {
   isOtpConfigured,
   sendCode,
 } from "@/lib/allowlist";
+import { reviewEmail } from "@/lib/review";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,23 @@ export const dynamic = "force-dynamic";
  * empty inbox with no idea why.
  */
 export async function POST(request: Request) {
+  let email = "";
+  try {
+    const body = (await request.json()) as { email?: unknown };
+    email = typeof body.email === "string" ? normaliseEmail(body.email) : "";
+  } catch {
+    // Falls through to the generic answer below.
+  }
+
+  /*
+   * The platform reviewers' test account signs in with a password instead
+   * (lib/review.ts): the form asks for it straight away. Saying so reveals
+   * only an address the reviewers are handed anyway.
+   */
+  if (email && email === reviewEmail()) {
+    return NextResponse.json({ ok: true, method: "password" });
+  }
+
   const secret = await sessionSecret();
   /*
    * Name what is missing. "Not configured" on its own sent the owner to guess
@@ -44,14 +62,6 @@ export async function POST(request: Request) {
       },
       { status: 503 },
     );
-  }
-
-  let email = "";
-  try {
-    const body = (await request.json()) as { email?: unknown };
-    email = typeof body.email === "string" ? normaliseEmail(body.email) : "";
-  } catch {
-    // Falls through to the generic answer below.
   }
 
   const ok = NextResponse.json({ ok: true });

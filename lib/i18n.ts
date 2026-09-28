@@ -474,10 +474,8 @@ const FR = {
   "login.badCode": "Wrong or expired code.",
   "login.failed": "Sign-in failed.",
   "login.unreachable": "The server cannot be reached.",
-  "login.reviewer": "Reviewing this app for TikTok or Pinterest? Sign in with the test account",
   "login.reviewerTitle": "Test account for app reviewers",
   "login.password": "Password",
-  "login.backToLink": "Sign in with an email link instead",
   "login.badPassword": "Wrong email or password.",
 
   "editor.displayLanguage": "Langue affichée",

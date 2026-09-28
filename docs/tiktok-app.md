@@ -48,8 +48,8 @@ vérifié chez TikTok.
 >
 > **Compte de test reviewer** (exigé par TikTok quand le site est une page de
 > connexion, refus du 28/09) : `REVIEW_EMAIL` + `REVIEW_PASSWORD` dans Vercel
-> (12 caractères minimum), lien « Reviewing this app… Sign in with the test
-> account » sous le formulaire. Session en lecture seule (middleware) : pas
+> (12 caractères minimum). On tape l'e-mail review dans le champ habituel, le
+> formulaire demande alors le mot de passe (aucun mail). Session en lecture seule (middleware) : pas
 > d'écriture, pas de connexion Pinterest/TikTok, pas de Performances. Retirer
 > les variables ferme l'accès et les sessions déjà ouvertes (`lib/review.ts`).
 > Les identifiants vont dans le champ « Explain how each product and scope
